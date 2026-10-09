@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TropaAI</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%236d8cff'/><text x='16' y='22' font-size='16' font-family='monospace' text-anchor='middle' fill='white'>T</text></svg>">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
   :root {
     --bg: #0f1115; --panel: #161920; --panel2: #1c2029; --line: #272c37;
@@ -28,6 +29,7 @@
   .brand { padding: 14px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
   .brand .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--accent); color: #fff; display: grid; place-items: center; font-family: ui-monospace, monospace; font-weight: 700; }
   .brand b { font-size: 15px; }
+  .brand .logo-img { width: 30px; height: 30px; flex: none; }
   .conn { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
   .conn.on { background: var(--ok); }
   .side-scroll { overflow-y: auto; flex: 1; padding: 8px 0 16px; }
@@ -321,7 +323,7 @@
 <body>
 <div class="app" id="app">
   <aside>
-    <div class="brand"><div class="logo">T</div><b>TropaAI</b><span class="conn" id="conn" title="disconnected"></span></div>
+    <div class="brand"><img class="logo-img" src="logo-mark.png" alt="" width="30" height="30"><b>TropaAI</b><span class="conn" id="conn" title="disconnected"></span></div>
     <div class="side-scroll">
       <div class="sec">Feeds</div>
       <div id="feeds"></div>

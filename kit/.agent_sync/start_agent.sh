@@ -40,16 +40,16 @@ exec_agent() {
     role=$(field agent.json role); provider=$(field agent.json provider)
     project=$(cfg project); room=$(cfg room); history=$(cfg history_limit)
     human=$(cfg human); docs=$(cfg docs_path); flags=$(cfg "tool_flags.$tool")
-    local boot="Startup: you are '$name' on ai-irc. Call the ai-irc register tool with agent \"$name\", project \"$project\", provider \"$provider\", model set to your exact model id, and description \"$role\". Then read the last $history messages of room \"$room\" (read_messages with recent=true, limit=$history) to catch up; the chatroom is the team's memory. Project specs and docs are in $docs. Follow AGENTS.md: do not post an introduction or acknowledgement; act only if a message assigns you work (an @$name mention) or otherwise needs you, then wait."
+    local boot="Startup: you are '$name' on the TropaAI chat. Call the tropa register tool with agent \"$name\", project \"$project\", provider \"$provider\", model set to your exact model id, and description \"$role\". Then read the last $history messages of room \"$room\" (read_messages with recent=true, limit=$history) to catch up; the chatroom is the team's memory. Project specs and docs are in $docs. Follow AGENTS.md: do not post an introduction or acknowledgement; act only if a message assigns you work (an @$name mention) or otherwise needs you, then wait."
     case "$tool" in
         claude)   exec claude $flags -n "$name" ${model:+--model "$model"} "$boot" ;;
         opencode) cd "$ROOT" && OPENCODE_CONFIG="$ws/opencode.json" exec opencode $flags ${model:+-m "$model"} --prompt "$boot" ;;
         qwen)     exec qwen $flags --include-directories "$ROOT" ${model:+-m "$model"} -i "$boot" ;;
         codex)    # Runs in the project root (reads the root AGENTS.md itself); identity is in AGENT.md.
-                  # The ai-irc MCP server is passed as a -c override, so ~/.codex (and its login) is untouched.
+                  # The tropa MCP server is passed as a -c override, so ~/.codex (and its login) is untouched.
                   local url; url="$(cfg server)/mcp?agent=$name&project=$project"
                   cd "$ROOT" && exec codex $flags -C "$ROOT" ${model:+-m "$model"} \
-                      -c "mcp_servers.ai-irc.url=\"$url\"" \
+                      -c "mcp_servers.tropa.url=\"$url\"" \
                       "First read agents/$name/AGENT.md (your identity and role) and .agent_sync/TEAM.md (the team). $boot" ;;
         *) echo "Unknown tool '$tool' in agent.json"; sleep 30; exit 1 ;;
     esac

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""AI-IRC room watcher: the hands of the team on this machine.
+"""TropaAI room watcher: the hands of the team on this machine.
 
-AI-IRC decides who to wake (mentions, lead, @all, pause, cooldown, hourly limit; set per
+TropaAI decides who to wake (mentions, lead, @all, pause, cooldown, hourly limit; set per
 room in settings.json or the monitor's Team view). This watcher:
-  - long-polls AI-IRC (/api/watch/poll) for wake and command events and types the wake
+  - long-polls TropaAI (/api/watch/poll) for wake and command events and types the wake
     prompt into the agent's tmux window;
   - never types into an agent sitting on an approval prompt: it posts the prompt to the room
     once, holds the wake, and delivers it when the prompt clears;
   - runs `@watcher approve|always|deny NAME` (from the room or the Team view) by pressing the
     CLI's keys (settings: approval_keys);
-  - streams each agent's screen to AI-IRC so the monitor can show the whole team working;
-  - keeps the routing keys in settings.json and AI-IRC in sync (edit either one);
+  - streams each agent's screen to TropaAI so the monitor can show the whole team working;
+  - keeps the routing keys in settings.json and TropaAI in sync (edit either one);
   - copies files shared in the room into the project (docs/attachments/...) and uploads
     files that agents share with the share_file tool.
 
@@ -40,7 +40,7 @@ def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
-# ---------- AI-IRC ----------
+# ---------- TropaAI ----------
 def http(cfg, path, body=None, timeout=10, method=None):
     req = urllib.request.Request(cfg["server"] + "/api" + path,
                                  data=json.dumps(body).encode() if body is not None else None,
@@ -129,8 +129,8 @@ def approval_alert(cfg, a, snippet):
 
 
 def wake_text(cfg, name, reason):
-    return (f"[ai-irc] {reason} Read your unread messages in {cfg['room']} "
-            f"(ai-irc read_messages, agent \"{name}\", limit {cfg['history_limit']}). "
+    return (f"[tropa] {reason} Read your unread messages in {cfg['room']} "
+            f"(tropa read_messages, agent \"{name}\", limit {cfg['history_limit']}). "
             f"Follow AGENTS.md: act if you are mentioned or needed, otherwise stay silent.")
 
 
@@ -190,7 +190,7 @@ def sync_files(cfg, resp):
                 pass
 
 
-# ---------- settings sync (settings.json <-> AI-IRC room settings) ----------
+# ---------- settings sync (settings.json <-> TropaAI room settings) ----------
 def routing(d):
     return {k: d.get(k) for k in ROUTING if k in d}
 
@@ -226,7 +226,7 @@ class Watcher:
         except FileNotFoundError:
             return 0
 
-    # -- events from AI-IRC --
+    # -- events from TropaAI --
     def poll(self, agents, timeout):
         local = routing(self.cfg)
         snap = read_sync()
@@ -237,19 +237,19 @@ class Watcher:
                                            "timeout": timeout}, timeout=timeout + 10)
         server = routing(r.get("settings") or {})
         if changed:
-            log(f"pushed settings to AI-IRC: {local}")
+            log(f"pushed settings to TropaAI: {local}")
         elif server != (snap or local) and server != local:
             for k, v in server.items():
                 if self.cfg.get(k) != v:
                     config.save_key(k, json.dumps(v))
-            log(f"pulled settings from AI-IRC: {server}")
+            log(f"pulled settings from TropaAI: {server}")
             if server.get("lead") != local.get("lead"):
                 subprocess.run([sys.executable, os.path.join(HERE, "setup_agent.py"), "refresh"], capture_output=True)
             self.cfg = config.load()
         write_sync(server)
         self.last_resp = r
         if r.get("human") and r["human"] != self.cfg["human"]:
-            log(f"note: AI-IRC human is @{r['human']} but settings.human is @{self.cfg['human']}")
+            log(f"note: TropaAI human is @{r['human']} but settings.human is @{self.cfg['human']}")
         return r.get("events") or []
 
     def handle(self, ev, agents):
@@ -347,7 +347,7 @@ class Watcher:
                         log(f"{self.cfg['server']} is an older AI-IRC without wake routing. "
                             f"Replace it: docker rm -f ai-irc && tropa server up  (retrying)")
                     else:
-                        log(f"AI-IRC not reachable at {self.cfg['server']} ({e}); retrying")
+                        log(f"TropaAI not reachable at {self.cfg['server']} ({e}); retrying")
                     ok = False
                 time.sleep(5)
                 continue
@@ -362,13 +362,13 @@ class Watcher:
 
 
 def wake_all(cfg, names):
-    """Ask AI-IRC to wake agents now (bypasses pause/cooldown). Falls back to typing directly."""
+    """Ask TropaAI to wake agents now (bypasses pause/cooldown). Falls back to typing directly."""
     reason = f"{cfg['human']} asked everyone to check the room."
     try:
         r = http(cfg, f"/rooms/{room_q(cfg)}/wake", {"agents": names, "reason": reason})
         return r.get("woke", [])
     except Exception as e:
-        log(f"AI-IRC wake failed ({e}); typing directly")
+        log(f"TropaAI wake failed ({e}); typing directly")
     agents = agent_windows(cfg)
     woke = []
     for a in (names or agents):

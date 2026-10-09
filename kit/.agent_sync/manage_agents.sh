@@ -1,5 +1,5 @@
 #!/bin/bash
-# AI-IRC team control panel: create agents (Claude Code / OpenCode / Qwen Code),
+# TropaAI team control panel: create agents (Claude Code / OpenCode / Qwen Code),
 # pick their model and lead, start them in tmux, and run the room watcher.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONDONTWRITEBYTECODE=1
@@ -16,7 +16,7 @@ for bin in tmux python3 curl; do
     command -v "$bin" >/dev/null || { if [ "$(uname)" = Darwin ]; then h="brew install $bin"; else h="install $bin with your package manager (e.g. sudo apt-get install -y $bin)"; fi; echo "❌ '$bin' is not installed — $h"; exit 1; }
 done
 if ! curl -fsS "$(cfg server)/health" >/dev/null 2>&1; then
-    echo "⚠️  AI-IRC is not answering at $(cfg server)."
+    echo "⚠️  TropaAI is not answering at $(cfg server)."
     TH="$(cfg tropa_home)"
     if [ -n "$TH" ] && [ -x "$TH/tropa" ]; then
         read -p "   Start it now with '$TH/tropa server up'? (y/n) [y]: " SU
@@ -209,7 +209,7 @@ PY
 while true; do
     echo ""
     echo "========================================="
-    echo "🛠️  AI-IRC Agent Panel — $(cfg room)"
+    echo "🛠️  TropaAI Agent Panel — $(cfg room)"
     echo "========================================="
     echo "1) Create a single agent        2) Create multiple agents"
     echo "3) Start all agents + watcher   4) Restart one agent"

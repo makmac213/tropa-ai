@@ -42,7 +42,7 @@ def write_team(cfg):
         "",
         f"- **Human:** `@{cfg['human']}` (final say on everything)",
         f"- **Lead:** " + (f"`@{lead}`" if lead else f"none — {cfg['human']} assigns work directly"),
-        f"- **Room:** `{cfg['room']}` on AI-IRC at {cfg['server']} (monitor: open it in a browser)",
+        f"- **Room:** `{cfg['room']}` on the TropaAI chat at {cfg['server']} (monitor: open it in a browser)",
         f"- **Project docs/specs:** `{cfg['docs_path']}`",
         "",
         "| Agent | Lead | Runs in | Model | Role |",
@@ -71,7 +71,7 @@ def write_agent(cfg, a):
 """ if is_lead else ""
 
     dump(os.path.join(ws, "AGENT.md"), f"""# Your identity
-- **Agent name:** `{name}` — always pass `agent: "{name}"` to ai-irc tools.
+- **Agent name:** `{name}` — always pass `agent: "{name}"` to the tropa tools.
 - **Role:** {a.get('role', '')}
 - **Runs in:** {PROVIDERS[tool]}{f" · model {a['model']}" if a.get('model') else ""}
 - **Project room:** `{cfg['room']}`
@@ -84,16 +84,16 @@ def write_agent(cfg, a):
 # Team rules
 Follow `{rules}` (AGENTS.md) and see the roster in `{team}` (TEAM.md). Read them at startup if they are not already in your context.
 
-# When a prompt starting with `[ai-irc]` arrives
+# When a prompt starting with `[tropa]` arrives
 It was typed by the room watcher, not by {cfg['human']}. Read the room, decide per AGENTS.md whether you need to act, and stay silent if not.
 """)
 
     if tool == "claude":
         dump(os.path.join(ws, "CLAUDE.md"), f"@{rules}\n@{team}\n@AGENT.md\n")
-        dump(os.path.join(ws, ".mcp.json"), {"mcpServers": {"ai-irc": {"type": "http", "url": mcp_url}}})
+        dump(os.path.join(ws, ".mcp.json"), {"mcpServers": {"tropa": {"type": "http", "url": mcp_url}}})
         dump(os.path.join(ws, ".claude", "settings.json"),
              {"enableAllProjectMcpServers": True,
-              "permissions": {"allow": ["mcp__ai-irc", f"Edit(/{cfg['root']}/**)"] + list(cfg.get("claude_allow", [])),
+              "permissions": {"allow": ["mcp__tropa", f"Edit(/{cfg['root']}/**)"] + list(cfg.get("claude_allow", [])),
                               "additionalDirectories": [cfg["root"]]}})
     elif tool == "opencode":
         # OpenCode runs from the project folder with OPENCODE_CONFIG pointing here,
@@ -101,11 +101,11 @@ It was typed by the room watcher, not by {cfg['human']}. Read the room, decide p
         dump(os.path.join(ws, "opencode.json"),
              {"$schema": "https://opencode.ai/config.json",
               "instructions": [team, os.path.join(ws, "AGENT.md")],
-              "mcp": {"ai-irc": {"type": "remote", "url": mcp_url, "enabled": True}}})
+              "mcp": {"tropa": {"type": "remote", "url": mcp_url, "enabled": True}}})
     elif tool == "qwen":
         dump(os.path.join(ws, "QWEN.md"), f"@{rules}\n@{team}\n@AGENT.md\n")
         dump(os.path.join(ws, ".qwen", "settings.json"),
-             {"mcpServers": {"ai-irc": {"httpUrl": mcp_url, "trust": True}}})
+             {"mcpServers": {"tropa": {"httpUrl": mcp_url, "trust": True}}})
     return ws
 
 

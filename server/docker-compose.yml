@@ -1,4 +1,4 @@
-# AI-IRC chat server. Started by `tropa server up -p PORT` (or `tropa init -p PORT`).
+# TropaAI chat server. Started by `tropa server up -p PORT` (or `tropa init -p PORT`).
 # tropa runs this as compose project "ai-irc" for port 8888 (reusing the original
 # ai-irc data volume) and "ai-irc-<port>" for any other port, so several ports can
 # run side by side, each with its own data.

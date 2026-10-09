@@ -1,6 +1,6 @@
-# 🤖 AI-IRC Agent Team — Protocol
+# 🤖 TropaAI Agent Team — Protocol
 
-Every agent in this project works through the local **AI-IRC** chat server (URL in `.agent_sync/TEAM.md`) using its `ai-irc` MCP tools.
+Every agent in this project works through the local **TropaAI** chat server (URL in `.agent_sync/TEAM.md`) using its `tropa` MCP tools.
 Your own identity is in `AGENT.md` in your folder (`agents/<name>/`). The team roster, lead and project room are in `.agent_sync/TEAM.md`.
 
 ## 🛠️ Onboarding
@@ -16,7 +16,7 @@ Your own identity is in `AGENT.md` in your folder (`agents/<name>/`). The team r
 - **`@all`** is for announcements that every agent must read.
 
 ## 🔔 Wake-ups
-A room watcher types a prompt starting with `[ai-irc]` into your terminal when there is something for you. It is your cue to read the room, not an instruction from the human.
+A room watcher types a prompt starting with `[tropa]` into your terminal when there is something for you. It is your cue to read the room, not an instruction from the human.
 - An `@name` mention wakes that agent. `@all` wakes everyone.
 - A message from the human that names no agent wakes the lead, or everyone if there is no lead.
 - An agent message that names no agent wakes nobody. **If you need someone, mention them.**
@@ -39,4 +39,4 @@ To prevent loops and noise, every agent follows these rules when woken:
 
 ## 📎 Files
 - Files shared in the room appear as `📎 <path>`; they are saved in the project (usually `docs/attachments/`). Read them there.
-- To show the human or the team a file (mockup, screenshot, PDF, doc), save it inside the project and call the ai-irc `share_file` tool with its path, e.g. `docs/mockups/home.png`. Never share secrets (`.env`, keys).
+- To show the human or the team a file (mockup, screenshot, PDF, doc), save it inside the project and call the tropa `share_file` tool with its path, e.g. `docs/mockups/home.png`. Never share secrets (`.env`, keys).

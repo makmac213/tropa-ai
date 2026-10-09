@@ -3,7 +3,7 @@
 
   doctor.py            run all checks (exit 1 if anything is broken)
 
-Checks: required tools, AI-IRC health and human-name match, each agent's CLI,
+Checks: required tools, TropaAI health and human-name match, each agent's CLI,
 config files, MCP reachability (using the exact URL in its config), first-run
 sign-in / folder-trust hints, and what is running in tmux.
 """
@@ -58,15 +58,19 @@ def load_json(p):
         return None
 
 
+def mcp_entry(servers):
+    return servers.get("tropa") or servers["ai-irc"]   # "ai-irc" = configs written before the rename
+
+
 def mcp_url_for(a, ws):
     t = a["tool"]
     try:
         if t == "claude":
-            return load_json(os.path.join(ws, ".mcp.json"))["mcpServers"]["ai-irc"]["url"]
+            return mcp_entry(load_json(os.path.join(ws, ".mcp.json"))["mcpServers"])["url"]
         if t == "opencode":
-            return load_json(os.path.join(ws, "opencode.json"))["mcp"]["ai-irc"]["url"]
+            return mcp_entry(load_json(os.path.join(ws, "opencode.json"))["mcp"])["url"]
         if t == "qwen":
-            return load_json(os.path.join(ws, ".qwen", "settings.json"))["mcpServers"]["ai-irc"]["httpUrl"]
+            return mcp_entry(load_json(os.path.join(ws, ".qwen", "settings.json"))["mcpServers"])["httpUrl"]
         if t == "codex":   # passed at launch with -c; nothing on disk to go stale
             return None
     except Exception:
@@ -115,24 +119,24 @@ def main():
     print("Tools")
     for b in ("tmux", "python3", "curl"):
         say(OK, f"{b}: {version(b)}") if shutil.which(b) else say(FAIL, f"{b} not installed", install_hint(b))
-    for b, why in (("docker", "runs AI-IRC in a container"), ("node", "runs AI-IRC without Docker (needs ≥ 22.13)")):
+    for b, why in (("docker", "runs TropaAI in a container"), ("node", "runs TropaAI without Docker (needs ≥ 22.13)")):
         say(OK, f"{b}: {version(b)}") if shutil.which(b) else say(WARN, f"{b} not installed ({why})")
 
-    print("\nAI-IRC")
+    print("\nTropaAI")
     server_ok = False
     try:
         h = http(cfg["server"] + "/health") or {}
         server_ok = True
         if "wake-routing" in (h.get("features") or []):
-            say(OK, f"up at {cfg['server']} (AI-IRC {h.get('version', '?')})")
+            say(OK, f"up at {cfg['server']} (TropaAI {h.get('version', '?')})")
         else:
             say(FAIL, f"{cfg['server']} is an older AI-IRC without wake routing / Team view — agents won't be woken",
                 "docker rm -f ai-irc && tropa server up   (or point this project at another port: tropa init -p 8080)")
         st = http(cfg["server"] + "/api/state")
         human = (st or {}).get("human", "")
         if human and human.lower() != cfg["human"].lower():
-            say(FAIL, f"settings.human is '{cfg['human']}' but AI-IRC HUMAN_NAME is '{human}'",
-                f"python3 .agent_sync/config.py set human '\"{human}\"'  (or restart AI-IRC with HUMAN_NAME={cfg['human']})")
+            say(FAIL, f"settings.human is '{cfg['human']}' but TropaAI HUMAN_NAME is '{human}'",
+                f"python3 .agent_sync/config.py set human '\"{human}\"'  (or restart TropaAI with HUMAN_NAME={cfg['human']})")
         else:
             say(OK, f"human name matches (@{cfg['human']})")
         rooms = [r.get("id") for r in (st or {}).get("rooms", [])]
@@ -187,9 +191,9 @@ def main():
         if not url and tool == "codex":
             url = f"{cfg['server']}/mcp?agent={name}&project={cfg['project']}"   # what start_agent.sh passes
         if not url:
-            say(FAIL, "no ai-irc MCP entry in its config")
+            say(FAIL, "no tropa MCP entry in its config", f"python3 .agent_sync/setup_agent.py refresh {name}")
         else:
-            if url != expect:
+            if url != expect or "ai-irc" in json.dumps(load_json(os.path.join(ws, ".mcp.json")) or {}):
                 say(WARN, f"MCP URL is stale ({url})", "it is rebuilt on next launch, or run setup_agent.py refresh")
             if server_ok:
                 try:

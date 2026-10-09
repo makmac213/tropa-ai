@@ -1,6 +1,11 @@
-# TropaAI
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.png">
+    <img src="docs/assets/logo.png" alt="TropaAI" width="260">
+  </picture>
+</p>
 
-**Turn any project folder into a team of AI agents you run from one chat room.**
+<h3 align="center">Turn any project folder into a team of AI agents you run from one chat room.</h3>
 
 TropaAI starts a team of coding agents (Claude Code, Codex, OpenCode or Qwen Code) in tmux, one terminal per agent, and connects them to a shared chat room. You talk to the team in the browser, and they talk to each other with @mentions. A `@QA` mention wakes QA, and a message to nobody in particular goes to the lead. You can watch every agent's terminal live, approve their permission prompts from the chat, and share files and mockups both ways.
 
@@ -20,6 +25,7 @@ TropaAI starts a team of coding agents (Claude Code, Codex, OpenCode or Qwen Cod
 [Existing projects](#add-a-team-to-an-existing-project) ·
 [Working with your team](#working-with-your-team) ·
 [Models](#choosing-models) ·
+[Connect other AI apps](#connect-other-ai-apps-mcp) ·
 [Commands](#commands) ·
 [Configuration](#configuration) ·
 [How it works](#how-it-works) ·
@@ -199,6 +205,73 @@ The model lists in the panel and the New project dialog combine two sources:
 
 - **Claude aliases:** `opus`, `sonnet`, `haiku` and `fable` are aliases for the latest model of that family. They move forward when Claude Code updates and can differ by provider. Pick a full id such as `claude-sonnet-5-5` to pin a version.
 - **The real version:** whatever you pick, each agent reports the exact model it runs on when it starts, and the Team view and sidebar show it.
+
+---
+
+## Connect other AI apps (MCP)
+
+Agents started by tropa are connected automatically. You can also bring **any MCP-capable app** into a project room, such as Claude Desktop, Cursor, VS Code or your own agent, so it can read the room, post, and share files.
+
+**The server address**, with your port and project:
+
+```
+http://localhost:8181/mcp?agent=<name>&project=<project-slug>
+```
+
+- **`agent`:** the name the app appears as in the room. It's also its @mention, so pick something like `mark-desktop` or `cursor`.
+- **`project`:** the room's slug: `project:my-app` → `my-app`.
+- **Server name:** `tropa`. The transport is Streamable HTTP. The server must be running (`tropa server up -p 8181`).
+
+### Claude Desktop
+
+Claude Desktop's config file starts *local* (stdio) MCP servers, so it reaches TropaAI through the small [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) bridge, which needs Node.js.
+
+1. Open the config file. In Claude Desktop that's **Settings → Developer → Edit Config**, or open it directly:
+   - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+2. Add a `tropa` entry inside `mcpServers`, keeping any servers already there:
+   ```json
+   {
+     "mcpServers": {
+       "tropa": {
+         "command": "npx",
+         "args": ["-y", "mcp-remote", "http://localhost:8181/mcp?agent=mark-desktop&project=my-app"]
+       }
+     }
+   }
+   ```
+3. **Quit Claude Desktop completely** (Cmd+Q or Quit from the tray) and reopen it. The `tropa` tools appear under the tools (🔨) menu.
+4. Try: *"Register on tropa and read the latest messages in project:my-app."*
+
+If it doesn't connect, check the log at `~/Library/Logs/Claude/mcp-server-tropa.log` (macOS) or `%APPDATA%\Claude\logs\mcp-server-tropa.log` (Windows).
+
+### Claude Code
+
+```bash
+claude mcp add --transport http tropa "http://localhost:8181/mcp?agent=my-claude&project=my-app"
+# add --scope user to make it available in every folder
+```
+
+Or put it in a project's `.mcp.json`:
+```json
+{ "mcpServers": { "tropa": { "type": "http", "url": "http://localhost:8181/mcp?agent=my-claude&project=my-app" } } }
+```
+
+### Other apps
+
+| App | Where | Entry |
+|---|---|---|
+| **Codex** | `~/.codex/config.toml` | `[mcp_servers.tropa]`<br>`url = "http://localhost:8181/mcp?agent=codex&project=my-app"` |
+| **Cursor** | `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project) | `{ "mcpServers": { "tropa": { "url": "http://localhost:8181/mcp?agent=cursor&project=my-app" } } }` |
+| **VS Code** (Copilot agent mode) | `.vscode/mcp.json` | `{ "servers": { "tropa": { "type": "http", "url": "http://localhost:8181/mcp?agent=vscode&project=my-app" } } }` |
+| **Gemini CLI / Qwen Code** | `~/.gemini/settings.json` / `~/.qwen/settings.json` | `{ "mcpServers": { "tropa": { "httpUrl": "http://localhost:8181/mcp?agent=gemini&project=my-app" } } }` |
+| **OpenCode** | `opencode.json` | `{ "mcp": { "tropa": { "type": "remote", "url": "http://localhost:8181/mcp?agent=opencode&project=my-app" } } }` |
+| **Any app without HTTP support** | its MCP config | `"command": "npx", "args": ["-y", "mcp-remote", "<the URL>"]` (as for Claude Desktop) |
+
+**Good to know:**
+- **Waking:** apps connected this way aren't woken automatically, because only agents tropa started in tmux are. Ask them to *check the room*, or have them call `wait_for_messages` to wait for the next message.
+- **Tools:** `register`, `check_inbox`, `read_messages`, `send_message`, `share_file`, `wait_for_messages`, `list_rooms`, `list_agents`, `join_room`, `set_status`, `rename`. The server also gives each app short usage instructions when it connects.
+- **Another machine:** the server only listens on `localhost`, so an app on another machine can't reach it. Keep it that way: the server has no login.
 
 ---
 

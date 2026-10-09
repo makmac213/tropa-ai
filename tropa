@@ -1,5 +1,5 @@
 #!/bin/bash
-# tropa — turn any folder into an AI-IRC agent team.  (macOS bash 3.2 compatible)
+# tropa — turn any folder into a TropaAI agent team.  (macOS bash 3.2 compatible)
 #
 #   tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--panel] [DIR]
 #   tropa panel  [DIR]                      open the agent control panel
@@ -117,7 +117,7 @@ server_up() {
     valid_port "$port" || die "invalid port '$port'"
     if health "$port"; then
         if is_tropa_server "$port"; then
-            info "✅ AI-IRC already running on http://localhost:$port (human: @$(server_human "$port"))"
+            info "✅ TropaAI already running on http://localhost:$port (human: @$(server_human "$port"))"
             [ "${TROPA_NO_HOST:-0}" = 1 ] || host_start "$port"
         else
             old_server_note "$port"
@@ -126,12 +126,12 @@ server_up() {
     fi
     name=$(compose_name "$port")
     if [ "$mode" != node ] && docker_ok; then
-        info "🐳 Starting AI-IRC in Docker (project '$name', port $port)..."
+        info "🐳 Starting TropaAI in Docker (project '$name', port $port)..."
         local svc="ai-irc"; [ "$tts" = 1 ] && svc="ai-irc kokoro"
         (cd "$SERVER_DIR" && AI_IRC_PORT="$port" HUMAN_NAME="$human" TZ="$(host_tz)" \
             docker compose -p "$name" up -d --build $svc) || die "docker compose failed"
     elif node_ok; then
-        info "🟢 Starting AI-IRC with node (port $port)..."
+        info "🟢 Starting TropaAI with node (port $port)..."
         mkdir -p "$STATE_DIR/ai-irc-$port"
         [ -d "$SERVER_DIR/node_modules/express" ] || (cd "$SERVER_DIR" && npm install --omit=dev --no-audit --no-fund >/dev/null) || die "npm install failed"
         (cd "$SERVER_DIR" || exit 1
@@ -139,11 +139,11 @@ server_up() {
             nohup node --no-warnings server.js </dev/null >>"$STATE_DIR/ai-irc-$port.log" 2>&1 &
          echo $! >"$STATE_DIR/ai-irc-$port.pid")
     else
-        die "Need Docker (running) or Node ≥ 22.13 to start AI-IRC. Start Docker, or: $(install_hint node)"
+        die "Need Docker (running) or Node ≥ 22.13 to start TropaAI. Start Docker, or: $(install_hint node)"
     fi
     i=0; while [ $i -lt 60 ]; do health "$port" && break; sleep 1; i=$((i+1)); done
-    health "$port" || die "AI-IRC did not come up on port $port (see 'tropa server logs -p $port')"
-    info "✅ AI-IRC up on http://localhost:$port"
+    health "$port" || die "TropaAI did not come up on port $port (see 'tropa server logs -p $port')"
+    info "✅ TropaAI up on http://localhost:$port"
     [ "${TROPA_NO_HOST:-0}" = 1 ] || host_start "$port"
 }
 
@@ -151,10 +151,10 @@ server_down() {
     local port="$1" name pidf; name=$(compose_name "$port"); pidf="$STATE_DIR/ai-irc-$port.pid"
     host_running "$port" && tmux kill-session -t "$(host_session "$port")" 2>/dev/null
     if [ -f "$pidf" ] && kill -0 "$(cat "$pidf")" 2>/dev/null; then
-        kill "$(cat "$pidf")" && rm -f "$pidf" && info "🛑 Stopped node AI-IRC on port $port"; return
+        kill "$(cat "$pidf")" && rm -f "$pidf" && info "🛑 Stopped node TropaAI on port $port"; return
     fi
     if docker_ok && [ -n "$(docker compose -p "$name" ps -q 2>/dev/null)" ]; then
-        (cd "$SERVER_DIR" && docker compose -p "$name" stop) && info "🛑 Stopped Docker AI-IRC ('$name')"; return
+        (cd "$SERVER_DIR" && docker compose -p "$name" stop) && info "🛑 Stopped Docker TropaAI ('$name')"; return
     fi
     if health "$port"; then
         info "⚠️  Something is serving AI-IRC on $port but tropa didn't start it (e.g. the old ai-irc folder)."
@@ -167,9 +167,9 @@ server_down() {
 server_status() {
     local port="$1"
     if health "$port"; then
-        info "✅ AI-IRC up on http://localhost:$port (human: @$(server_human "$port"))"
+        info "✅ TropaAI up on http://localhost:$port (human: @$(server_human "$port"))"
         is_tropa_server "$port" || old_server_note "$port"
-    else info "⏹  AI-IRC not running on port $port"; return 1; fi
+    else info "⏹  TropaAI not running on port $port"; return 1; fi
 }
 
 server_logs() {
@@ -222,7 +222,7 @@ if "<!-- tropa:begin" in cur and E in cur:
     new = cur[:a] + block.rstrip("\n") + cur[b:]
     if new != cur: open(dst, "w").write(new); print("  ↻ AGENTS.md (team protocol block updated)")
     else: print("  = AGENTS.md (up to date)")
-elif "AI-IRC Agent Team — Protocol" in cur:
+elif "TropaAI Agent Team — Protocol" in cur or "TropaAI Agent Team — Protocol" in cur:
     bak = dst + ".bak-" + time.strftime("%Y%m%d%H%M%S")
     open(bak, "w").write(cur); open(dst, "w").write(block)
     print(f"  ↻ AGENTS.md (old kit copy replaced; previous saved as {os.path.basename(bak)})")

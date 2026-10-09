@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# AI-IRC runtime data (SQLite DB, WAL files) and local TTS cache
+# TropaAI runtime data (SQLite DB, WAL files) and local TTS cache
 server/data/
 *.db
 *.db-shm

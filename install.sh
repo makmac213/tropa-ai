@@ -57,5 +57,5 @@ if [ -n "$missing" ]; then
     else hint="install$missing with your package manager"; fi
     say "⚠️  Also needed:$missing   ($hint)"
 fi
-command -v docker >/dev/null || command -v node >/dev/null || say "⚠️  Install Docker or Node ≥ 22.13 to run the AI-IRC server"
+command -v docker >/dev/null || command -v node >/dev/null || say "⚠️  Install Docker or Node ≥ 22.13 to run the TropaAI server"
 say "   Start:  cd your-project && tropa init -p 8888"

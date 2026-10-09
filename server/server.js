@@ -1,6 +1,6 @@
 'use strict';
 /*
- * AI-IRC — a chat service for Claude agents.
+ * TropaAI chat server (originally AI-IRC) — rooms for AI agent teams and their human.
  *   - "general" room: every agent, any project
  *   - "project:<slug>" rooms: agents working on one project
  *   - MCP endpoint (Streamable HTTP, stateless JSON) at /mcp
@@ -18,6 +18,7 @@ const { WebSocketServer } = require('ws');
 const PORT = Number(process.env.PORT || 8888);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const TZ = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+const PKG_VERSION = (() => { try { return require('./package.json').version; } catch { return ''; } })();
 const HUMAN_NAME = process.env.HUMAN_NAME || 'human';
 const KOKORO_URL = (process.env.KOKORO_URL || 'http://kokoro:8880').replace(/\/+$/, '');
 const ONLINE_WINDOW_MS = 10 * 60 * 1000;
@@ -476,7 +477,8 @@ function fmtInbox(ib) {
 }
 
 // ---------- MCP ----------
-const MCP_INSTRUCTIONS = `AI-IRC is a shared chat for Claude agents working in different sessions, and their human (${HUMAN_NAME}).
+const MCP_INSTRUCTIONS = `TropaAI is a shared chat for AI agents working in different sessions (Claude Code, Codex, OpenCode, Qwen Code…), and their human (${HUMAN_NAME}).
+Wake-up prompts typed into your terminal start with "[tropa]": read the room when you see one.
 Rooms: "general" (all agents, any project) and "project:<slug>" (only agents working on that project).
 Workflow:
 1. Call register once at the start with a short, stable agent name (e.g. "api-backend"), your project slug, and who you are: provider (e.g. "Claude Code", "Codex", "OpenCode") and model (e.g. "claude-opus-4-5"). This joins you to general + your project room. To change your name later, use rename (don't register a second name). To switch project, call register again with the same name and the new project.
@@ -710,7 +712,7 @@ async function handleRpc(msg, ctx) {
       return ok({
         protocolVersion: SUPPORTED_PROTOCOLS.includes(requested) ? requested : SUPPORTED_PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'ai-irc', version: '1.0.0' },
+        serverInfo: { name: 'tropa', title: 'TropaAI chat', version: PKG_VERSION || '2' },
         instructions: MCP_INSTRUCTIONS,
       });
     }
@@ -880,7 +882,7 @@ function sendTranscript(res, { rooms, msgs, title, slug, format }) {
   const fmt = ['md', 'txt', 'json'].includes(format) ? format : 'md';
   const types = { md: 'text/markdown', txt: 'text/plain', json: 'application/json' };
   const p = stampParts(Date.now());
-  const filename = `ai-irc_${slug}_${p.date}_${p.time.replace(':', '')}.${fmt}`;
+  const filename = `tropa_${slug}_${p.date}_${p.time.replace(':', '')}.${fmt}`;
   res.set('Content-Type', `${types[fmt]}; charset=utf-8`);
   res.set('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(buildTranscript({ rooms, msgs: msgs.map(rowToMessage), title, format: fmt }));
@@ -1004,7 +1006,7 @@ api.get('/wait', wrap(async (req, res) => {
 }));
 
 // ---------- team: wake routing, live screens, approvals ----------
-// AI-IRC decides who to wake. A watcher on the host (tropa's room_watcher.py) long-polls
+// The chat server decides who to wake. A watcher on the host (tropa's room_watcher.py) long-polls
 // /api/watch/poll for wake/command events, types them into the agents' tmux windows,
 // and streams each agent's screen back here for the monitor's Team view.
 db.exec(`CREATE TABLE IF NOT EXISTS room_wake (
@@ -1084,7 +1086,7 @@ function watcherSay(roomId, content) {
   try { return postMessage({ room: roomId, sender: WATCHER, kind: 'system', content }); } catch (e) { console.error(e); }
 }
 function wakeText(roomId, agent, reason, s) {
-  return `[ai-irc] ${reason} Read your unread messages in ${roomId} (ai-irc read_messages, agent "${agent}", limit ${s.history_limit}). ` +
+  return `[tropa] ${reason} Read your unread messages in ${roomId} (tropa read_messages, agent "${agent}", limit ${s.history_limit}). ` +
     'Follow AGENTS.md: act if you are mentioned or needed, otherwise stay silent.';
 }
 /** Who a message wakes: @all → everyone but the sender; @name → those agents; human with no
@@ -1417,8 +1419,7 @@ api.delete('/projects/:slug', wrap((req) => {
 
 app.use('/api', api);
 
-const PKG_VERSION = (() => { try { return require('./package.json').version; } catch { return ''; } })();
-app.get('/health', (req, res) => res.json({ ok: true, app: 'ai-irc', version: PKG_VERSION, features: ['team', 'wake-routing', 'project-delete', 'files', 'host'] }));
+app.get('/health', (req, res) => res.json({ ok: true, app: 'tropa-ai', version: PKG_VERSION, features: ['team', 'wake-routing', 'project-delete', 'files', 'host'] }));
 app.get('/agent-guide.md', (req, res) => res.type('text/markdown').sendFile(path.join(__dirname, 'AGENT_GUIDE.md')));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -1451,7 +1452,7 @@ setInterval(() => {
 }, 30000).unref();
 
 server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
-  console.log(`TropaAI chat (AI-IRC) listening on http://localhost:${PORT}  (MCP: /mcp, API: /api, UI: /)`);
+  console.log(`TropaAI chat listening on http://localhost:${PORT}  (MCP: /mcp, API: /api, UI: /)`);
 });
 
 function shutdown() { server.close(); try { db.close(); } catch {} process.exit(0); }
