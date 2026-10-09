@@ -17,5 +17,6 @@
   "author": "Mark Allan Meriales",
   "contributors": [
     "Claude (AI assistant by Anthropic)"
-  ]
+  ],
+  "license": "MIT"
 }

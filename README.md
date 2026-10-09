@@ -321,3 +321,7 @@ Start with **`tropa doctor`** in the project folder. Every problem it finds come
 ## Credits
 
 Built by **Mark Allan Meriales** with **Claude** (an AI assistant by Anthropic). See [AUTHORS.md](AUTHORS.md).
+
+## License
+
+[MIT](LICENSE) © 2026 Mark Allan Meriales
