@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# AI-IRC runtime data (SQLite DB, WAL files) and local TTS cache
+server/data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+.incoming-tts/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Kit runtime state (only created if the kit is run in place)
+kit/.agent_sync/chatroom/.last_id
+kit/.agent_sync/TEAM.md
+
+# Build, release and test output
+dist/
+*.tar.gz
+*.log
+*.pid
+tmp/
+
+# Secrets and local overrides
+.env
+.env.*
+!.env.example
+
+# Backups made by `tropa init` when replacing an old AGENTS.md
+*.bak-*
+
+# Editor and OS clutter
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~

@@ -1,0 +1,274 @@
+#!/bin/bash
+# tropa — turn any folder into an AI-IRC agent team.  (macOS bash 3.2 compatible)
+#
+#   tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--panel] [DIR]
+#   tropa panel  [DIR]                      open the agent control panel
+#   tropa doctor [DIR]                      check tools, server, agents, tmux
+#   tropa server up|down|status|logs [-p PORT] [--tts] [--node] [--human NAME]
+#   tropa update [DIR]                      refresh a project's kit to this tropa version
+#   tropa self-update                       update tropa itself
+#   tropa install [BIN_DIR]                 put this copy of `tropa` on your PATH
+#   tropa help
+#
+# DIR defaults to the current folder. PORT defaults to the project's saved port,
+# else 8888. Re-running `tropa init` updates the kit and keeps your settings.
+export PYTHONDONTWRITEBYTECODE=1
+SRC="${BASH_SOURCE[0]}"
+while [ -h "$SRC" ]; do D="$(cd -P "$(dirname "$SRC")" && pwd)"; SRC="$(readlink "$SRC")"; case "$SRC" in /*) ;; *) SRC="$D/$SRC";; esac; done
+TROPA_HOME="$(cd "$(dirname "$SRC")" && pwd)"   # logical path: keeps ~/.tropa/app stable across updates
+KIT="$TROPA_HOME/kit"
+SERVER_DIR="$TROPA_HOME/server"
+STATE_DIR="${TROPA_STATE:-$HOME/.tropa}"
+VERSION="$(cat "$TROPA_HOME/VERSION" 2>/dev/null || echo dev)"
+TROPA_REPO="${TROPA_REPO:-makmac213/tropa-ai}"
+
+die()  { echo "❌ $*" >&2; exit 1; }
+info() { echo "$*"; }
+usage() { sed -n '2,14p' "$TROPA_HOME/tropa" | sed 's/^# \{0,1\}//'; }
+
+abspath() { mkdir -p "$1" && (cd "$1" && pwd -P); }
+health()  { curl -fsS --max-time 3 "http://localhost:$1/health" >/dev/null 2>&1; }
+compose_name() { if [ "$1" = 8888 ]; then echo ai-irc; else echo "ai-irc-$1"; fi; }
+valid_port() { case "$1" in ''|*[!0-9]*) return 1;; esac; [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; }
+
+server_human() {   # prints HUMAN_NAME of the server on port $1
+    curl -fsS --max-time 3 "http://localhost:$1/api/state" 2>/dev/null |
+        python3 -c 'import json,sys; print(json.load(sys.stdin).get("human",""))' 2>/dev/null
+}
+port_of() {        # project dir -> port from its settings.json server URL
+    python3 - "$1" <<'PY' 2>/dev/null
+import json, sys, urllib.parse
+try:
+    s = json.load(open(sys.argv[1] + "/.agent_sync/settings.json")).get("server", "")
+    print(urllib.parse.urlparse(s).port or "")
+except Exception:
+    print("")
+PY
+}
+node_ok() {
+    command -v node >/dev/null || return 1
+    node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)'
+}
+docker_ok() { command -v docker >/dev/null && docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; }
+
+# ---------------------------------------------------------------- server
+server_up() {
+    local port="$1" human="$2" tts="$3" mode="$4" name i
+    valid_port "$port" || die "invalid port '$port'"
+    if health "$port"; then
+        info "✅ AI-IRC already running on http://localhost:$port (human: @$(server_human "$port"))"
+        return 0
+    fi
+    name=$(compose_name "$port")
+    if [ "$mode" != node ] && docker_ok; then
+        info "🐳 Starting AI-IRC in Docker (project '$name', port $port)..."
+        local svc="ai-irc"; [ "$tts" = 1 ] && svc="ai-irc kokoro"
+        (cd "$SERVER_DIR" && AI_IRC_PORT="$port" HUMAN_NAME="$human" \
+            docker compose -p "$name" up -d --build $svc) || die "docker compose failed"
+    elif node_ok; then
+        info "🟢 Starting AI-IRC with node (port $port)..."
+        mkdir -p "$STATE_DIR/ai-irc-$port"
+        [ -d "$SERVER_DIR/node_modules/express" ] || (cd "$SERVER_DIR" && npm install --omit=dev --no-audit --no-fund >/dev/null) || die "npm install failed"
+        (cd "$SERVER_DIR" && PORT="$port" HOST=127.0.0.1 DATA_DIR="$STATE_DIR/ai-irc-$port" HUMAN_NAME="$human" \
+            nohup node --no-warnings server.js >>"$STATE_DIR/ai-irc-$port.log" 2>&1 & echo $! >"$STATE_DIR/ai-irc-$port.pid")
+    else
+        die "Need Docker (running) or Node ≥ 22.13 to start AI-IRC. Install one, or start the server yourself."
+    fi
+    i=0; while [ $i -lt 60 ]; do health "$port" && break; sleep 1; i=$((i+1)); done
+    health "$port" || die "AI-IRC did not come up on port $port (see 'tropa server logs -p $port')"
+    info "✅ AI-IRC up on http://localhost:$port"
+}
+
+server_down() {
+    local port="$1" name pidf; name=$(compose_name "$port"); pidf="$STATE_DIR/ai-irc-$port.pid"
+    if [ -f "$pidf" ] && kill -0 "$(cat "$pidf")" 2>/dev/null; then
+        kill "$(cat "$pidf")" && rm -f "$pidf" && info "🛑 Stopped node AI-IRC on port $port"; return
+    fi
+    if docker_ok && [ -n "$(docker compose -p "$name" ps -q 2>/dev/null)" ]; then
+        (cd "$SERVER_DIR" && docker compose -p "$name" stop) && info "🛑 Stopped Docker AI-IRC ('$name')"; return
+    fi
+    if health "$port"; then
+        info "⚠️  Something is serving AI-IRC on $port but tropa didn't start it (e.g. the old ai-irc folder)."
+        info "   Stop it there: docker stop ai-irc"
+    else
+        info "Nothing running on port $port."
+    fi
+}
+
+server_status() {
+    local port="$1"
+    if health "$port"; then info "✅ AI-IRC up on http://localhost:$port (human: @$(server_human "$port"))"
+    else info "⏹  AI-IRC not running on port $port"; return 1; fi
+}
+
+server_logs() {
+    local port="$1" name; name=$(compose_name "$port")
+    if [ -f "$STATE_DIR/ai-irc-$port.log" ] && [ -f "$STATE_DIR/ai-irc-$port.pid" ]; then tail -n 80 "$STATE_DIR/ai-irc-$port.log"
+    elif docker_ok; then (cd "$SERVER_DIR" && docker compose -p "$name" logs --tail 80 ai-irc)
+    else info "No logs found for port $port"; fi
+}
+
+cmd_server() {
+    local sub="$1"; shift
+    local port="" tts=0 mode="" human=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -p|--port) port="$2"; shift ;;
+            --tts) tts=1 ;;
+            --node) mode=node ;;
+            --human) human="$2"; shift ;;
+            *) die "unknown option '$1'" ;;
+        esac; shift
+    done
+    [ -z "$port" ] && [ -f ./.agent_sync/settings.json ] && port=$(port_of "$PWD")
+    port="${port:-8888}"
+    if [ -z "$human" ]; then
+        human=$( [ -f ./.agent_sync/config.py ] && python3 ./.agent_sync/config.py get human 2>/dev/null )
+        human="${human:-Mark}"
+    fi
+    case "$sub" in
+        up) server_up "$port" "$human" "$tts" "$mode" ;;
+        down|stop) server_down "$port" ;;
+        status) server_status "$port" ;;
+        logs) server_logs "$port" ;;
+        *) die "usage: tropa server up|down|status|logs [-p PORT]" ;;
+    esac
+}
+
+# ---------------------------------------------------------------- init
+C() { python3 "$S/config.py" "$@"; }   # uses the caller's $S (project .agent_sync)
+merge_agents_md() {   # $1 = project dir; keep the user's own AGENTS.md content
+    python3 - "$KIT/AGENTS.md" "$1/AGENTS.md" <<'PY'
+import os, sys, time
+kit, dst = sys.argv[1], sys.argv[2]
+B, E = "<!-- tropa:begin (managed by `tropa init`; edits inside are overwritten) -->", "<!-- tropa:end -->"
+block = f"{B}\n{open(kit).read().rstrip()}\n{E}\n"
+if not os.path.exists(dst):
+    open(dst, "w").write(block); print("  + AGENTS.md"); sys.exit()
+cur = open(dst).read()
+if "<!-- tropa:begin" in cur and E in cur:
+    a = cur.index("<!-- tropa:begin"); b = cur.index(E) + len(E)
+    new = cur[:a] + block.rstrip("\n") + cur[b:]
+    if new != cur: open(dst, "w").write(new); print("  ↻ AGENTS.md (team protocol block updated)")
+    else: print("  = AGENTS.md (up to date)")
+elif "AI-IRC Agent Team — Protocol" in cur:
+    bak = dst + ".bak-" + time.strftime("%Y%m%d%H%M%S")
+    open(bak, "w").write(cur); open(dst, "w").write(block)
+    print(f"  ↻ AGENTS.md (old kit copy replaced; previous saved as {os.path.basename(bak)})")
+else:
+    open(dst, "w").write(cur.rstrip("\n") + "\n\n" + block); print("  + AGENTS.md (team protocol appended to your existing file)")
+PY
+}
+
+cmd_init() {
+    local dir="" port="" slug="" human="" no_server=0 panel=0 tts=0 mode=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -p|--port) port="$2"; shift ;;
+            -n|--name|--project) slug="$2"; shift ;;
+            --human) human="$2"; shift ;;
+            --no-server) no_server=1 ;;
+            --panel) panel=1 ;;
+            --tts) tts=1 ;;
+            --node) mode=node ;;
+            -h|--help) usage; exit 0 ;;
+            -*) die "unknown option '$1' (see: tropa help)" ;;
+            *) dir="$1" ;;
+        esac; shift
+    done
+    [ -n "$port" ] && { valid_port "$port" || die "invalid port '$port'"; }
+    for b in python3 curl; do command -v "$b" >/dev/null || die "'$b' is required"; done
+    dir=$(abspath "${dir:-.}") || die "cannot use folder"
+    [ "$dir" = "$TROPA_HOME" ] && die "run tropa init in a project folder, not in tropa itself"
+    local S="$dir/.agent_sync"
+    info "🧩 Setting up agent team in $dir"
+
+    mkdir -p "$S/chatroom" "$dir/agents"
+    local f
+    for f in "$KIT"/.agent_sync/*; do
+        case "$(basename "$f")" in settings.json|__pycache__|chatroom|TEAM.md) continue ;; esac
+        cp -p "$f" "$S/"
+    done
+    chmod +x "$S"/*.sh "$S"/*.py
+    touch "$S/chatroom/broadcast.txt"
+    if [ -f "$S/settings.json" ]; then info "  = .agent_sync/settings.json (kept)"
+    else
+        cp "$KIT/.agent_sync/settings.json" "$S/settings.json"; info "  + .agent_sync/settings.json"
+        NEW_SETTINGS=1   # give each project its own tmux session so watchers don't cross projects
+    fi
+    info "  ↻ .agent_sync scripts"
+    merge_agents_md "$dir"
+
+    C set tropa_home "\"$TROPA_HOME\""
+    [ -n "$slug" ]  && C set project "\"$slug\""
+    [ -n "$human" ] && C set human "\"$human\""
+    [ "${NEW_SETTINGS:-0}" = 1 ] && C set tmux_session "\"ai-$(C get project)\""
+    if [ -n "$port" ]; then C set server "\"http://localhost:$port\""
+    else port=$(port_of "$dir"); port="${port:-8888}"; fi
+    mkdir -p "$dir/$(C get docs_dir)"
+
+    if [ -d "$dir/.git" ] || [ -f "$dir/.gitignore" ]; then
+        if ! grep -q "tropa:begin" "$dir/.gitignore" 2>/dev/null; then
+            printf '\n# tropa:begin\n.agent_sync/chatroom/\n.agent_sync/__pycache__/\n.agent_sync/TEAM.md\nagents/*/*\n!agents/*/agent.json\n# tropa:end\n' >>"$dir/.gitignore"
+            info "  + .gitignore entries"
+        fi
+    fi
+
+    if [ "$no_server" = 0 ]; then
+        server_up "$port" "$(C get human)" "$tts" "$mode" || exit 1
+        local sh; sh=$(server_human "$port")
+        if [ -n "$sh" ] && [ "$sh" != "$(C get human)" ]; then
+            if [ -n "$human" ]; then
+                info "⚠️  The server on port $port knows the human as @$sh, not @$human. Restart it with HUMAN_NAME=$human or use another port."
+            else
+                C set human "\"$sh\""; info "  ↻ human set to @$sh (from the server)"
+            fi
+        fi
+        curl -fsS -X POST -H 'Content-Type: application/json' -d "{\"project\":\"$(C get project)\"}" \
+            "http://localhost:$port/api/rooms" >/dev/null 2>&1 && info "  ✓ room $(C get room) ready"
+    fi
+    python3 "$S/setup_agent.py" refresh >/dev/null
+
+    info ""
+    info "✅ Ready: room $(C get room) on $(C get server)"
+    info "   Next:  tropa panel            create agents, start them + the watcher"
+    info "          tmux attach -t $(C get tmux_session)"
+    info "          open $(C get server)   chat as @$(C get human)"
+    [ "$panel" = 1 ] && exec "$S/manage_agents.sh"
+    return 0
+}
+
+project_dir() {
+    local d; d=$(cd "${1:-.}" 2>/dev/null && pwd -P) || die "no such folder: $1"
+    [ -f "$d/.agent_sync/config.py" ] || die "$d is not set up yet — run: tropa init"
+    echo "$d"
+}
+
+cmd_install() {
+    local bin="${1:-}"
+    if [ -z "$bin" ]; then
+        if [ -w /usr/local/bin ]; then bin=/usr/local/bin; else bin="$HOME/.local/bin"; fi
+    fi
+    mkdir -p "$bin" && ln -sf "$TROPA_HOME/tropa" "$bin/tropa" || die "could not link into $bin"
+    info "✅ Linked $bin/tropa → $TROPA_HOME/tropa"
+    case ":$PATH:" in *":$bin:"*) ;; *) info "   Add to PATH: echo 'export PATH=\"$bin:\$PATH\"' >> ~/.zshrc";; esac
+}
+
+case "${1:-help}" in
+    init|bootstrap) shift; cmd_init "$@" ;;
+    update) shift; cmd_init --no-server "$@" ;;
+    panel)  shift; d=$(project_dir "$1") && cd "$d" && exec "$d/.agent_sync/manage_agents.sh" ;;
+    doctor) shift; d=$(project_dir "$1") && exec python3 "$d/.agent_sync/doctor.py" ;;
+    server) shift; cmd_server "$@" ;;
+    install) shift; cmd_install "$@" ;;
+    self-update|selfupdate)
+        if [ -d "$TROPA_HOME/.git" ]; then
+            git -C "$TROPA_HOME" pull --ff-only && echo "✅ tropa $(cat "$TROPA_HOME/VERSION")"
+        else
+            curl -fsSL "https://raw.githubusercontent.com/$TROPA_REPO/main/install.sh" | TROPA_REPO="$TROPA_REPO" bash
+        fi
+        echo "   Run 'tropa update' in each project to refresh its kit." ;;
+    version|--version|-v) echo "tropa $VERSION" ;;
+    help|-h|--help) usage ;;
+    *) die "unknown command '$1' (see: tropa help)" ;;
+esac

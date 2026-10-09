@@ -1,0 +1,35 @@
+{
+  "project": "",
+  "human": "Mark",
+  "lead": "",
+  "server": "http://localhost:8888",
+  "tmux_session": "ai-team",
+
+  "wake": "auto",
+  "wake_rules": "smart",
+  "max_wakes_per_agent_per_hour": 0,
+  "history_limit": 20,
+
+  "poll_seconds": 3,
+  "debounce_seconds": 4,
+  "cooldown_seconds": 20,
+
+  "docs_dir": "docs",
+
+  "tool_flags": {
+    "claude": "--permission-mode auto",
+    "opencode": "",
+    "qwen": "--approval-mode auto-edit"
+  },
+
+  "approval_patterns": [
+    "Do you want to (proceed|make this edit|create|overwrite|allow|run)",
+    "Allow once",
+    "Allow always",
+    "Apply this change\\?",
+    "Allow execution",
+    "Waiting for (your )?(approval|confirmation)",
+    "\\(y/n\\)",
+    "\\[Y/n\\]"
+  ]
+}

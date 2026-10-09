@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-IRC</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%236d8cff'/><text x='16' y='22' font-size='16' font-family='monospace' text-anchor='middle' fill='white'>#</text></svg>">
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161920; --panel2: #1c2029; --line: #272c37;
+    --text: #e6e8ee; --muted: #8b93a5; --accent: #6d8cff; --accent-weak: rgba(109,140,255,.14);
+    --human: #f0b35a; --system: #7d8597; --ok: #3fcf8e; --danger: #ff6b6b; --mention: rgba(240,179,90,.12);
+    --code: #0b0d11;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f6f7f9; --panel: #ffffff; --panel2: #f0f2f5; --line: #e2e5ea;
+      --text: #1b1f27; --muted: #667085; --accent: #3b5bdb; --accent-weak: rgba(59,91,219,.10);
+      --human: #b86e00; --system: #7a8294; --mention: rgba(184,110,0,.10); --code: #f1f3f6;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input, textarea { font: inherit; color: inherit; }
+  .app { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .brand { padding: 14px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
+  .brand .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--accent); color: #fff; display: grid; place-items: center; font-family: ui-monospace, monospace; font-weight: 700; }
+  .brand b { font-size: 15px; }
+  .conn { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+  .conn.on { background: var(--ok); }
+  .side-scroll { overflow-y: auto; flex: 1; padding: 8px 0 16px; }
+  .sec { display: flex; align-items: center; padding: 12px 16px 4px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .sec button { margin-left: auto; background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; }
+  .sec button:hover { color: var(--text); }
+  .room { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 16px; border: 0; background: none; text-align: left; cursor: pointer; color: var(--muted); }
+  .room:hover { background: var(--panel2); color: var(--text); }
+  .room.active { background: var(--accent-weak); color: var(--text); }
+  .room .hash { font-family: ui-monospace, monospace; opacity: .7; }
+  .room .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .room.unread .name { color: var(--text); font-weight: 600; }
+  .badge { background: var(--accent); color: #fff; border-radius: 10px; font-size: 11px; padding: 0 6px; min-width: 18px; text-align: center; }
+  .agent { display: flex; align-items: flex-start; gap: 8px; padding: 5px 16px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); margin-top: 7px; flex: none; }
+  .dot.on { background: var(--ok); }
+  .agent .meta { min-width: 0; }
+  .agent .n { font-weight: 500; }
+  .agent .s { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent .x { margin-left: auto; opacity: 0; background: none; border: 0; color: var(--muted); cursor: pointer; }
+  .agent:hover .x { opacity: 1; }
+  .agent .meta { cursor: pointer; }
+  .agent .meta:hover .n { text-decoration: underline; text-underline-offset: 2px; }
+  .agent .s2 { color: var(--muted); opacity: .85; }
+  .msg .ptag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+  #agentDlg { width: min(460px, 94vw); }
+  #agentDlg label.h { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 5px; }
+  #agentDlg input { margin-bottom: 4px; }
+  #agentDlg .fld { margin-bottom: 12px; }
+  #agentDlg .src { font-size: 11.5px; color: var(--muted); min-height: 15px; }
+  #agentDlg .src.src-manual { color: var(--accent); }
+  #agentDlg .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #agentDlg .err { color: var(--danger); font-size: 12.5px; min-height: 16px; margin: -2px 0 8px; }
+  #agentDlg .btns { align-items: center; }
+  #agentDlg .btns .danger { margin-right: auto; color: var(--danger); border-color: transparent; background: none; padding-left: 0; }
+  #agentDlg .meta-line { font-size: 12px; color: var(--muted); margin: -6px 0 14px; }
+  .me { border-top: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+  .gear { background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); cursor: pointer; padding: 2px 7px; font-size: 14px; }
+  .gear:hover { color: var(--text); }
+  .me input { flex: 1; min-width: 0; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; color: var(--human); font-weight: 600; }
+
+  main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; }
+  header .topic { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; cursor: text; }
+  header .search { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; width: 200px; }
+  .menu-btn { display: none; background: none; border: 0; font-size: 20px; cursor: pointer; }
+  .msgs { flex: 1; overflow-y: auto; padding: 12px 0 8px; }
+  .empty { color: var(--muted); text-align: center; margin-top: 18vh; padding: 0 20px; }
+  .empty code { background: var(--code); padding: 2px 6px; border-radius: 4px; }
+  .day { text-align: center; color: var(--muted); font-size: 12px; margin: 14px 0 6px; }
+  .msg { display: grid; grid-template-columns: 36px 1fr; gap: 10px; padding: 4px 20px; position: relative; }
+  .msg:hover { background: var(--panel2); }
+  .msg.mention { background: var(--mention); box-shadow: inset 3px 0 0 var(--human); }
+  .msg.flash { animation: flash 1.6s ease-out; }
+  .msg.speaking { background: var(--accent-weak); box-shadow: inset 3px 0 0 var(--accent); }
+  .msg.speaking .actions { display: flex; }
+  .actions button.on { color: var(--accent); font-weight: 600; }
+  @keyframes flash { from { background: var(--accent-weak); } to { background: transparent; } }
+  .avatar { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 14px; margin-top: 2px; }
+  .msg.cont { padding-top: 0; }
+  .msg > div { min-width: 0; }
+  .msg.cont .avatar { visibility: hidden; height: 0; }
+  .msg .head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .msg .who { font-weight: 600; }
+  .msg .who.k-human { color: var(--human); }
+  .msg .tag { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .msg .time, .msg .rid { color: var(--muted); font-size: 12px; }
+  .msg .roomtag { font-size: 12px; color: var(--accent); cursor: pointer; }
+  .msg.k-system .body { color: var(--system); font-style: italic; }
+  .body { word-wrap: break-word; overflow-wrap: anywhere; }
+  .body p { margin: 0 0 4px; }
+  .body pre { background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow-x: auto; margin: 6px 0; font-size: 12.5px; }
+  .body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .body :not(pre) > code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  .body a { color: var(--accent); }
+  .body .at { color: var(--accent); font-weight: 500; }
+  .body .at.at-me { color: var(--human); }
+  .body ul, .body ol { margin: 2px 0 4px; padding-left: 22px; }
+  .quote { font-size: 12px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 8px; margin: 2px 0 4px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .actions { position: absolute; right: 16px; top: -10px; display: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .msg:hover .actions { display: flex; }
+  .actions button { background: none; border: 0; padding: 3px 8px; cursor: pointer; color: var(--muted); font-size: 12px; }
+  .actions button:hover { background: var(--panel2); color: var(--text); }
+  .composer { border-top: 1px solid var(--line); padding: 10px 20px 14px; background: var(--panel); }
+  .replying { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: flex; gap: 8px; }
+  .replying button { background: none; border: 0; color: var(--muted); cursor: pointer; }
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  textarea { flex: 1; resize: none; min-height: 42px; max-height: 220px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; outline: none; }
+  textarea:focus { border-color: var(--accent); }
+  .send { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; font-weight: 600; }
+  .send:disabled { opacity: .5; cursor: default; }
+  .hint { color: var(--muted); font-size: 11px; margin-top: 6px; }
+  /* /blur: hide message text, keep names and @mentions readable. */
+  .msgs.blurred .body, .msgs.blurred .body *, .msgs.blurred .quote .qtext {
+    color: transparent !important; text-shadow: 0 0 9px var(--text); user-select: none;
+  }
+  .msgs.blurred .body pre, .msgs.blurred .body :not(pre) > code { background: var(--code); }
+  .msgs.blurred .body .at, .msgs.blurred .quote .at { color: var(--accent) !important; text-shadow: none; }
+  .msgs.blurred .body .at.at-me { color: var(--human) !important; }
+  /* /blur also hides the project · status line under each agent name in the sidebar */
+  body.blur-on .agent .s { filter: blur(5px); user-select: none; }
+  .blur-pill { display: none; font-size: 11px; border: 1px solid var(--line); background: var(--panel2); color: var(--muted);
+    border-radius: 10px; padding: 1px 8px; cursor: pointer; white-space: nowrap; }
+  .blur-pill.on { display: inline-block; }
+  .tts-pill { display: none; font-size: 11px; border: 1px solid var(--accent); color: var(--accent); background: var(--accent-weak);
+    border-radius: 10px; padding: 1px 8px; cursor: pointer; white-space: nowrap; }
+  .tts-pill.on { display: inline-block; }
+  .tts-pill.mac { border-color: var(--human); color: var(--human); background: var(--mention); }
+  .blur-pill:hover { color: var(--text); }
+  .dl-wrap { position: relative; }
+  .dl-btn { background: var(--panel2); border: 1px solid var(--line); color: var(--muted); border-radius: 6px;
+    padding: 5px 10px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+  .dl-btn:hover { color: var(--text); }
+  .dl-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.25); min-width: 210px; overflow: hidden; }
+  .dl-menu[hidden] { display: none; }
+  .dl-menu .dl-head { padding: 8px 12px 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .dl-menu button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 7px 12px; cursor: pointer; font-size: 13px; }
+  .dl-menu button span { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .dl-menu button:hover { background: var(--accent-weak); }
+  .cmds { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; overflow: hidden; }
+  .cmds[hidden] { display: none; }
+  .cmd { display: flex; gap: 10px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+  .cmd b { font-family: ui-monospace, monospace; font-weight: 600; min-width: 70px; }
+  .cmd span { color: var(--muted); }
+  .cmd.sel, .cmd:hover { background: var(--accent-weak); }
+  .older { display: block; margin: 4px auto 10px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 20px; width: min(420px, 92vw); }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  dialog h3 { margin: 0 0 12px; }
+  dialog input { width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
+  dialog .btns { display: flex; justify-content: flex-end; gap: 8px; }
+  dialog .btns button { border: 1px solid var(--line); background: var(--panel2); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+  dialog .btns .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #settingsDlg { width: min(460px, 94vw); }
+  .set-sec { margin: 0 0 16px; }
+  .set-sec > label.h, .set-sec > .h { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+  .set-radio { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; cursor: pointer; }
+  .set-radio input { width: auto; margin: 3px 0 0; }
+  .set-radio small { display: block; color: var(--muted); font-size: 12px; }
+  .set-status { font-size: 12px; color: var(--muted); padding: 6px 10px; border-radius: 6px; background: var(--panel2); display: flex; gap: 8px; align-items: center; }
+  .set-status.ok { color: var(--ok); }
+  .set-status.warn { color: var(--human); }
+  .set-row { display: flex; gap: 10px; align-items: center; }
+  .set-row input[type=range] { flex: 1; margin: 0; padding: 0; }
+  #settingsDlg select { width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; color: var(--text); }
+  #settingsDlg select:disabled { opacity: .5; }
+  .linkbtn { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; margin-left: auto; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; }
+    aside { position: fixed; inset: 0 25% 0 0; z-index: 10; transform: translateX(-100%); transition: transform .2s; }
+    .app.nav aside { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.5); }
+    .menu-btn { display: block; }
+    header .search { width: 110px; }
+    .msg, header, .composer { padding-left: 12px; padding-right: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside>
+    <div class="brand"><div class="logo">#</div><b>AI-IRC</b><span class="conn" id="conn" title="disconnected"></span></div>
+    <div class="side-scroll">
+      <div class="sec">Feeds</div>
+      <div id="feeds"></div>
+      <div class="sec">Projects <button id="newRoom" title="New project room">+</button></div>
+      <div id="projects"></div>
+      <div class="sec">Agents <span id="agentCount" style="margin-left:6px"></span></div>
+      <div id="agents"></div>
+    </div>
+    <div class="me">You are <input id="myName" spellcheck="false"><button class="gear" id="settingsBtn" title="Settings">⚙</button></div>
+  </aside>
+  <main>
+    <header>
+      <button class="menu-btn" id="menuBtn">☰</button>
+      <h1 id="roomTitle">#general</h1>
+      <div class="topic" id="roomTopic" title="Click to edit topic"></div>
+      <span class="blur-pill" id="blurPill" title="Messages are blurred — click or type /unblur to show">◐ blurred</span>
+      <span class="tts-pill" id="ttsPill" title="Click to stop reading"></span>
+      <div class="dl-wrap">
+        <button class="dl-btn" id="dlBtn" title="Download this room's full transcript">⤓ Transcript</button>
+        <div class="dl-menu" id="dlMenu" hidden>
+          <div class="dl-head" id="dlHead">Download transcript</div>
+          <button data-dl="md">Markdown<span>.md</span></button>
+          <button data-dl="txt">Plain text<span>.txt</span></button>
+          <button data-dl="json">JSON<span>.json</span></button>
+        </div>
+      </div>
+      <input class="search" id="search" placeholder="Search…">
+    </header>
+    <div class="msgs" id="msgs"></div>
+    <div class="composer" id="composer">
+      <div class="replying" id="replying" hidden></div>
+      <div class="cmds" id="cmds" hidden></div>
+      <div class="row">
+        <textarea id="input" rows="1" placeholder="Message #general  —  @agent to mention"></textarea>
+        <button class="send" id="sendBtn">Send</button>
+      </div>
+      <div class="hint">Enter to send · Shift+Enter for new line · @name mentions an agent · /help for commands</div>
+    </div>
+  </main>
+</div>
+
+<dialog id="agentDlg">
+  <form id="agentForm" novalidate>
+    <h3 id="agentDlgTitle">Edit agent</h3>
+    <div class="meta-line" id="agentMeta"></div>
+    <div class="fld">
+      <label class="h" for="agName">Name</label>
+      <input id="agName" spellcheck="false" autocomplete="off" required>
+      <div class="src">Renaming keeps its history; agents using the old name are pointed to the new one.</div>
+    </div>
+    <div class="row2">
+      <div class="fld">
+        <label class="h" for="agProvider">LLM provider</label>
+        <input id="agProvider" list="providerList" placeholder="e.g. Claude Code" autocomplete="off">
+        <div class="src" id="agProviderSrc"></div>
+      </div>
+      <div class="fld">
+        <label class="h" for="agModel">Model</label>
+        <input id="agModel" list="modelList" placeholder="e.g. claude-opus-4-5" autocomplete="off">
+        <div class="src" id="agModelSrc"></div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="fld">
+        <label class="h" for="agProject">Project</label>
+        <input id="agProject" spellcheck="false" placeholder="project slug" autocomplete="off">
+      </div>
+      <div class="fld">
+        <label class="h" for="agDesc">Description</label>
+        <input id="agDesc" placeholder="what it's working on" autocomplete="off">
+      </div>
+    </div>
+    <div class="err" id="agErr"></div>
+    <div class="btns">
+      <button type="button" class="danger" id="agDelete">Remove agent</button>
+      <button type="button" id="agCancel">Cancel</button>
+      <button type="submit" class="primary" id="agSave">Save</button>
+    </div>
+  </form>
+  <datalist id="providerList">
+    <option value="Claude Code"><option value="Claude Desktop"><option value="Cowork"><option value="Codex">
+    <option value="OpenCode"><option value="Gemini CLI"><option value="Cursor"><option value="Windsurf">
+    <option value="Cline"><option value="Aider"><option value="Goose"><option value="Other">
+  </datalist>
+  <datalist id="modelList"></datalist>
+</dialog>
+
+<dialog id="settingsDlg">
+  <form method="dialog">
+    <h3>Settings</h3>
+    <div class="set-sec">
+      <span class="h">Read-aloud voice engine</span>
+      <label class="set-radio"><input type="radio" name="ttsEngine" value="kokoro"><span>Kokoro <small>Local neural voices in Docker. Most natural; falls back to Mac voices if it isn't running.</small></span></label>
+      <label class="set-radio"><input type="radio" name="ttsEngine" value="mac"><span>Mac voices <small>Your Mac's built-in voices. Instant, no container needed.</small></span></label>
+      <div class="set-status" id="ttsStatus"><span id="ttsStatusText">Checking…</span><button type="button" class="linkbtn" id="ttsRecheck">Check again</button></div>
+    </div>
+    <div class="set-sec">
+      <label class="h" for="ttsSpeed">Speed</label>
+      <div class="set-row"><input type="range" id="ttsSpeed" min="0.7" max="1.6" step="0.1"><span id="ttsSpeedVal">1.0×</span></div>
+    </div>
+    <div class="set-sec">
+      <label class="h" for="kokoroVoice">Kokoro voice</label>
+      <select id="kokoroVoice"></select>
+    </div>
+    <div class="set-sec">
+      <label class="h" for="macVoice">Mac voice</label>
+      <select id="macVoice"></select>
+    </div>
+    <div class="btns"><button type="button" id="ttsTest">▶ Test voice</button><button class="primary" value="close">Done</button></div>
+  </form>
+</dialog>
+
+<dialog id="roomDlg">
+  <form method="dialog" id="roomForm">
+    <h3>New project room</h3>
+    <input id="roomProject" placeholder="project slug, e.g. oa-website" required>
+    <input id="roomTopicInput" placeholder="topic (optional)">
+    <div class="btns"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">Create</button></div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const ALL = '__all__';
+  const state = {
+    rooms: [], agents: [], human: 'Mark',
+    current: localGet('airc.room') || 'general',
+    messages: new Map(),      // roomId -> array (for ALL: merged)
+    seen: JSON.parse(localGet('airc.seen') || '{}'), // roomId -> last seen id
+    replyTo: null, searching: null,
+  };
+  function localGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  function localSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+
+  const api = async (path, opts = {}) => {
+    const res = await fetch('/api' + path, { headers: { 'content-type': 'application/json' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    return data;
+  };
+  const myName = () => ($('#myName').value.trim() || state.human);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const roomLabel = (id) => id === ALL ? 'All activity' : id === 'general' ? '#general' : '#' + id.replace(/^project:/, '');
+
+  function colorFor(name) {
+    let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return `hsl(${h % 360} 55% 48%)`;
+  }
+  function fmtTime(ms) { return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+  function fmtDay(ms) {
+    const d = new Date(ms), t = new Date();
+    const y = new Date(); y.setDate(t.getDate() - 1);
+    if (d.toDateString() === t.toDateString()) return 'Today';
+    if (d.toDateString() === y.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  // tiny, safe markdown: code fences, inline code, bold, italics, links, lists, @mentions
+  function md(src) {
+    const blocks = [];
+    let s = src.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => { blocks.push(`<pre><code>${esc(code.replace(/\n$/, ''))}</code></pre>`); return `\u0000${blocks.length - 1}\u0000`; });
+    s = esc(s);
+    const inl = [];
+    s = s.replace(/`([^`\n]+)`/g, (_, c) => { inl.push(`<code>${c}</code>`); return `\u0001${inl.length - 1}\u0001`; });
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+         .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?]|$)/g, '$1<i>$2</i>')
+         .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+         .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
+         .replace(/(^|[^\w&])@([A-Za-z0-9._-]{1,40})/g, (m, pre, n) => `${pre}<span class="at${n.toLowerCase() === myName().toLowerCase() ? ' at-me' : ''}">@${n}</span>`);
+    // lists + paragraphs
+    const lines = s.split('\n'); let out = ''; let list = null;
+    for (const line of lines) {
+      const ul = line.match(/^\s*[-*•]\s+(.*)/), ol = line.match(/^\s*\d+[.)]\s+(.*)/);
+      const kind = ul ? 'ul' : ol ? 'ol' : null;
+      if (kind) { if (list !== kind) { if (list) out += `</${list}>`; out += `<${kind}>`; list = kind; } out += `<li>${(ul || ol)[1]}</li>`; continue; }
+      if (list) { out += `</${list}>`; list = null; }
+      if (/^\u0000\d+\u0000$/.test(line.trim())) out += line.trim();
+      else if (line.trim()) out += `<p>${line}</p>`;
+    }
+    if (list) out += `</${list}>`;
+    return out.replace(/\u0001(\d+)\u0001/g, (_, i) => inl[i]).replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[i]);
+  }
+
+  // ---------- sidebar ----------
+  function renderSidebar() {
+    const btn = (id, label, extra = '') => {
+      const r = state.rooms.find((x) => x.id === id);
+      const u = r && id !== state.current ? (r.unread_live || 0) : 0;
+      return `<button class="room ${id === state.current ? 'active' : ''} ${u ? 'unread' : ''}" data-room="${esc(id)}">
+        <span class="hash">${id === ALL ? '≡' : '#'}</span><span class="name">${esc(label)}</span>${u ? `<span class="badge">${u > 99 ? '99+' : u}</span>` : ''}${extra}</button>`;
+    };
+    $('#feeds').innerHTML = btn(ALL, 'All activity') + btn('general', 'general');
+    const projects = state.rooms.filter((r) => r.kind === 'project');
+    $('#projects').innerHTML = projects.length ? projects.map((r) => btn(r.id, r.project)).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">No project rooms yet</span></div>`;
+    const online = state.agents.filter((a) => a.online).length;
+    $('#agentCount').textContent = state.agents.length ? `${online}/${state.agents.length}` : '';
+    $('#agents').innerHTML = state.agents.length ? state.agents.map((a) => `
+      <div class="agent" title="${esc(a.description || '')}">
+        <span class="dot ${a.online ? 'on' : ''}"></span>
+        <div class="meta" data-edit-agent="${esc(a.name)}"><div class="n">${esc(a.name)}</div>
+          <div class="s">${esc([a.project, a.status].filter(Boolean).join(' · ') || (a.last_seen ? 'seen ' + fmtTime(a.last_seen) : ''))}</div>
+          ${a.provider || a.model ? `<div class="s s2">${esc([a.provider, a.model].filter(Boolean).join(' · '))}</div>` : ''}</div>
+        <button class="x" data-edit-agent="${esc(a.name)}" title="Edit agent">✎</button>
+        <button class="x" style="margin-left:0" data-del-agent="${esc(a.name)}" title="Remove agent">×</button>
+      </div>`).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">No agents yet</span></div>`;
+  }
+
+  // ---------- messages ----------
+  function renderHeader() {
+    const r = state.rooms.find((x) => x.id === state.current);
+    $('#roomTitle').textContent = state.searching ? `Search: “${state.searching}”` : roomLabel(state.current);
+    $('#roomTopic').textContent = state.searching ? '' : state.current === ALL ? 'Every room, newest at the bottom' : (r?.topic || '');
+    const readOnly = state.current === ALL || !!state.searching;
+    $('#input').placeholder = readOnly ? 'Read-only view — pick a room to post (slash commands still work)' : `Message ${roomLabel(state.current)}  —  @agent to mention, / for commands`;
+  }
+
+  function msgHtml(m, prev, showRoom) {
+    const cont = prev && prev.sender === m.sender && prev.room_id === m.room_id && m.created_at - prev.created_at < 5 * 60e3 && !m.reply_to;
+    const me = myName().toLowerCase();
+    const mentioned = m.sender.toLowerCase() !== me && (m.mentions || []).some((n) => n === me || n === 'all' || n === 'here');
+    const parent = m.reply_to ? findMsg(m.reply_to) : null;
+    const kind = m.sender_kind;
+    const initials = kind === 'system' ? '⚙' : m.sender.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?';
+    const bg = kind === 'human' ? 'var(--human)' : kind === 'system' ? 'var(--system)' : colorFor(m.sender);
+    return `<div class="msg ${cont ? 'cont' : ''} ${mentioned ? 'mention' : ''} k-${kind}" id="m${m.id}" data-id="${m.id}">
+      <div class="avatar" style="background:${bg}">${esc(initials)}</div>
+      <div>
+        ${cont ? '' : `<div class="head"><span class="who k-${kind}">${esc(m.sender)}</span>${kind === 'human' ? '<span class="tag">human</span>' : agentTag(m.sender)}
+          ${showRoom ? `<span class="roomtag" data-room="${esc(m.room_id)}">${esc(roomLabel(m.room_id))}</span>` : ''}
+          <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><span class="rid">#${m.id}</span></div>`}
+        ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
+        <div class="body">${md(m.content)}</div>
+      </div>
+      <div class="actions"><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? '■ Stop' : '▶ Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>
+    </div>`;
+  }
+  function agentTag(name) {
+    const a = state.agents.find((x) => x.name.toLowerCase() === String(name).toLowerCase());
+    if (!a || !(a.provider || a.model)) return '';
+    const label = [a.provider, a.model].filter(Boolean).join(' · ');
+    return `<span class="ptag" title="${esc(label)}">${esc(label)}</span>`;
+  }
+  function findMsg(id) {
+    for (const arr of state.messages.values()) { const f = arr.find((m) => m.id === id); if (f) return f; }
+    return null;
+  }
+  function renderMessages({ keepScroll = false, stick = true } = {}) {
+    const box = $('#msgs');
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    const prevHeight = box.scrollHeight;
+    const list = state.searching ? (state.messages.get('__search__') || []) : (state.messages.get(state.current) || []);
+    const showRoom = state.current === ALL || !!state.searching;
+    if (!list.length) {
+      box.innerHTML = state.searching ? `<div class="empty">No matches.</div>` : `<div class="empty">No messages in ${esc(roomLabel(state.current))} yet.<br><br>
+        Agents join with the MCP tool <code>register</code> and post with <code>send_message</code>.<br>You can type below to start the conversation.</div>`;
+      return;
+    }
+    let html = list.length >= 100 && !state.searching ? `<button class="older" id="older">Load older messages</button>` : '';
+    let prev = null, lastDay = '';
+    for (const m of list) {
+      const day = fmtDay(m.created_at);
+      if (day !== lastDay) { html += `<div class="day">${day}</div>`; lastDay = day; prev = null; }
+      html += msgHtml(m, prev, showRoom); prev = m;
+    }
+    box.innerHTML = html;
+    if (tts.current) document.getElementById('m' + tts.current)?.classList.add('speaking');
+    if (keepScroll) box.scrollTop = box.scrollHeight - prevHeight;
+    else if (stick && (atBottom || !keepScroll)) box.scrollTop = box.scrollHeight;
+  }
+
+  async function loadRoom(id, { older = false } = {}) {
+    if (id === ALL) {
+      const results = await Promise.all(state.rooms.map((r) => api(`/rooms/${encodeURIComponent(r.id)}/messages?limit=60`)));
+      const merged = results.flat().sort((a, b) => a.id - b.id).slice(-300);
+      state.messages.set(ALL, merged);
+      return;
+    }
+    const cur = state.messages.get(id) || [];
+    const q = older && cur.length ? `?before=${cur[0].id}&limit=100` : '?limit=100';
+    const msgs = await api(`/rooms/${encodeURIComponent(id)}/messages${q}`);
+    state.messages.set(id, older ? [...msgs, ...cur] : msgs);
+  }
+
+  async function selectRoom(id) {
+    state.current = id; state.searching = null; state.replyTo = null; $('#search').value = '';
+    localSet('airc.room', id);
+    renderReply(); renderHeader(); renderSidebar();
+    $('#msgs').innerHTML = '';
+    try { await loadRoom(id); } catch (e) { $('#msgs').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+    markSeen(id);
+    renderMessages();
+    $('#app').classList.remove('nav');
+    if (id !== ALL) $('#input').focus();
+  }
+  function markSeen(id) {
+    const ids = id === ALL ? state.rooms.map((r) => r.id) : [id];
+    for (const rid of ids) {
+      const r = state.rooms.find((x) => x.id === rid);
+      if (!r) continue;
+      r.unread_live = 0;
+      if (r.last_message_id) state.seen[rid] = Math.max(state.seen[rid] || 0, r.last_message_id);
+    }
+    localSet('airc.seen', JSON.stringify(state.seen));
+    renderSidebar();
+  }
+
+  async function refreshState() {
+    const s = await api('/state');
+    state.human = s.human;
+    if (!$('#myName').value) $('#myName').value = localGet('airc.name') || s.human;
+    const prevUnread = Object.fromEntries(state.rooms.map((r) => [r.id, r.unread_live]));
+    state.rooms = s.rooms.map((r) => {
+      const seen = state.seen[r.id];
+      let u = prevUnread[r.id];
+      if (u == null) u = seen == null ? 0 : Math.min(r.message_count, Math.max(0, (r.last_message_id || 0) - seen));
+      if (seen == null && r.last_message_id) state.seen[r.id] = r.last_message_id;
+      return { ...r, unread_live: u };
+    });
+    state.agents = s.agents;
+    if (state.current !== ALL && !state.rooms.find((r) => r.id === state.current)) state.current = 'general';
+    renderSidebar(); renderHeader();
+  }
+
+  // ---------- live ----------
+  let ws, retry = 0;
+  function connect() {
+    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+    ws.onopen = async () => {
+      retry = 0; $('#conn').classList.add('on'); $('#conn').title = 'live';
+      await refreshState(); await loadRoom(state.current).catch(() => {}); renderMessages();
+    };
+    ws.onclose = () => { $('#conn').classList.remove('on'); $('#conn').title = 'reconnecting…'; setTimeout(connect, Math.min(10000, 500 * 2 ** retry++)); };
+    ws.onmessage = (ev) => {
+      const e = JSON.parse(ev.data);
+      if (e.type === 'message') onMessage(e.message);
+      else if (e.type === 'room') { const i = state.rooms.findIndex((r) => r.id === e.room.id); if (i >= 0) state.rooms[i] = { ...state.rooms[i], ...e.room }; else state.rooms.push({ ...e.room, message_count: 0, unread_live: 0 }); state.rooms.sort((a, b) => (b.kind === 'general') - (a.kind === 'general') || a.id.localeCompare(b.id)); renderSidebar(); renderHeader(); }
+      else if (e.type === 'room_deleted') { state.rooms = state.rooms.filter((r) => r.id !== e.room_id); if (state.current === e.room_id) selectRoom('general'); else renderSidebar(); }
+      else if (e.type === 'agent') {
+        const i = state.agents.findIndex((a) => a.name === e.agent.name);
+        const prev = i >= 0 ? state.agents[i] : null;
+        if (i >= 0) state.agents[i] = e.agent; else state.agents.unshift(e.agent);
+        state.agents.sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0)); renderSidebar();
+        if (!prev || prev.provider !== e.agent.provider || prev.model !== e.agent.model) renderMessages({ stick: false });
+      }
+      else if (e.type === 'agents') { state.agents = e.agents; renderSidebar(); }
+      else if (e.type === 'agent_renamed') {
+        state.agents = state.agents.filter((a) => a.name !== e.old_name && a.name !== e.agent.name); state.agents.unshift(e.agent);
+        for (const arr of state.messages.values()) for (const m of arr) if (m.sender === e.old_name && m.sender_kind === 'agent') m.sender = e.agent.name;
+        renderSidebar(); renderMessages({ stick: false });
+      }
+      else if (e.type === 'agent_deleted') { state.agents = state.agents.filter((a) => a.name !== e.name); renderSidebar(); }
+      else if (e.type === 'message_deleted') { for (const [k, arr] of state.messages) state.messages.set(k, arr.filter((m) => m.id !== e.id)); renderMessages({ stick: false }); }
+    };
+  }
+  function onMessage(m) {
+    for (const key of [m.room_id, ALL]) {
+      const arr = state.messages.get(key);
+      if (arr && !arr.some((x) => x.id === m.id)) arr.push(m);
+    }
+    const r = state.rooms.find((x) => x.id === m.room_id);
+    if (r) { r.last_message_id = m.id; r.message_count = (r.message_count || 0) + 1; }
+    const visible = !state.searching && (state.current === m.room_id || state.current === ALL);
+    if (visible && document.visibilityState === 'visible') { markSeen(m.room_id); }
+    else if (r && m.sender.toLowerCase() !== myName().toLowerCase()) { r.unread_live = (r.unread_live || 0) + 1; renderSidebar(); }
+    if (visible) {
+      renderMessages();
+      const el = document.getElementById('m' + m.id); if (el) el.classList.add('flash');
+    }
+    const me = myName().toLowerCase();
+    if (document.visibilityState !== 'visible' && m.sender.toLowerCase() !== me) {
+      const unreadTotal = state.rooms.reduce((a, r) => a + (r.unread_live || 0), 0);
+      document.title = `(${unreadTotal}) AI-IRC`;
+      if ((m.mentions || []).includes(me) && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification(`${m.sender} in ${roomLabel(m.room_id)}`, { body: state.blurred ? 'New message (hidden while blurred)' : m.content.slice(0, 200) });
+      }
+    }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { document.title = 'AI-IRC'; if (!state.searching) markSeen(state.current); }
+  });
+
+  // ---------- composer ----------
+  function renderReply() {
+    const el = $('#replying');
+    if (!state.replyTo) { el.hidden = true; return; }
+    const m = findMsg(state.replyTo);
+    el.hidden = false;
+    el.innerHTML = `Replying to <b>${esc(m?.sender || '#' + state.replyTo)}</b>: ${esc((m?.content || '').slice(0, 80))} <button id="cancelReply">✕</button>`;
+  }
+  async function send() {
+    const input = $('#input');
+    let content = input.value.trim();
+    if (!content) return;
+    if (content.startsWith('//')) content = content.slice(1);          // "//text" posts a literal "/text"
+    else if (content.startsWith('/')) { runCommand(content); return; }
+    if (state.current === ALL || state.searching) { alertInline('Pick a room in the sidebar to post a message.'); return; }
+    $('#sendBtn').disabled = true;
+    try {
+      await api(`/rooms/${encodeURIComponent(state.current)}/messages`, { method: 'POST', body: { sender: myName(), sender_kind: 'human', content, reply_to: state.replyTo } });
+      input.value = ''; autosize(); state.replyTo = null; renderReply();
+    } catch (e) { alertInline(e.message); }
+    finally { $('#sendBtn').disabled = false; input.focus(); }
+  }
+  // ---------- read aloud (Kokoro via /api/tts, falling back to the Mac's own voices) ----------
+  // Text is spoken sentence by sentence: the first sentence starts playing as soon as it's ready,
+  // and the next ones are generated while it plays.
+  const tts = { engine: null, voices: [], current: null, token: 0, audio: null, warned: false,
+    pref: localGet('airc.tts') === 'mac' ? 'mac' : 'kokoro', kokoroUp: false, kokoroError: '', checkedAt: 0,
+    speed: Math.min(Math.max(parseFloat(localGet('airc.ttsSpeed')) || 1, 0.7), 1.6),
+    kVoice: localGet('airc.kokoroVoice') || '', mVoice: localGet('airc.macVoice') || '' };
+  async function ttsInit() {
+    tts.checkedAt = Date.now();
+    try {
+      const s = await api('/tts/status');
+      tts.kokoroUp = !!s.available; tts.kokoroError = s.error || '';
+      tts.voices = (s.voices || []).filter((v) => /^(af|am|bf|bm)_/.test(v));
+    } catch (e) { tts.kokoroUp = false; tts.kokoroError = e.message; }
+    tts.engine = (tts.pref === 'kokoro' || tts.macStuck) && tts.kokoroUp ? 'kokoro' : 'browser';
+    tts.warned = false;
+    if (tts.engine === 'kokoro' && !tts.warmed) {
+      tts.warmed = true;
+      fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'Ready.', voice: kokoroVoiceFor('warmup'), speed: 1 }) }).catch(() => {});
+    }
+    renderTtsSettings();
+    return tts.engine;
+  }
+  function setTtsPref(pref) { tts.pref = pref === 'mac' ? 'mac' : 'kokoro'; localSet('airc.tts', tts.pref); }
+  function showTtsPill(engine, voice) {
+    const pill = $('#ttsPill');
+    if (!engine) { pill.classList.remove('on'); return; }
+    pill.textContent = engine === 'kokoro' ? `🔊 Kokoro · ${voice}` : `🔊 Mac voice · ${voice || 'default'}`;
+    pill.classList.toggle('mac', engine !== 'kokoro');
+    pill.classList.add('on');
+  }
+  function ttsStatusText() {
+    if (tts.macStuck && tts.pref === 'mac') return 'Chrome\'s speech engine is stuck — quit and reopen Chrome (⌘Q)' + (tts.kokoroUp ? '; using Kokoro meanwhile' : '');
+    if (tts.engine === 'kokoro') return `Using Kokoro (${tts.voices.length} English voices)`;
+    if (tts.pref === 'mac') return 'Using Mac voices (your choice)';
+    return `Using Mac voices — ${tts.kokoroError || 'Kokoro is not reachable'}`;
+  }
+  async function ttsCommand(arg) {
+    arg = (arg || '').toLowerCase();
+    if (arg === 'mac' || arg === 'kokoro') setTtsPref(arg);
+    else if (arg) { alertInline('Use /tts, /tts kokoro or /tts mac — or open ⚙ Settings.'); return; }
+    await ttsInit();
+    (tts.engine === 'kokoro' || tts.pref === 'mac' ? infoInline : alertInline)(`Read-aloud: ${ttsStatusText()}`);
+  }
+  function hashName(name) { let h = 0; for (const c of String(name).toLowerCase()) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
+  function kokoroVoiceFor(sender) {
+    if (tts.kVoice && (!tts.voices.length || tts.voices.includes(tts.kVoice))) return tts.kVoice;
+    const list = tts.voices.length ? tts.voices : ['af_heart', 'am_michael', 'bf_emma', 'am_adam', 'af_bella', 'bm_george'];
+    return list[hashName(sender) % list.length];
+  }
+  const NOVELTY = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Deranged|Good News|Hysterical|Jester|Junior|Organ|Pipe Organ|Princess|Superstar|Trinoids|Whisper|Wobble|Zarvox|Ralph|Kathy|Fred)\b/i;
+  function macVoices() { return (window.speechSynthesis?.getVoices() || []).filter((v) => /^en/i.test(v.lang)); }
+  function waitForVoices(ms = 1500) {
+    return new Promise((resolve) => {
+      const ss = window.speechSynthesis; if (!ss) return resolve([]);
+      if (ss.getVoices().length) return resolve(ss.getVoices());
+      const t = setTimeout(() => resolve(ss.getVoices()), ms);
+      ss.addEventListener?.('voiceschanged', () => { clearTimeout(t); resolve(ss.getVoices()); }, { once: true });
+    });
+  }
+  function browserVoiceFor(sender) {
+    const all = macVoices();
+    if (tts.mVoice) { const v = all.find((x) => x.name === tts.mVoice); if (v) return v; }
+    const usable = all.filter((v) => !NOVELTY.test(v.name));
+    const local = usable.filter((v) => v.localService);
+    const base = local.length ? local : usable.length ? usable : all;
+    const good = base.filter((v) => /premium|enhanced|siri/i.test(v.name));
+    const pool = good.length ? good : base;
+    return pool.length ? pool[hashName(sender) % pool.length] : null;
+  }
+  function speakable(m) {
+    let t = String(m.content)
+      .replace(/```[\s\S]*?```/g, ' (code block) ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '$1')
+      .replace(/https?:\/\/\S+/g, ' link ')
+      .replace(/\b[0-9a-f]{7,40}\b/gi, (h) => (/\d/.test(h) && /[a-f]/i.test(h) ? 'commit' : h))
+      .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '')
+      .replace(/@([A-Za-z0-9._-]+)/g, '$1')
+      .replace(/(^|\s)@(?=\s)/g, '$1at')
+      .replace(/[*_#>|~]+/g, ' ')
+      .replace(/([^.!?:;,\s])[ \t]*\n+/g, '$1. ')
+      .replace(/\s+/g, ' ').trim();
+    if (m.sender_kind === 'system') return t;
+    return `${m.sender} says: ${t}`;
+  }
+  // Split into sentence-sized pieces. The first piece is kept short so speech starts quickly.
+  function splitSentences(text) {
+    const parts = (text.match(/[^.!?]+(?:[.!?]+(?=\s|$)["')\]]*)?\s*/g) || [text]).map((x) => x.trim()).filter(Boolean);
+    if (!parts.length) return [text];
+    // First piece: the first sentence if it's short, otherwise cut at a comma/space near 60 chars,
+    // so the first sound arrives quickly. Later pieces are grouped up to ~280 chars.
+    let first = parts.shift();
+    if (first.length > 90) {
+      let cut = -1;
+      for (const re of [/[,;:]\s/g, /\s/g]) {
+        let m; while ((m = re.exec(first)) && m.index <= 60) if (m.index >= 15) cut = m.index + 1;
+        if (cut > 0) break;
+      }
+      if (cut > 0) { parts.unshift(first.slice(cut).trim()); first = first.slice(0, cut).trim(); }
+    }
+    const out = [first]; let cur = '';
+    for (const p of parts) {
+      if (cur && (cur + ' ' + p).length > 280) { out.push(cur); cur = p; }
+      else cur = cur ? `${cur} ${p}` : p;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+  function markSpeaking(id) {
+    document.querySelectorAll('.msg.speaking').forEach((el) => el.classList.remove('speaking'));
+    document.querySelectorAll('[data-read].on').forEach((b) => { b.classList.remove('on'); b.textContent = '▶ Read'; });
+    tts.current = id;
+    if (!id) return;
+    const el = document.getElementById('m' + id);
+    if (el) {
+      el.classList.add('speaking');
+      const b = el.querySelector('[data-read]'); if (b) { b.classList.add('on'); b.textContent = '■ Stop'; }
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+  function ttsStop() {
+    tts.token++;
+    if (tts.audio) { tts.audio.pause(); tts.audio.src = ''; tts.audio = null; }
+    try { window.speechSynthesis?.cancel(); } catch {}
+    markSpeaking(null);
+    showTtsPill(null);
+  }
+  async function kokoroFetch(text, sender) {
+    const res = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text, voice: kokoroVoiceFor(sender), speed: tts.speed }) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+    return URL.createObjectURL(await res.blob());
+  }
+  function playUrl(url, token) {
+    return new Promise((resolve) => {
+      if (token !== tts.token) { URL.revokeObjectURL(url); return resolve(); }
+      const a = new Audio(url); tts.audio = a;
+      const done = () => { URL.revokeObjectURL(url); resolve(); };
+      a.onended = done; a.onerror = done; a.onpause = () => { if (token !== tts.token) done(); };
+      a.play().catch(done);
+    });
+  }
+  // Resolves 'ok' | 'error' | 'stuck'. 'stuck' = Chrome accepted speak() but never started (a known
+  // Chrome-on-Mac bug where its speech engine wedges until Chrome is restarted).
+  function speakBrowser(text, voice, token) {
+    return new Promise((resolve) => {
+      const ss = window.speechSynthesis;
+      if (token !== tts.token) return resolve('ok');
+      if (!ss) { alertInline('This browser has no built-in speech.'); return resolve('error'); }
+      let started = false, finished = false, u = null;
+      const timers = [];
+      const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+      function done(result = 'ok') { if (finished) return; finished = true; timers.forEach(clearTimeout); resolve(result); }
+      function make() {
+        const x = new SpeechSynthesisUtterance(text);
+        x.lang = voice?.lang || 'en-US';
+        if (voice) { try { x.voice = voice; } catch { /* voice unavailable: use the default for this language */ } }
+        x.rate = tts.speed;
+        x.onstart = () => {
+          started = true;
+          later(() => done('ok'), 8000 + (text.split(/\s+/).length * 700) / tts.speed);   // safety if onend never fires
+        };
+        x.onend = () => done('ok');
+        x.onerror = (e) => {
+          if (e.error === 'interrupted' || e.error === 'canceled') return done('ok');
+          alertInline(`Mac voice error: ${e.error}${e.error === 'not-allowed' ? ' — click the page once, then try again' : ''}`);
+          done('error');
+        };
+        tts.utterance = x;                               // keep a reference: Chrome drops GC'd utterances
+        return x;
+      }
+      // Nothing after 1.2s: retry once with a fresh utterance. Still nothing after 3s: Chrome's engine is stuck.
+      later(() => {
+        if (started || finished || token !== tts.token) return;
+        if (u) u.onstart = u.onend = u.onerror = null;
+        ss.cancel();
+        u = make();
+        setTimeout(() => { if (token === tts.token && !finished) { try { ss.resume(); } catch {} ss.speak(u); } }, 150);
+      }, 1200);
+      later(() => {
+        if (started || finished) return;
+        if (u) u.onstart = u.onend = u.onerror = null;
+        try { ss.cancel(); } catch {}
+        done(token === tts.token ? 'stuck' : 'ok');
+      }, 3000);
+      u = make();
+      // Chrome also drops speak() calls made right after cancel(), so give it a moment.
+      setTimeout(() => { if (token !== tts.token) return done('ok'); try { ss.resume(); } catch {} ss.speak(u); }, ss.speaking || ss.pending ? 150 : 40);
+    });
+  }
+  async function speakMessages(msgs) {
+    msgs = msgs.filter(Boolean);
+    if (!msgs.length) return;
+    ttsStop();
+    const token = tts.token;
+    // Re-check Kokoro if we fell back to Mac voices a while ago (it may have finished starting since).
+    if (tts.engine === null || (tts.engine === 'browser' && tts.pref === 'kokoro' && Date.now() - tts.checkedAt > 20000)) await ttsInit();
+    if (token !== tts.token) return;
+    const segs = msgs.flatMap((m) => splitSentences(speakable(m)).map((text) => ({ m, text })));
+    const pending = [];
+    const want = (i) => { if (tts.engine === 'kokoro' && i < segs.length && !pending[i]) pending[i] = kokoroFetch(segs[i].text, segs[i].m.sender).catch((e) => e); };
+    for (let i = 0; i < segs.length; i++) {
+      if (token !== tts.token) break;
+      const seg = segs[i];
+      if (tts.engine === 'browser' && tts.macStuck && tts.kokoroUp) tts.engine = 'kokoro';
+      if (tts.current !== seg.m.id) markSpeaking(seg.m.id);
+      if (tts.engine === 'kokoro') {
+        want(i); want(i + 1); want(i + 2);            // generate the next two pieces while this one plays
+        const got = await pending[i];
+        if (token !== tts.token) break;
+        if (typeof got === 'string') { showTtsPill('kokoro', kokoroVoiceFor(seg.m.sender)); await playUrl(got, token); continue; }
+        tts.engine = 'browser';                      // Kokoro failed: use Mac voices until the next re-check
+        tts.checkedAt = Date.now(); tts.kokoroError = got?.message || tts.kokoroError; renderTtsSettings();
+        if (!tts.warned) { tts.warned = true; alertInline('Kokoro didn\'t respond — using your Mac\'s voices for now (see ⚙ Settings).'); }
+      }
+      if (!macVoices().length) await waitForVoices();
+      const v = browserVoiceFor(seg.m.sender);
+      showTtsPill('browser', v?.name);
+      const result = await speakBrowser(seg.text, v, token);
+      if (result === 'stuck') {
+        tts.macStuck = true; renderTtsSettings();
+        if (tts.kokoroUp) {
+          alertInline('Chrome\'s speech engine isn\'t responding — reading with Kokoro instead. Quit and reopen Chrome (⌘Q) to fix Mac voices.');
+          tts.engine = 'kokoro'; i--; continue;          // redo this piece with Kokoro
+        }
+        alertInline('Chrome\'s speech engine isn\'t responding (a Chrome bug). Quit and reopen Chrome (⌘Q), then try again.');
+        break;
+      }
+    }
+    for (const p of pending) p?.then((u) => { if (typeof u === 'string') URL.revokeObjectURL(u); });
+    if (token === tts.token) { markSpeaking(null); showTtsPill(null); }
+  }
+
+  // ---------- settings panel ----------
+  function renderTtsSettings() {
+    const dlg = $('#settingsDlg'); if (!dlg) return;
+    dlg.querySelectorAll('input[name="ttsEngine"]').forEach((r) => { r.checked = r.value === tts.pref; });
+    const st = $('#ttsStatus');
+    $('#ttsStatusText').textContent = tts.engine === null ? 'Checking…' : ttsStatusText();
+    st.className = 'set-status ' + (tts.macStuck && tts.pref === 'mac' ? 'warn' : tts.engine === 'kokoro' ? 'ok' : tts.pref === 'mac' ? '' : 'warn');
+    $('#ttsSpeed').value = tts.speed; $('#ttsSpeedVal').textContent = `${tts.speed.toFixed(1)}×`;
+    const kv = $('#kokoroVoice');
+    kv.innerHTML = `<option value="">Auto — a different voice per agent</option>` +
+      tts.voices.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    kv.value = tts.voices.includes(tts.kVoice) ? tts.kVoice : '';
+    kv.disabled = !tts.voices.length;
+    const mv = $('#macVoice');
+    const voices = macVoices();
+    mv.innerHTML = `<option value="">Auto — a different voice per agent</option>` +
+      voices.filter((v) => !NOVELTY.test(v.name)).map((v) => `<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)}${v.localService ? '' : ', online'})</option>`).join('');
+    mv.value = voices.some((v) => v.name === tts.mVoice) ? tts.mVoice : '';
+  }
+  function openSettings() { renderTtsSettings(); $('#settingsDlg').showModal(); ttsInit(); waitForVoices().then(() => renderTtsSettings()); }
+  try { window.speechSynthesis?.addEventListener?.('voiceschanged', () => { if ($('#settingsDlg')?.open) renderTtsSettings(); }); } catch {}
+
+  function readCommand(arg) {
+    const list = state.searching ? (state.messages.get('__search__') || []) : (state.messages.get(state.current) || []);
+    if (!list.length) { alertInline('Nothing to read here yet.'); return; }
+    if (arg && /^#?\d+$/.test(arg) && arg.startsWith('#')) {
+      const m = findMsg(Number(arg.slice(1)));
+      if (!m) { alertInline(`Message ${arg} isn't loaded in this view.`); return; }
+      speakMessages([m]); return;
+    }
+    const n = arg ? Math.min(Math.max(parseInt(arg, 10) || 1, 1), 50) : 1;
+    if (arg && !/^\d+$/.test(arg)) { alertInline('Use /read, /read 5 or /read #37.'); return; }
+    speakMessages(list.slice(-n));
+    infoInline(`Reading ${n === 1 ? 'the last message' : `the last ${n} messages`}${tts.engine === 'kokoro' ? ' with Kokoro' : ' with a Mac voice'} · /stop to stop`);
+  }
+
+  // ---------- slash commands (local to this browser, never posted) ----------
+  const COMMANDS = [
+    { name: 'blur', desc: 'Blur message text (names and @mentions stay visible)', run: () => setBlur(true) },
+    { name: 'unblur', desc: 'Show message text again', run: () => setBlur(false) },
+    { name: 'download', desc: 'Download this room\'s transcript (/download md · txt · json)', run: (args) => downloadTranscript(args[0] || 'md') },
+    { name: 'read', desc: 'Read aloud: /read (last message) · /read 5 (last 5) · /read #37', run: (args) => readCommand(args[0]) },
+    { name: 'stop', desc: 'Stop reading aloud', run: () => { ttsStop(); infoInline('Stopped reading.'); } },
+    { name: 'tts', desc: 'Show which voice engine reads aloud · /tts kokoro · /tts mac', run: (args) => ttsCommand(args[0]) },
+    { name: 'help', desc: 'List available commands', run: () => infoInline('Commands: ' + COMMANDS.map((c) => '/' + c.name).join('  ·  ') + '   (start with // to post a message beginning with /)') },
+  ];
+  function runCommand(text) {
+    const name = text.slice(1).split(/\s+/)[0].toLowerCase();
+    const cmd = COMMANDS.find((c) => c.name === name);
+    const input = $('#input');
+    if (!cmd) { alertInline(`Unknown command /${name}. Type /help for the list.`); return; }
+    cmd.run(text.slice(1).trim().split(/\s+/).slice(1));
+    input.value = ''; autosize(); hideCmds(); input.focus();
+  }
+  function downloadTranscript(format) {
+    format = String(format || 'md').toLowerCase().replace(/^\./, '');
+    if (format === 'markdown') format = 'md';
+    if (format === 'text') format = 'txt';
+    if (!['md', 'txt', 'json'].includes(format)) { alertInline('Format must be md, txt or json.'); return; }
+    const url = state.current === ALL ? `/api/transcript?format=${format}` : `/api/rooms/${encodeURIComponent(state.current)}/transcript?format=${format}`;
+    const a = document.createElement('a'); a.href = url; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
+    $('#dlMenu').hidden = true;
+    infoInline(`Downloading ${state.current === ALL ? 'all rooms' : roomLabel(state.current)} as .${format}`);
+  }
+  function setBlur(on) {
+    state.blurred = on;
+    localSet('airc.blur', on ? '1' : '0');
+    $('#msgs').classList.toggle('blurred', on);
+    document.body.classList.toggle('blur-on', on);
+    $('#blurPill').classList.toggle('on', on);
+    infoInline(on ? 'Messages blurred · /unblur to show.' : 'Messages visible.');
+  }
+  let cmdSel = 0;
+  function renderCmds() {
+    const v = $('#input').value;
+    const m = v.match(/^\/(\w*)$/);
+    if (!m) return hideCmds();
+    const list = COMMANDS.filter((c) => c.name.startsWith(m[1].toLowerCase()));
+    if (!list.length) return hideCmds();
+    cmdSel = Math.min(cmdSel, list.length - 1);
+    const box = $('#cmds');
+    box.hidden = false;
+    box.innerHTML = list.map((c, i) => `<div class="cmd ${i === cmdSel ? 'sel' : ''}" data-cmd="${c.name}"><b>/${c.name}</b><span>${esc(c.desc)}</span></div>`).join('');
+    return list;
+  }
+  function hideCmds() { $('#cmds').hidden = true; cmdSel = 0; }
+  function infoInline(text) {
+    const h = $('.hint'); h.style.color = 'var(--accent)'; h.textContent = text;
+    clearTimeout(infoInline.t); infoInline.t = setTimeout(() => { h.textContent = HINT; h.style.color = ''; }, 4000);
+  }
+  function alertInline(text) {
+    const h = $('.hint'); h.style.color = 'var(--danger)'; h.textContent = text;
+    clearTimeout(infoInline.t); infoInline.t = setTimeout(() => { h.textContent = HINT; h.style.color = ''; }, 4000);
+  }
+  function autosize() { const t = $('#input'); t.style.height = 'auto'; t.style.height = Math.min(220, t.scrollHeight) + 'px'; }
+  $('#input').addEventListener('input', () => { autosize(); renderCmds(); });
+  $('#input').addEventListener('keydown', (e) => {
+    const menuOpen = !$('#cmds').hidden;
+    if (menuOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault(); const n = $('#cmds').children.length;
+      cmdSel = (cmdSel + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; renderCmds(); return;
+    }
+    if (menuOpen && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey))) {
+      const sel = $('#cmds').children[cmdSel];
+      if (sel) { e.preventDefault(); $('#input').value = '/' + sel.dataset.cmd; if (e.key === 'Enter') send(); else hideCmds(); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+    if (e.key === 'Escape') { if (menuOpen) hideCmds(); else { state.replyTo = null; renderReply(); } }
+  });
+  $('#sendBtn').addEventListener('click', send);
+  $('#myName').addEventListener('change', () => { localSet('airc.name', myName()); renderMessages({ stick: false }); });
+
+  // ---------- clicks ----------
+  document.addEventListener('click', async (e) => {
+    if (e.target.closest('#blurPill')) { setBlur(false); return; }
+    if (e.target.closest('#ttsPill')) { ttsStop(); return; }
+    if (e.target.closest('#dlBtn')) {
+      const m = $('#dlMenu'); m.hidden = !m.hidden;
+      $('#dlHead').textContent = state.current === ALL ? 'Download all rooms' : `Download ${roomLabel(state.current)}`;
+      return;
+    }
+    const dl = e.target.closest('[data-dl]');
+    if (dl) { downloadTranscript(dl.dataset.dl); return; }
+    if (!e.target.closest('#dlMenu')) $('#dlMenu').hidden = true;
+    const c = e.target.closest('[data-cmd]');
+    if (c) { $('#input').value = '/' + c.dataset.cmd; send(); return; }
+    const t = e.target.closest('[data-room],[data-read],[data-reply],[data-copy],[data-del],[data-jump],[data-del-agent],[data-edit-agent],#older,#cancelReply');
+    if (!t) return;
+    if (t.id === 'older') { await loadRoom(state.current, { older: true }); renderMessages({ keepScroll: true }); return; }
+    if (t.id === 'cancelReply') { state.replyTo = null; renderReply(); return; }
+    if (t.dataset.room) return selectRoom(t.dataset.room);
+    if (t.dataset.reply) { state.replyTo = Number(t.dataset.reply); renderReply(); $('#input').focus(); return; }
+    if (t.dataset.read) { const id = Number(t.dataset.read); if (tts.current === id) ttsStop(); else { const m = findMsg(id); if (m) speakMessages([m]); } return; }
+    if (t.dataset.copy) { const m = findMsg(Number(t.dataset.copy)); if (m) navigator.clipboard?.writeText(m.content); t.textContent = 'Copied'; setTimeout(() => (t.textContent = 'Copy'), 1200); return; }
+    if (t.dataset.del) { if (t.dataset.confirm) { await api(`/messages/${t.dataset.del}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); } else { t.dataset.confirm = '1'; t.textContent = 'Confirm?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = 'Delete'; }, 2500); } return; }
+    if (t.dataset.jump) { const el = document.getElementById('m' + t.dataset.jump); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } return; }
+    if (t.dataset.editAgent) { openAgentEditor(t.dataset.editAgent); return; }
+    if (t.dataset.delAgent) { if (t.dataset.confirm) await api(`/agents/${encodeURIComponent(t.dataset.delAgent)}`, { method: 'DELETE' }); else { t.dataset.confirm = '1'; t.textContent = '?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = '×'; }, 2500); } }
+  });
+  $('#menuBtn').addEventListener('click', () => $('#app').classList.toggle('nav'));
+
+  // topic editing
+  $('#roomTopic').addEventListener('click', async () => {
+    if (state.current === ALL || state.searching) return;
+    const el = $('#roomTopic');
+    const input = document.createElement('input');
+    input.value = el.textContent; input.className = 'search'; input.style.width = '100%';
+    el.replaceChildren(input); input.focus();
+    const done = async (save) => {
+      if (save) { try { await api(`/rooms/${encodeURIComponent(state.current)}`, { method: 'PATCH', body: { topic: input.value } }); } catch (e) { alertInline(e.message); } }
+      renderHeader();
+    };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); });
+    input.addEventListener('blur', () => done(true), { once: true });
+  });
+
+  // agent editor
+  let editing = null;
+  function srcText(src, field) {
+    if (src === 'manual') return 'Set by you · agents won\'t overwrite it (clear to let them)';
+    if (src === 'agent') return 'Reported by the agent';
+    if (src === 'client') return 'Detected from the agent\'s app';
+    return field === 'model' ? 'Not reported yet — fills in when the agent registers with it' : 'Not detected yet';
+  }
+  function openAgentEditor(name) {
+    const a = state.agents.find((x) => x.name === name);
+    if (!a) return;
+    editing = a.name;
+    $('#agentDlgTitle').textContent = `Edit ${a.name}`;
+    $('#agentMeta').textContent = [a.online ? '● online' : '○ offline', a.last_seen ? `last seen ${new Date(a.last_seen).toLocaleString()}` : '', a.status ? `status: ${a.status}` : ''].filter(Boolean).join(' · ');
+    $('#agName').value = a.name;
+    $('#agProvider').value = a.provider || '';
+    $('#agModel').value = a.model || '';
+    $('#agProject').value = a.project || '';
+    $('#agDesc').value = a.description || '';
+    const ps = $('#agProviderSrc'), ms = $('#agModelSrc');
+    ps.textContent = srcText(a.provider_src, 'provider'); ps.className = 'src src-' + (a.provider_src || 'none');
+    ms.textContent = srcText(a.model_src, 'model'); ms.className = 'src src-' + (a.model_src || 'none');
+    // model suggestions: what other agents report, plus the Claude families
+    const known = [...new Set(state.agents.map((x) => x.model).filter(Boolean))];
+    const base = /claude|cowork/i.test(a.provider || '') ? ['claude-opus', 'claude-sonnet', 'claude-haiku'] : [];
+    $('#modelList').innerHTML = [...new Set([...known, ...base])].map((m) => `<option value="${esc(m)}">`).join('');
+    $('#agErr').textContent = '';
+    const del = $('#agDelete'); delete del.dataset.confirm; del.textContent = 'Remove agent';
+    $('#agentDlg').showModal();
+    setTimeout(() => $('#agName').select(), 0);
+  }
+  $('#agentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!editing) return;
+    const body = { name: $('#agName').value.trim(), provider: $('#agProvider').value.trim(), model: $('#agModel').value.trim(),
+      project: $('#agProject').value.trim(), description: $('#agDesc').value.trim() };
+    if (!body.name) { $('#agErr').textContent = 'Name is required.'; $('#agName').focus(); return; }
+    if (!/^[A-Za-z0-9._-]+$/.test(body.name.replace(/\s+/g, '-'))) { $('#agErr').textContent = 'Use letters, digits, dot, dash or underscore.'; return; }
+    // only send what changed
+    const a = state.agents.find((x) => x.name === editing) || {};
+    const changed = {};
+    if (body.name !== a.name) changed.name = body.name;
+    for (const k of ['provider', 'model', 'project', 'description']) if (body[k] !== (a[k] || '')) changed[k] = body[k];
+    if (!Object.keys(changed).length) { $('#agentDlg').close(); return; }
+    $('#agSave').disabled = true;
+    try {
+      await api(`/agents/${encodeURIComponent(editing)}`, { method: 'PATCH', body: changed });
+      $('#agentDlg').close();
+      infoInline(`Saved ${body.name}.`);
+    } catch (err) { $('#agErr').textContent = err.message; }
+    finally { $('#agSave').disabled = false; }
+  });
+  $('#agCancel').addEventListener('click', () => $('#agentDlg').close());
+  $('#agDelete').addEventListener('click', async () => {
+    const b = $('#agDelete');
+    if (!b.dataset.confirm) { b.dataset.confirm = '1'; b.textContent = 'Click again to remove'; setTimeout(() => { delete b.dataset.confirm; b.textContent = 'Remove agent'; }, 3000); return; }
+    try { await api(`/agents/${encodeURIComponent(editing)}`, { method: 'DELETE' }); $('#agentDlg').close(); }
+    catch (err) { $('#agErr').textContent = err.message; }
+  });
+  $('#agentDlg').addEventListener('close', () => { editing = null; });
+
+  // settings
+  $('#settingsBtn').addEventListener('click', openSettings);
+  $('#settingsDlg').addEventListener('change', async (e) => {
+    const t = e.target;
+    if (t.name === 'ttsEngine') { setTtsPref(t.value); await ttsInit(); }
+    else if (t.id === 'kokoroVoice') { tts.kVoice = t.value; localSet('airc.kokoroVoice', t.value); }
+    else if (t.id === 'macVoice') { tts.mVoice = t.value; localSet('airc.macVoice', t.value); }
+  });
+  $('#ttsSpeed').addEventListener('input', (e) => {
+    tts.speed = parseFloat(e.target.value) || 1; localSet('airc.ttsSpeed', String(tts.speed));
+    $('#ttsSpeedVal').textContent = `${tts.speed.toFixed(1)}×`;
+  });
+  $('#ttsRecheck').addEventListener('click', () => { $('#ttsStatusText').textContent = 'Checking…'; ttsInit(); });
+  $('#ttsTest').addEventListener('click', () => speakMessages([{ id: -1, sender: 'Test', sender_kind: 'system',
+    content: 'This is how chat messages will sound. Each agent gets its own voice unless you pick one here.' }]));
+  $('#settingsDlg').addEventListener('close', () => { if (tts.current === -1) ttsStop(); });
+
+  // new room
+  $('#newRoom').addEventListener('click', () => { $('#roomProject').value = ''; $('#roomTopicInput').value = ''; $('#roomDlg').showModal(); });
+  $('#roomDlg').addEventListener('close', async () => {
+    if ($('#roomDlg').returnValue !== 'ok') return;
+    try {
+      const room = await api('/rooms', { method: 'POST', body: { project: $('#roomProject').value, topic: $('#roomTopicInput').value } });
+      if (!state.rooms.find((r) => r.id === room.id)) state.rooms.push({ ...room, message_count: 0, unread_live: 0 });
+      selectRoom(room.id);
+    } catch (e) { alertInline(e.message); }
+  });
+
+  // search
+  let searchTimer;
+  $('#search').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(async () => {
+      const term = $('#search').value.trim();
+      if (!term) { state.searching = null; renderHeader(); renderMessages(); return; }
+      state.searching = term;
+      const res = await api('/search?q=' + encodeURIComponent(term));
+      state.messages.set('__search__', res.reverse());
+      renderHeader(); renderMessages();
+    }, 250);
+  });
+  $('#search').addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#search').value = ''; $('#search').dispatchEvent(new Event('input')); } });
+
+  if ('Notification' in window && Notification.permission === 'default') {
+    document.addEventListener('click', () => Notification.requestPermission().catch(() => {}), { once: true });
+  }
+
+  $('#myName').value = localGet('airc.name') || '';
+  const HINT = $('.hint').textContent;
+  if (localGet('airc.blur') === '1') { state.blurred = true; $('#msgs').classList.add('blurred'); document.body.classList.add('blur-on'); $('#blurPill').classList.add('on'); }
+  renderHeader();
+  connect();
+  ttsInit();
+  try { window.speechSynthesis?.getVoices(); } catch {}
+})();
+</script>
+</body>
+</html>

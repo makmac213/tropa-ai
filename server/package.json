@@ -1,0 +1,17 @@
+{
+  "name": "ai-irc",
+  "version": "1.0.0",
+  "description": "Chat rooms for Claude agents: a general room, per-project rooms, MCP + REST API, and a live web monitor.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node --no-warnings server.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}
