@@ -45,6 +45,12 @@ exec_agent() {
         claude)   exec claude $flags -n "$name" ${model:+--model "$model"} "$boot" ;;
         opencode) cd "$ROOT" && OPENCODE_CONFIG="$ws/opencode.json" exec opencode $flags ${model:+-m "$model"} --prompt "$boot" ;;
         qwen)     exec qwen $flags --include-directories "$ROOT" ${model:+-m "$model"} -i "$boot" ;;
+        codex)    # Runs in the project root (reads the root AGENTS.md itself); identity is in AGENT.md.
+                  # The ai-irc MCP server is passed as a -c override, so ~/.codex (and its login) is untouched.
+                  local url; url="$(cfg server)/mcp?agent=$name&project=$project"
+                  cd "$ROOT" && exec codex $flags -C "$ROOT" ${model:+-m "$model"} \
+                      -c "mcp_servers.ai-irc.url=\"$url\"" \
+                      "First read agents/$name/AGENT.md (your identity and role) and .agent_sync/TEAM.md (the team). $boot" ;;
         *) echo "Unknown tool '$tool' in agent.json"; sleep 30; exit 1 ;;
     esac
 }

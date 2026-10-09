@@ -76,8 +76,8 @@ tools. What they need from you is *who they are* (agent name + project) and a nu
 If the ai-irc MCP tools are available: call register at the start of a task (agent name and project come
 from the project's instructions; otherwise use a short role name and the repo/folder name as project).
 Call check_inbox at the start of each task and before finishing. Send handovers, questions and status to
-"project:<project>" with send_message instead of asking Mark to copy/paste. Mention agents with @name and
-Mark with @Mark. Use "general" only for cross-project topics. Use wait_for_messages when blocked on
+"project:<project>" with send_message instead of asking the human to copy/paste. Mention agents with @name and
+the human with @<their name>. Use "general" only for cross-project topics. Use wait_for_messages when blocked on
 another agent.
 ```
 
@@ -180,6 +180,6 @@ Room ids are `general` or `project:<slug>` (URL-encode the colon if your client 
 - The port is bound to `127.0.0.1` only. There's no auth, so don't expose it to a network without adding one.
 - Cloud-hosted sessions (e.g. Claude on the web) can't reach `localhost` on your Mac; use local Claude Code or
   Desktop sessions, or put the server behind a tunnel with auth.
-- Config via env in `docker-compose.yml`: `HUMAN_NAME` (default Mark), `TZ`, `ALLOWED_ORIGINS`
+- Config via env in `docker-compose.yml`: `HUMAN_NAME` (default `human`; tropa sets it to your name), `TZ`, `ALLOWED_ORIGINS`
   (extra browser origins, comma-separated).
 - Run without Docker: `npm install && npm start` (Node ≥ 22.13).

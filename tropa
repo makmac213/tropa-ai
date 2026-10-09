@@ -5,8 +5,10 @@
 #   tropa panel  [DIR]                      open the agent control panel
 #   tropa doctor [DIR]                      check tools, server, agents, tmux
 #   tropa server up|down|status|logs [-p PORT] [--tts] [--node] [--human NAME]
+#   tropa host start|stop|status|logs [-p PORT] [--projects-dir DIR]   (lets the chat create projects)
 #   tropa update [DIR]                      refresh a project's kit to this tropa version
 #   tropa self-update                       update tropa itself
+#   tropa models [claude|codex|opencode|qwen]   models each CLI can use (incl. your accounts' versioned ids)
 #   tropa install [BIN_DIR]                 put this copy of `tropa` on your PATH
 #   tropa help
 #
@@ -24,11 +26,35 @@ TROPA_REPO="${TROPA_REPO:-makmac213/tropa-ai}"
 
 die()  { echo "❌ $*" >&2; exit 1; }
 info() { echo "$*"; }
-usage() { sed -n '2,14p' "$TROPA_HOME/tropa" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,16p' "$TROPA_HOME/tropa" | sed 's/^# \{0,1\}//'; }
 
 abspath() { mkdir -p "$1" && (cd "$1" && pwd -P); }
 health()  { curl -fsS --max-time 3 "http://localhost:$1/health" >/dev/null 2>&1; }
+is_tropa_server() { curl -fsS --max-time 3 "http://localhost:$1/health" 2>/dev/null | grep -q '"wake-routing"'; }
+old_server_note() {
+    echo "⚠️  Port $1 is served by an older AI-IRC (not tropa's): no Team view, wake routing or project delete."
+    echo "   Replace it (chat history is kept):  docker rm -f ai-irc && tropa server up -p $1"
+    echo "   Or keep it and use another port:    tropa init -p 8080"
+}
 compose_name() { if [ "$1" = 8888 ]; then echo ai-irc; else echo "ai-irc-$1"; fi; }
+default_human() {   # $TROPA_HUMAN, else your OS user name, capitalised
+    local n="${TROPA_HUMAN:-${USER:-human}}"; n=$(printf %s "$n" | tr -cd 'A-Za-z0-9._-')
+    [ -n "$n" ] || n=human
+    printf '%s%s' "$(printf %s "$n" | cut -c1 | tr '[:lower:]' '[:upper:]')" "$(printf %s "$n" | cut -c2-)"
+}
+host_tz() {          # IANA timezone of this machine (macOS + Linux), for the server's timestamps
+    [ -n "$TZ" ] && { echo "$TZ"; return; }
+    local l; l=$(readlink /etc/localtime 2>/dev/null) && case "$l" in *zoneinfo/*) echo "${l##*zoneinfo/}"; return;; esac
+    [ -f /etc/timezone ] && { head -1 /etc/timezone; return; }
+    echo UTC
+}
+install_hint() {     # package-manager hint for $1
+    if [ "$(uname)" = Darwin ]; then echo "brew install $1"
+    elif command -v apt-get >/dev/null; then echo "sudo apt-get install -y $1"
+    elif command -v dnf >/dev/null; then echo "sudo dnf install -y $1"
+    elif command -v pacman >/dev/null; then echo "sudo pacman -S $1"
+    else echo "install $1 with your package manager"; fi
+}
 valid_port() { case "$1" in ''|*[!0-9]*) return 1;; esac; [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; }
 
 server_human() {   # prints HUMAN_NAME of the server on port $1
@@ -51,36 +77,79 @@ node_ok() {
 }
 docker_ok() { command -v docker >/dev/null && docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; }
 
+# ---------------------------------------------------------------- host helper
+host_session() { echo "tropa-host-$1"; }
+host_running() { tmux has-session -t "$(host_session "$1")" 2>/dev/null; }
+host_start() {   # $1 port, $2 projects dir (optional)
+    local port="$1" dir="${2:-${TROPA_PROJECTS_DIR:-$HOME/projects}}" s
+    command -v tmux >/dev/null || { info "⚠️  tmux not installed ($(install_hint tmux)) — the host helper (create projects from chat) can't run"; return 0; }
+    s=$(host_session "$port")
+    if host_running "$port"; then info "✅ Host helper running (tmux '$s', projects in $dir)"; return 0; fi
+    mkdir -p "$STATE_DIR"
+    tmux new-session -d -s "$s" -n host \
+        "python3 -u \"$TROPA_HOME/host/tropa_host.py\" --server http://localhost:$port --projects-dir \"$dir\" 2>&1 | tee -a \"$STATE_DIR/host-$port.log\"" \
+        && info "🤝 Host helper started (tmux '$s') — the chat can now create projects in $dir"
+}
+cmd_host() {
+    local sub="$1"; shift
+    local port="" dir=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -p|--port) port="$2"; shift ;;
+            --projects-dir) dir="$2"; shift ;;
+            *) die "unknown option '$1'" ;;
+        esac; shift
+    done
+    [ -z "$port" ] && [ -f ./.agent_sync/settings.json ] && port=$(port_of "$PWD")
+    port="${port:-8888}"
+    case "$sub" in
+        start) host_start "$port" "$dir" ;;
+        stop) if host_running "$port"; then tmux kill-session -t "$(host_session "$port")" && info "🛑 Host helper stopped"; else info "Host helper not running for port $port"; fi ;;
+        status) if host_running "$port"; then info "✅ Host helper running (tmux '$(host_session "$port")')"; else info "⏹  Host helper not running for port $port"; return 1; fi ;;
+        logs) tail -n 80 "$STATE_DIR/host-$port.log" 2>/dev/null || info "No host log for port $port" ;;
+        *) die "usage: tropa host start|stop|status|logs [-p PORT] [--projects-dir DIR]" ;;
+    esac
+}
+
 # ---------------------------------------------------------------- server
 server_up() {
     local port="$1" human="$2" tts="$3" mode="$4" name i
     valid_port "$port" || die "invalid port '$port'"
     if health "$port"; then
-        info "✅ AI-IRC already running on http://localhost:$port (human: @$(server_human "$port"))"
+        if is_tropa_server "$port"; then
+            info "✅ AI-IRC already running on http://localhost:$port (human: @$(server_human "$port"))"
+            [ "${TROPA_NO_HOST:-0}" = 1 ] || host_start "$port"
+        else
+            old_server_note "$port"
+        fi
         return 0
     fi
     name=$(compose_name "$port")
     if [ "$mode" != node ] && docker_ok; then
         info "🐳 Starting AI-IRC in Docker (project '$name', port $port)..."
         local svc="ai-irc"; [ "$tts" = 1 ] && svc="ai-irc kokoro"
-        (cd "$SERVER_DIR" && AI_IRC_PORT="$port" HUMAN_NAME="$human" \
+        (cd "$SERVER_DIR" && AI_IRC_PORT="$port" HUMAN_NAME="$human" TZ="$(host_tz)" \
             docker compose -p "$name" up -d --build $svc) || die "docker compose failed"
     elif node_ok; then
         info "🟢 Starting AI-IRC with node (port $port)..."
         mkdir -p "$STATE_DIR/ai-irc-$port"
         [ -d "$SERVER_DIR/node_modules/express" ] || (cd "$SERVER_DIR" && npm install --omit=dev --no-audit --no-fund >/dev/null) || die "npm install failed"
-        (cd "$SERVER_DIR" && PORT="$port" HOST=127.0.0.1 DATA_DIR="$STATE_DIR/ai-irc-$port" HUMAN_NAME="$human" \
-            nohup node --no-warnings server.js >>"$STATE_DIR/ai-irc-$port.log" 2>&1 & echo $! >"$STATE_DIR/ai-irc-$port.pid")
+        (cd "$SERVER_DIR" || exit 1
+         PORT="$port" HOST=127.0.0.1 DATA_DIR="$STATE_DIR/ai-irc-$port" HUMAN_NAME="$human" TZ="$(host_tz)" \
+            nohup node --no-warnings server.js </dev/null >>"$STATE_DIR/ai-irc-$port.log" 2>&1 &
+         echo $! >"$STATE_DIR/ai-irc-$port.pid")
     else
-        die "Need Docker (running) or Node ≥ 22.13 to start AI-IRC. Install one, or start the server yourself."
+        die "Need Docker (running) or Node ≥ 22.13 to start AI-IRC. Start Docker, or: $(install_hint node)"
     fi
     i=0; while [ $i -lt 60 ]; do health "$port" && break; sleep 1; i=$((i+1)); done
     health "$port" || die "AI-IRC did not come up on port $port (see 'tropa server logs -p $port')"
     info "✅ AI-IRC up on http://localhost:$port"
+    [ "${TROPA_NO_HOST:-0}" = 1 ] || host_start "$port"
 }
 
 server_down() {
     local port="$1" name pidf; name=$(compose_name "$port"); pidf="$STATE_DIR/ai-irc-$port.pid"
+    host_running "$port" && tmux kill-session -t "$(host_session "$port")" 2>/dev/null
     if [ -f "$pidf" ] && kill -0 "$(cat "$pidf")" 2>/dev/null; then
         kill "$(cat "$pidf")" && rm -f "$pidf" && info "🛑 Stopped node AI-IRC on port $port"; return
     fi
@@ -97,7 +166,9 @@ server_down() {
 
 server_status() {
     local port="$1"
-    if health "$port"; then info "✅ AI-IRC up on http://localhost:$port (human: @$(server_human "$port"))"
+    if health "$port"; then
+        info "✅ AI-IRC up on http://localhost:$port (human: @$(server_human "$port"))"
+        is_tropa_server "$port" || old_server_note "$port"
     else info "⏹  AI-IRC not running on port $port"; return 1; fi
 }
 
@@ -124,7 +195,7 @@ cmd_server() {
     port="${port:-8888}"
     if [ -z "$human" ]; then
         human=$( [ -f ./.agent_sync/config.py ] && python3 ./.agent_sync/config.py get human 2>/dev/null )
-        human="${human:-Mark}"
+        human="${human:-$(default_human)}"
     fi
     case "$sub" in
         up) server_up "$port" "$human" "$tts" "$mode" ;;
@@ -177,7 +248,7 @@ cmd_init() {
         esac; shift
     done
     [ -n "$port" ] && { valid_port "$port" || die "invalid port '$port'"; }
-    for b in python3 curl; do command -v "$b" >/dev/null || die "'$b' is required"; done
+    for b in python3 curl; do command -v "$b" >/dev/null || die "'$b' is required ($(install_hint "$b"))"; done
     dir=$(abspath "${dir:-.}") || die "cannot use folder"
     [ "$dir" = "$TROPA_HOME" ] && die "run tropa init in a project folder, not in tropa itself"
     local S="$dir/.agent_sync"
@@ -260,6 +331,9 @@ case "${1:-help}" in
     panel)  shift; d=$(project_dir "$1") && cd "$d" && exec "$d/.agent_sync/manage_agents.sh" ;;
     doctor) shift; d=$(project_dir "$1") && exec python3 "$d/.agent_sync/doctor.py" ;;
     server) shift; cmd_server "$@" ;;
+    host) shift; cmd_host "$@" ;;
+    models) shift; python3 "$TROPA_HOME/host/tropa_host.py" --list-models "${1:-all}" |
+                awk -F'|' '{ if ($1 != t) { t = $1; print "\n" t } printf "  %-34s %s\n", $2, $3 }' ;;
     install) shift; cmd_install "$@" ;;
     self-update|selfupdate)
         if [ -d "$TROPA_HOME/.git" ]; then
@@ -268,7 +342,7 @@ case "${1:-help}" in
             curl -fsSL "https://raw.githubusercontent.com/$TROPA_REPO/main/install.sh" | TROPA_REPO="$TROPA_REPO" bash
         fi
         echo "   Run 'tropa update' in each project to refresh its kit." ;;
-    version|--version|-v) echo "tropa $VERSION" ;;
+    version|--version|-v) echo "tropa $VERSION — built by Mark Allan Meriales with Claude (Anthropic)" ;;
     help|-h|--help) usage ;;
     *) die "unknown command '$1' (see: tropa help)" ;;
 esac

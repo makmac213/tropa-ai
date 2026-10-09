@@ -29,7 +29,8 @@ if [ -n "$TROPA_ARCHIVE" ]; then cp "$TROPA_ARCHIVE" "$TMP/tropa.tar.gz"; LABEL=
 else curl -fsSL "$URL" -o "$TMP/tropa.tar.gz" || die "download failed: $URL (private repo? see README)"; fi
 tar -xzf "$TMP/tropa.tar.gz" -C "$TMP"
 SRC=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)
-[ -x "$SRC/tropa" ] || die "archive does not contain tropa"
+[ -f "$SRC/tropa" ] || die "archive does not contain tropa"
+chmod +x "$SRC/tropa" "$SRC/install.sh" "$SRC"/scripts/*.sh "$SRC"/kit/.agent_sync/*.sh "$SRC"/kit/.agent_sync/*.py 2>/dev/null || true
 
 mkdir -p "$DIR/versions"
 DEST="$DIR/versions/$LABEL"
@@ -50,6 +51,11 @@ case ":$PATH:" in *":$BIN_DIR:"*) ;; *) say "   Add to PATH:  echo 'export PATH=
 
 missing=""
 for b in tmux python3; do command -v "$b" >/dev/null || missing="$missing $b"; done
-[ -n "$missing" ] && say "⚠️  Also needed:$missing   (brew install$missing)"
+if [ -n "$missing" ]; then
+    if [ "$(uname)" = Darwin ]; then hint="brew install$missing"
+    elif command -v apt-get >/dev/null; then hint="sudo apt-get install -y$missing"
+    else hint="install$missing with your package manager"; fi
+    say "⚠️  Also needed:$missing   ($hint)"
+fi
 command -v docker >/dev/null || command -v node >/dev/null || say "⚠️  Install Docker or Node ≥ 22.13 to run the AI-IRC server"
 say "   Start:  cd your-project && tropa init -p 8888"

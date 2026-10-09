@@ -17,8 +17,8 @@ const { WebSocketServer } = require('ws');
 
 const PORT = Number(process.env.PORT || 8888);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const TZ = process.env.TZ || 'Asia/Manila';
-const HUMAN_NAME = process.env.HUMAN_NAME || 'Mark';
+const TZ = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+const HUMAN_NAME = process.env.HUMAN_NAME || 'human';
 const KOKORO_URL = (process.env.KOKORO_URL || 'http://kokoro:8880').replace(/\/+$/, '');
 const ONLINE_WINDOW_MS = 10 * 60 * 1000;
 const MAX_CONTENT = 20000;
@@ -76,6 +76,77 @@ db.exec(`
 db.prepare(`INSERT OR IGNORE INTO rooms (id, kind, project, topic, created_at) VALUES ('general','general',NULL,?,?)`)
   .run('Cross-project chat for all agents', Date.now());
 
+// ---------- attachments (files shared in rooms; copied into the project by the watcher) ----------
+db.exec(`
+  CREATE TABLE IF NOT EXISTS attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    message_id INTEGER,
+    name TEXT NOT NULL,
+    mime TEXT NOT NULL DEFAULT 'application/octet-stream',
+    size INTEGER NOT NULL DEFAULT 0,
+    sha256 TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL,                 -- path inside the project folder
+    uploader TEXT NOT NULL DEFAULT '',
+    uploader_kind TEXT NOT NULL DEFAULT 'human',
+    stored INTEGER NOT NULL DEFAULT 0,  -- bytes are on this server
+    synced INTEGER NOT NULL DEFAULT 0,  -- file exists in the project folder
+    error TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_att_msg ON attachments(message_id);
+  CREATE INDEX IF NOT EXISTS idx_att_room ON attachments(room_id, synced, stored);
+`);
+const FILES_DIR = path.join(DATA_DIR, 'files');
+fs.mkdirSync(FILES_DIR, { recursive: true });
+const MAX_FILE = 25 * 1024 * 1024;
+const ATT_DIR = 'docs/attachments';
+const qa = {
+  insert: db.prepare(`INSERT INTO attachments (room_id, message_id, name, mime, size, sha256, path, uploader, uploader_kind, stored, synced, created_at)
+                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`),
+  get: db.prepare('SELECT * FROM attachments WHERE id = ?'),
+  setPath: db.prepare('UPDATE attachments SET path = ? WHERE id = ?'),
+  forMsg: db.prepare('SELECT * FROM attachments WHERE message_id = ? ORDER BY id'),
+  link: db.prepare('UPDATE attachments SET message_id = ? WHERE id = ? AND room_id = ? AND message_id IS NULL'),
+  stored: db.prepare('UPDATE attachments SET stored = 1, size = ?, sha256 = ?, mime = ?, error = \'\' WHERE id = ?'),
+  synced: db.prepare('UPDATE attachments SET synced = 1, error = \'\' WHERE id = ?'),
+  failed: db.prepare('UPDATE attachments SET error = ? WHERE id = ?'),
+  pendingSync: db.prepare(`SELECT * FROM attachments WHERE room_id = ? AND stored = 1 AND synced = 0 AND error = '' ORDER BY id LIMIT 20`),
+  pendingUpload: db.prepare(`SELECT * FROM attachments WHERE room_id = ? AND stored = 0 AND error = '' ORDER BY id LIMIT 20`),
+  forRoom: db.prepare('SELECT * FROM attachments WHERE room_id = ? ORDER BY id DESC LIMIT ?'),
+  idsForRoom: db.prepare('SELECT id FROM attachments WHERE room_id = ?'),
+};
+const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+  avif: 'image/avif', pdf: 'application/pdf', md: 'text/markdown', markdown: 'text/markdown', txt: 'text/plain', csv: 'text/csv',
+  json: 'application/json', html: 'text/html', htm: 'text/html', css: 'text/css', js: 'text/javascript', ts: 'text/plain',
+  yml: 'text/yaml', yaml: 'text/yaml', xml: 'application/xml', zip: 'application/zip', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  fig: 'application/octet-stream', mp4: 'video/mp4', mov: 'video/quicktime', mp3: 'audio/mpeg', wav: 'audio/wav' };
+const mimeFor = (name) => MIME[String(name).toLowerCase().split('.').pop()] || 'application/octet-stream';
+function cleanFileName(n) {
+  const base = String(n || '').split(/[\\/]/).pop().normalize('NFKD').replace(/[^A-Za-z0-9._ -]/g, '').trim().replace(/\s+/g, '-');
+  return (base.replace(/^\.+/, '') || 'file').slice(-100);
+}
+function cleanProjectPath(p) {
+  const s = String(p || '').trim().replace(/\\/g, '/');
+  if (!s || s.length > 500 || s.split('/').includes('..') || /[\u0000-\u001f]/.test(s)) throw new UserError('path must be a file path inside the project (no ..)');
+  return s;
+}
+function attView(a) {
+  return a && { id: a.id, room_id: a.room_id, message_id: a.message_id, name: a.name, mime: a.mime, size: a.size, path: a.path,
+    uploader: a.uploader, uploader_kind: a.uploader_kind, stored: !!a.stored, synced: !!a.synced, error: a.error,
+    is_image: /^image\//.test(a.mime), url: `/api/files/${a.id}` };
+}
+function storeBlob(id, buf, name) {
+  fs.writeFileSync(path.join(FILES_DIR, String(id)), buf);
+  const sha = require('node:crypto').createHash('sha256').update(buf).digest('hex');
+  qa.stored.run(buf.length, sha, mimeFor(name), id);
+}
+function purgeRoomFiles(roomId) {
+  for (const { id } of qa.idsForRoom.all(roomId)) { try { fs.unlinkSync(path.join(FILES_DIR, String(id))); } catch {} }
+}
+function fmtSize(n) { return n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`; }
+
 const bus = new EventEmitter();
 bus.setMaxListeners(0);
 
@@ -114,7 +185,9 @@ function parseMentions(content) {
   return [...set];
 }
 function rowToMessage(r) {
-  return r && { ...r, mentions: JSON.parse(r.mentions || '[]'), created_iso: new Date(r.created_at).toISOString() };
+  if (!r) return r;
+  const atts = qa.forMsg.all(r.id).map(attView);
+  return { ...r, mentions: JSON.parse(r.mentions || '[]'), created_iso: new Date(r.created_at).toISOString(), attachments: atts };
 }
 
 // ---------- rooms ----------
@@ -305,9 +378,13 @@ function markRead(agentName, roomId, id) {
 }
 
 // ---------- messages ----------
-function postMessage({ room, sender, kind = 'agent', content, reply_to }) {
+function postMessage({ room, sender, kind = 'agent', content, reply_to, attachments = [] }) {
   const roomId = normalizeRoomId(room);
-  const text = String(content ?? '').trim();
+  const attIds = (Array.isArray(attachments) ? attachments : []).map(Number).filter(Boolean).slice(0, 20);
+  const atts = attIds.map((id) => qa.get.get(id)).filter((a) => a && a.room_id === roomId && a.message_id == null);
+  if (attIds.length && atts.length !== attIds.length) throw new UserError('attachment not found in this room (or already sent)');
+  let text = String(content ?? '').trim();
+  if (!text && atts.length) text = atts.map((a) => `📎 ${a.name}`).join('  ');
   if (!text) throw new UserError('content is empty');
   if (text.length > MAX_CONTENT) throw new UserError(`content too long (max ${MAX_CONTENT} chars)`);
   if (kind === 'agent') requireRoom(roomId); else ensureRoom(roomId);
@@ -319,6 +396,7 @@ function postMessage({ room, sender, kind = 'agent', content, reply_to }) {
   }
   const mentions = parseMentions(text);
   const info = q.insertMsg.run(roomId, sender, kind, text, replyTo, JSON.stringify(mentions), Date.now());
+  for (const a of atts) qa.link.run(Number(info.lastInsertRowid), a.id, roomId);
   const msg = rowToMessage(q.getMsg.get(Number(info.lastInsertRowid)));
   if (kind === 'agent') markRead(sender, roomId, msg.id);
   broadcast({ type: 'message', message: msg });
@@ -380,7 +458,8 @@ function waitForMessages(agent, roomIds, timeoutMs, signal) {
 function fmtMsg(m) {
   const reply = m.reply_to ? ` ↩#${m.reply_to}` : '';
   const who = m.sender_kind === 'human' ? `${m.sender} (human)` : m.sender;
-  return `[#${m.id} ${m.room_id} ${fmtTime(m.created_at)}${reply}] ${who}: ${m.content}`;
+  const files = (m.attachments || []).map((a) => `\n📎 ${a.path} (${a.mime}, ${fmtSize(a.size)})${a.synced ? '' : a.stored ? ' — still being copied into the project' : a.error ? ` — upload failed: ${a.error}` : ' — not uploaded yet'}`).join('');
+  return `[#${m.id} ${m.room_id} ${fmtTime(m.created_at)}${reply}] ${who}: ${m.content}${files}`;
 }
 function fmtMsgs(msgs, empty = 'No messages.') {
   return msgs.length ? msgs.map(fmtMsg).join('\n\n') : empty;
@@ -404,6 +483,7 @@ Workflow:
 2. Call check_inbox when you start a task, before handing off, and whenever you finish a chunk of work.
 3. Use send_message to hand off work, ask another agent a question, or report status. Mention agents with @name and the human with @${HUMAN_NAME}. Keep messages self-contained: include file paths, decisions, and next steps so the reader doesn't need your context.
 4. Use wait_for_messages when you are blocked waiting for a reply.
+5. Files: attachments in messages are shown as "📎 <path>" — that path is inside the project folder, read it there. To show the human or the team a file (mockup, screenshot, PDF, doc), save it in the project and call share_file with its path.
 Project-specific talk belongs in the project room; use general only for cross-project matters.`;
 
 const agentProp = { type: 'string', description: 'Your agent name (the one you registered with).' };
@@ -478,6 +558,17 @@ const TOOLS = [
       agent: { type: 'string', description: 'Your current agent name.' },
       new_name: { type: 'string', description: 'New name (letters, digits, . _ -).' },
     }, required: ['agent', 'new_name'] },
+  },
+  {
+    name: 'share_file',
+    description: 'Share a file from the project folder in a room (mockups, screenshots, PDFs, docs). The human sees images inline and can download anything. Save the file inside the project first, then pass its path relative to the project root (e.g. "docs/mockups/home.png").',
+    inputSchema: { type: 'object', properties: {
+      agent: agentProp,
+      room: { type: 'string', description: '"project:<slug>"' },
+      path: { type: 'string', description: 'File path relative to the project root, e.g. "docs/mockups/home.png".' },
+      content: { type: 'string', description: 'Message to go with the file (markdown ok, @mentions work).' },
+      reply_to: { type: 'integer', description: 'Optional id of the message you are replying to.' },
+    }, required: ['agent', 'room', 'path'] },
   },
   {
     name: 'set_status',
@@ -575,6 +666,11 @@ async function callTool(name, args, ctx) {
     case 'rename': {
       const a = renameAgent(agentName, args.new_name);
       return `You are now "${a.name}". Pass agent:"${a.name}" in every call from now on.`;
+    }
+    case 'share_file': {
+      const a = agent();
+      const msg = shareFile({ room: args.room, agent: a.name, path: args.path, content: args.content, reply_to: args.reply_to });
+      return `Shared ${args.path} as #${msg.id}. The watcher uploads it from the project folder in a few seconds.`;
     }
     case 'set_status': {
       const a = agent();
@@ -707,6 +803,7 @@ api.delete('/rooms/:id', wrap((req) => {
   const roomId = normalizeRoomId(req.params.id);
   if (roomId === 'general') throw new UserError('cannot delete general');
   requireRoom(roomId);
+  purgeRoomFiles(roomId);
   q.deleteRoom.run(roomId);
   broadcast({ type: 'room_deleted', room_id: roomId });
   return { ok: true };
@@ -724,7 +821,7 @@ api.post('/rooms/:id/messages', wrap((req) => {
   let sender;
   if (kind === 'human') sender = cleanName(req.body.sender) || HUMAN_NAME;
   else sender = resolveAgent(req.body.sender || req.body.agent).name;
-  return postMessage({ room: req.params.id, sender, kind, content: req.body.content, reply_to: req.body.reply_to });
+  return postMessage({ room: req.params.id, sender, kind, content: req.body.content, reply_to: req.body.reply_to, attachments: req.body.attachments });
 }));
 api.delete('/messages/:id', wrap((req) => {
   const m = q.getMsg.get(Number(req.params.id));
@@ -792,7 +889,7 @@ api.get('/rooms/:id/transcript', (req, res) => {
   try {
     const room = requireRoom(normalizeRoomId(req.params.id));
     const label = room.id === 'general' ? '#general' : `#${room.project}`;
-    sendTranscript(res, { rooms: [room], msgs: q.allMsgsRoom.all(room.id), title: `AI-IRC transcript — ${label}`,
+    sendTranscript(res, { rooms: [room], msgs: q.allMsgsRoom.all(room.id), title: `TropaAI transcript — ${label}`,
       slug: room.id.replace(':', '-'), format: req.query.format });
   } catch (e) {
     if (e instanceof UserError) return res.status(400).json({ error: e.message });
@@ -801,7 +898,7 @@ api.get('/rooms/:id/transcript', (req, res) => {
 });
 api.get('/transcript', (req, res) => {
   try {
-    sendTranscript(res, { rooms: q.listRooms.all(), msgs: q.allMsgs.all(), title: 'AI-IRC transcript — all rooms',
+    sendTranscript(res, { rooms: q.listRooms.all(), msgs: q.allMsgs.all(), title: 'TropaAI transcript — all rooms',
       slug: 'all-rooms', format: req.query.format });
   } catch (e) { console.error(e); res.status(500).json({ error: 'internal error' }); }
 });
@@ -905,9 +1002,423 @@ api.get('/wait', wrap(async (req, res) => {
   markAllRead(a, msgs);
   return msgs;
 }));
+
+// ---------- team: wake routing, live screens, approvals ----------
+// AI-IRC decides who to wake. A watcher on the host (tropa's room_watcher.py) long-polls
+// /api/watch/poll for wake/command events, types them into the agents' tmux windows,
+// and streams each agent's screen back here for the monitor's Team view.
+db.exec(`CREATE TABLE IF NOT EXISTS room_wake (
+  room_id TEXT PRIMARY KEY REFERENCES rooms(id) ON DELETE CASCADE,
+  settings TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL DEFAULT 0)`);
+const WAKE_DEFAULTS = { lead: '', wake: 'auto', wake_rules: 'smart', max_wakes_per_agent_per_hour: 0,
+  cooldown_seconds: 20, debounce_seconds: 2, history_limit: 20 };
+const EVERYONE = new Set(['all', 'here', 'team', 'everyone']);
+const WATCHER = 'watcher';
+const WATCH_TTL = 45000;
+const qw = {
+  get: db.prepare('SELECT * FROM room_wake WHERE room_id = ?'),
+  put: db.prepare(`INSERT INTO room_wake (room_id, settings, updated_at) VALUES (?,?,?)
+    ON CONFLICT(room_id) DO UPDATE SET settings = excluded.settings, updated_at = excluded.updated_at`),
+};
+function wakeSettings(roomId) {
+  const r = qw.get.get(roomId);
+  let s = {};
+  try { s = JSON.parse(r?.settings || '{}'); } catch {}
+  return { ...WAKE_DEFAULTS, ...s, updated_at: r?.updated_at || 0 };
+}
+function cleanWake(patch) {
+  const out = {};
+  if ('lead' in patch) out.lead = cleanName(patch.lead || '');
+  if ('wake' in patch) {
+    if (!['auto', 'paused'].includes(patch.wake)) throw new UserError('wake must be "auto" or "paused"');
+    out.wake = patch.wake;
+  }
+  if ('wake_rules' in patch) {
+    if (!['smart', 'all'].includes(patch.wake_rules)) throw new UserError('wake_rules must be "smart" or "all"');
+    out.wake_rules = patch.wake_rules;
+  }
+  for (const [k, lo, hi] of [['max_wakes_per_agent_per_hour', 0, 1000], ['cooldown_seconds', 0, 3600],
+    ['debounce_seconds', 0, 60], ['history_limit', 1, 200]]) {
+    if (!(k in patch)) continue;
+    const n = Number(patch[k]);
+    if (!Number.isFinite(n) || n < lo || n > hi) throw new UserError(`${k} must be between ${lo} and ${hi}`);
+    out[k] = n;
+  }
+  return out;
+}
+function setWakeSettings(roomId, patch) {
+  const cur = wakeSettings(roomId); delete cur.updated_at;
+  const next = { ...cur, ...cleanWake(patch) };
+  const now = Date.now();
+  qw.put.run(roomId, JSON.stringify(next), now);
+  const settings = { ...next, updated_at: now };
+  broadcast({ type: 'wake_settings', room_id: roomId, settings });
+  return settings;
+}
+
+const watchers = new Map();   // roomId -> { agents, tmux, seen, queue, waiters, panes }
+const wakeState = new Map();  // roomId \0 agent(lower) -> { pending, timer, last, history, capped }
+function watcherRecord(roomId) {
+  let w = watchers.get(roomId);
+  if (!w) { w = { agents: [], tmux: '', seen: 0, queue: [], waiters: new Set(), panes: {} }; watchers.set(roomId, w); }
+  return w;
+}
+function watcherFor(roomId) {
+  const w = watchers.get(roomId);
+  return w && Date.now() - w.seen < WATCH_TTL ? w : null;
+}
+function teamView(roomId) {
+  const w = watcherFor(roomId);
+  return { room_id: roomId, watching: !!w, tmux_session: w?.tmux || '', agents: w?.agents || [],
+    panes: w ? w.panes : {}, settings: wakeSettings(roomId) };
+}
+function broadcastTeam(roomId) { broadcast({ type: 'team', team: teamView(roomId) }); }
+function pushEvent(roomId, ev) {
+  const w = watcherRecord(roomId);
+  w.queue.push({ ...ev, at: Date.now() });
+  if (w.queue.length > 500) w.queue.splice(0, w.queue.length - 500);
+  for (const f of [...w.waiters]) f();
+}
+function watcherSay(roomId, content) {
+  try { return postMessage({ room: roomId, sender: WATCHER, kind: 'system', content }); } catch (e) { console.error(e); }
+}
+function wakeText(roomId, agent, reason, s) {
+  return `[ai-irc] ${reason} Read your unread messages in ${roomId} (ai-irc read_messages, agent "${agent}", limit ${s.history_limit}). ` +
+    'Follow AGENTS.md: act if you are mentioned or needed, otherwise stay silent.';
+}
+/** Who a message wakes: @all → everyone but the sender; @name → those agents; human with no
+ *  agent mention → the lead (if running) else everyone; agent with no mention → nobody. */
+function pickTargets(s, m, agents) {
+  const byLower = new Map(agents.map((a) => [a.toLowerCase(), a]));
+  const sender = String(m.sender).toLowerCase();
+  const mentions = m.mentions || [];
+  const others = agents.filter((a) => a.toLowerCase() !== sender);
+  if (s.wake_rules === 'all' || mentions.some((x) => EVERYONE.has(x))) return others;
+  const named = [...new Set(mentions.map((x) => byLower.get(x)).filter((a) => a && a.toLowerCase() !== sender))];
+  if (named.length) return named;
+  if (m.sender_kind === 'human') {
+    const lead = byLower.get(String(s.lead || '').toLowerCase());
+    return lead ? [lead] : others;
+  }
+  return [];
+}
+function wakeEntry(roomId, agent) {
+  const k = `${roomId}\0${agent.toLowerCase()}`;
+  let st = wakeState.get(k);
+  if (!st) { st = { pending: [], timer: null, last: 0, history: [], capped: false }; wakeState.set(k, st); }
+  return st;
+}
+function scheduleWake(roomId, agent, msg) {
+  const st = wakeEntry(roomId, agent);
+  if (msg) st.pending.push(msg);
+  if (st.timer) return;
+  const s = wakeSettings(roomId);
+  const due = Math.max(Date.now() + s.debounce_seconds * 1000, st.last + s.cooldown_seconds * 1000);
+  st.timer = setTimeout(() => fireWake(roomId, agent), Math.max(0, due - Date.now()));
+}
+function fireWake(roomId, agent, { manual = false, reason } = {}) {
+  const st = wakeEntry(roomId, agent);
+  if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+  const s = wakeSettings(roomId);
+  const now = Date.now();
+  st.history = st.history.filter((t) => now - t < 3600e3);
+  const cap = Number(s.max_wakes_per_agent_per_hour) || 0;
+  if (!manual && cap && st.history.length >= cap) {
+    if (!st.capped) watcherSay(roomId, `@${HUMAN_NAME} \`${agent}\` hit the wake limit (${cap}/hour); holding its wake-ups.`);
+    st.capped = true;
+    st.timer = setTimeout(() => fireWake(roomId, agent), 60e3);
+    return false;
+  }
+  st.capped = false;
+  const msgs = st.pending; st.pending = [];
+  if (!manual && !msgs.length) return false;
+  let why = reason;
+  if (!why) {
+    const ids = msgs.map((m) => m.id).sort((a, b) => a - b);
+    const who = [...new Set(msgs.map((m) => m.sender))].sort().join(', ');
+    why = `New message(s) #${ids[0]}${ids.length > 1 ? `-#${ids[ids.length - 1]}` : ''} from ${who}.`;
+  }
+  st.last = now; st.history.push(now);
+  pushEvent(roomId, { type: 'wake', agent, reason: why, message_ids: msgs.map((m) => m.id), text: wakeText(roomId, agent, why, s) });
+  return true;
+}
+const CMD_RE = /@watcher\s+(approve|yes|allow|always|deny|no|reject)\s+@?([A-Za-z0-9._-]+)/gi;
+const CMD_ACT = { approve: 'yes', yes: 'yes', allow: 'yes', always: 'always', deny: 'no', no: 'no', reject: 'no' };
+bus.on('message', (m) => {
+  if (m.sender_kind === 'system') return;
+  const w = watcherFor(m.room_id);
+  if (!w) return;
+  if (m.sender_kind === 'human') {
+    const cmds = [...String(m.content).matchAll(CMD_RE)];
+    if (cmds.length) {
+      for (const c of cmds) pushEvent(m.room_id, { type: 'command', action: CMD_ACT[c[1].toLowerCase()], agent: c[2], message_id: m.id });
+      return;   // a command is not a message for the agents
+    }
+  }
+  const s = wakeSettings(m.room_id);
+  if (s.wake === 'paused') return;
+  for (const a of pickTargets(s, m, w.agents)) scheduleWake(m.room_id, a, m);
+});
+const roomOf = (req) => requireRoom(normalizeRoomId(req.params.id)).id;
+const pickWakeKeys = (o) => Object.fromEntries(Object.keys(WAKE_DEFAULTS).filter((k) => o && k in o).map((k) => [k, o[k]]));
+
+api.get('/rooms/:id/team', wrap((req) => teamView(roomOf(req))));
+api.get('/rooms/:id/wake', wrap((req) => wakeSettings(roomOf(req))));
+api.patch('/rooms/:id/wake', wrap((req) => setWakeSettings(roomOf(req), req.body || {})));
+api.post('/rooms/:id/wake', wrap((req) => {
+  const roomId = roomOf(req);
+  const w = watcherFor(roomId);
+  if (!w) throw new UserError('no watcher is running for this room (start agents with tropa)');
+  const byLower = new Map(w.agents.map((a) => [a.toLowerCase(), a]));
+  const want = Array.isArray(req.body.agents) && req.body.agents.length ? req.body.agents : w.agents;
+  const reason = String(req.body.reason || `${HUMAN_NAME} asked you to check the room.`).slice(0, 300);
+  const woke = [];
+  for (const n of want) { const a = byLower.get(String(n).toLowerCase()); if (a && fireWake(roomId, a, { manual: true, reason })) woke.push(a); }
+  return { woke };
+}));
+api.post('/rooms/:id/approve', wrap((req) => {
+  const roomId = roomOf(req);
+  if (!watcherFor(roomId)) throw new UserError('no watcher is running for this room');
+  const action = CMD_ACT[String(req.body.action || '').toLowerCase()] || req.body.action;
+  if (!['yes', 'always', 'no'].includes(action)) throw new UserError('action must be yes, always or no');
+  const agent = cleanName(req.body.agent);
+  if (!agent) throw new UserError('agent is required');
+  pushEvent(roomId, { type: 'command', action, agent });
+  return { ok: true };
+}));
+
+// watcher endpoints
+api.post('/watch/poll', wrap(async (req, res) => {
+  const roomId = normalizeRoomId(req.body.room);
+  ensureRoom(roomId);
+  const w = watcherRecord(roomId);
+  const wasOn = !!watcherFor(roomId);
+  w.seen = Date.now();
+  const agents = (Array.isArray(req.body.agents) ? req.body.agents : []).map(cleanName).filter(Boolean);
+  const changed = agents.join() !== w.agents.join() || String(req.body.tmux_session || '') !== w.tmux;
+  w.agents = agents; w.tmux = String(req.body.tmux_session || '').slice(0, 60);
+  for (const k of Object.keys(w.panes)) if (!agents.includes(k)) delete w.panes[k];
+  // settings: seed from the project the first time; afterwards a local edit is pushed explicitly
+  const local = pickWakeKeys(req.body.settings);
+  if (Object.keys(local).length && (!qw.get.get(roomId) || req.body.settings_changed)) setWakeSettings(roomId, local);
+  if (!wasOn || changed) broadcastTeam(roomId);
+  const t = Math.min(Math.max(Number(req.body.timeout) || 0, 0), 25) * 1000;
+  if (!w.queue.length && t) {
+    await new Promise((resolve) => {
+      const done = () => { w.waiters.delete(done); clearTimeout(timer); resolve(); };
+      const timer = setTimeout(done, t);
+      w.waiters.add(done);
+      res.on('close', done);
+    });
+  }
+  w.seen = Date.now();
+  return { events: w.queue.splice(0), settings: wakeSettings(roomId), human: HUMAN_NAME,
+    files: qa.pendingSync.all(roomId).map(attView), uploads: qa.pendingUpload.all(roomId).map(attView) };
+}));
+api.post('/watch/panes', wrap((req) => {
+  const roomId = normalizeRoomId(req.body.room);
+  const w = watcherRecord(roomId);
+  w.seen = Date.now();
+  const panes = req.body.panes && typeof req.body.panes === 'object' ? req.body.panes : {};
+  for (const [name, p] of Object.entries(panes)) {
+    const n = cleanName(name);
+    if (!n || !p) continue;
+    w.panes[n] = { text: String(p.text || '').slice(-8000), state: ['working', 'idle', 'approval', 'stopped'].includes(p.state) ? p.state : 'idle',
+      prompt: String(p.prompt || '').slice(0, 300), changed_at: Number(p.changed_at) || Date.now(), at: Date.now() };
+  }
+  broadcast({ type: 'panes', room_id: roomId, panes: w.panes });
+  return { ok: true };
+}));
+api.post('/watch/say', wrap((req) => {
+  const roomId = normalizeRoomId(req.body.room);
+  const m = watcherSay(roomId, String(req.body.content || '').slice(0, MAX_CONTENT));
+  return { id: m?.id };
+}));
+
+
+// ---------- files: upload (human), share (agent), download, watcher sync ----------
+function shareFile({ room, agent, path: p, content, reply_to }) {
+  const roomId = normalizeRoomId(room);
+  requireRoom(roomId);
+  const rel = cleanProjectPath(p);
+  const name = cleanFileName(rel);
+  const info = qa.insert.run(roomId, null, name, mimeFor(name), 0, '', rel, agent, 'agent', 0, 1, Date.now());
+  const id = Number(info.lastInsertRowid);
+  const msg = postMessage({ room: roomId, sender: agent, kind: 'agent', content: content || `📎 ${name}`, reply_to, attachments: [id] });
+  pushEvent(roomId, { type: 'files' });   // wake the watcher so it uploads now
+  return msg;
+}
+const rawBody = express.raw({ type: () => true, limit: MAX_FILE });
+api.post('/rooms/:id/files', rawBody, wrap((req) => {
+  const roomId = normalizeRoomId(req.params.id);
+  ensureRoom(roomId);
+  const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  if (!buf.length) throw new UserError('empty file');
+  const name = cleanFileName(req.query.name);
+  const sender = cleanName(req.query.sender) || HUMAN_NAME;
+  const info = qa.insert.run(roomId, null, name, mimeFor(name), buf.length, '', 'pending', sender, 'human', 0, 0, Date.now());
+  const id = Number(info.lastInsertRowid);
+  qa.setPath.run(`${ATT_DIR}/${id}-${name}`, id);
+  storeBlob(id, buf, name);
+  return attView(qa.get.get(id));
+}));
+api.get('/rooms/:id/files', wrap((req) => {
+  const roomId = roomOf(req);
+  if (req.query.pending) return qa.pendingSync.all(roomId).map(attView);
+  return qa.forRoom.all(roomId, Math.min(Number(req.query.limit) || 200, 1000)).map(attView);
+}));
+api.post('/rooms/:id/share', wrap((req) => {
+  const a = resolveAgent(req.body.agent);
+  return shareFile({ room: req.params.id, agent: a.name, path: req.body.path, content: req.body.content, reply_to: req.body.reply_to });
+}));
+const INLINE = /^(image\/(png|jpeg|gif|webp|avif|svg\+xml)|application\/pdf|text\/(plain|markdown|csv|html|css|yaml)|application\/json|video\/|audio\/)/;
+api.get('/files/:id', (req, res) => {
+  const a = qa.get.get(Number(req.params.id));
+  if (!a) return res.status(404).json({ error: 'not found' });
+  if (!a.stored) return res.status(409).json({ error: a.error || 'not uploaded yet' });
+  const inline = !req.query.download && INLINE.test(a.mime);
+  res.set({
+    'Content-Type': /^text\//.test(a.mime) || a.mime === 'application/json' ? `${a.mime}; charset=utf-8` : a.mime,
+    'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${a.name.replace(/"/g, '')}"`,
+    'X-Content-Type-Options': 'nosniff',
+    // shared files are untrusted: render without scripts, forms or same-origin access
+    'Content-Security-Policy': "default-src 'none'; img-src 'self' data: blob:; style-src 'unsafe-inline'; font-src data:; media-src 'self'; sandbox",
+    'Cache-Control': 'private, max-age=31536000, immutable',
+  });
+  res.sendFile(path.join(FILES_DIR, String(a.id)));
+});
+function updatedAttachment(id) {
+  const a = attView(qa.get.get(id));
+  if (a) broadcast({ type: 'attachment', attachment: a });
+  return a;
+}
+api.put('/watch/files/:id', rawBody, wrap((req) => {
+  const a = qa.get.get(Number(req.params.id));
+  if (!a) throw new UserError('not found');
+  const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  storeBlob(a.id, buf, a.name);
+  qa.synced.run(a.id);
+  return updatedAttachment(a.id);
+}));
+api.post('/watch/files/:id/synced', wrap((req) => { qa.synced.run(Number(req.params.id)); return updatedAttachment(Number(req.params.id)); }));
+api.post('/watch/files/:id/failed', wrap((req) => {
+  qa.failed.run(String(req.body.error || 'failed').slice(0, 300), Number(req.params.id));
+  const a = updatedAttachment(Number(req.params.id));
+  if (a && a.uploader_kind === 'agent') watcherSay(a.room_id, `@${a.uploader} couldn't share \`${a.path}\`: ${a.error}`);
+  return a;
+}));
+
+// ---------- host helper: creates projects and starts teams on the machine ----------
+const host = { seen: 0, info: {}, queue: [], waiters: new Set() };
+const jobs = new Map();
+const HOST_TTL = 45000;
+const hostOnline = () => Date.now() - host.seen < HOST_TTL;
+const RESERVED = new Set(['controlcenter', 'watcher', 'tropa', 'all', 'here', 'team', 'everyone', 'system']);
+api.get('/host', wrap(() => ({ connected: hostOnline(), ...host.info, human: HUMAN_NAME })));
+api.post('/host/poll', wrap(async (req, res) => {
+  const wasOn = hostOnline();
+  host.seen = Date.now();
+  host.info = { projects_dir: String(req.body.projects_dir || ''), home: String(req.body.home || ''), version: String(req.body.version || ''),
+    clis: Array.isArray(req.body.clis) ? req.body.clis.map(String).slice(0, 10) : [],
+    models: Object.fromEntries(['claude', 'opencode', 'qwen', 'codex'].map((t) => [t, (Array.isArray(req.body.models?.[t]) ? req.body.models[t] : [])
+      .map((m) => (typeof m === 'string' ? { id: m, label: '' } : { id: String(m?.id || ''), label: String(m?.label || '').slice(0, 120) }))
+      .filter((m) => /^[A-Za-z0-9._:/@-]{1,100}$/.test(m.id)).slice(0, 500)])),
+    folders: (Array.isArray(req.body.folders) ? req.body.folders : []).slice(0, 500)
+      .filter((f) => /^[A-Za-z0-9._-]{1,60}$/.test(String(f?.name || '')))
+      .map((f) => ({ name: String(f.name), kit: !!f.kit, git: !!f.git, slug: slugify(f.slug || f.name) })) };
+  if (!wasOn) broadcast({ type: 'host', host: { connected: true, ...host.info } });
+  const t = Math.min(Math.max(Number(req.body.timeout) || 0, 0), 25) * 1000;
+  if (!host.queue.length && t) {
+    await new Promise((resolve) => {
+      const done = () => { host.waiters.delete(done); clearTimeout(timer); resolve(); };
+      const timer = setTimeout(done, t);
+      host.waiters.add(done);
+      res.on('close', done);
+    });
+  }
+  host.seen = Date.now();
+  return { jobs: host.queue.splice(0) };
+}));
+api.post('/host/jobs/:id', wrap((req) => {
+  const job = jobs.get(req.params.id);
+  if (!job) throw new UserError('unknown job');
+  if (req.body.status) job.status = String(req.body.status).slice(0, 20);
+  if (req.body.folder) job.folder_path = String(req.body.folder).slice(0, 500);
+  if (req.body.message) {
+    const text = String(req.body.message).slice(0, 4000);
+    job.log.push(text);
+    try { postMessage({ room: job.room_id, sender: 'tropa', kind: 'system', content: text }); } catch (e) { console.error(e); }
+  }
+  broadcast({ type: 'job', job: jobView(job) });
+  return jobView(job);
+}));
+const jobView = (j) => ({ id: j.id, room_id: j.room_id, slug: j.slug, status: j.status, folder_path: j.folder_path || '', log: j.log });
+api.get('/jobs/:id', wrap((req) => { const j = jobs.get(req.params.id); if (!j) throw new UserError('unknown job'); return jobView(j); }));
+
+api.post('/projects', wrap((req) => {
+  const b = req.body || {};
+  if (!hostOnline()) throw new UserError('the tropa host helper is not running on your machine — start it with: tropa host start');
+  const name = String(b.name || '').trim().slice(0, 80);
+  const slug = slugify(b.slug || name);
+  if (!slug) throw new UserError('project name is required');
+  const roomId = `project:${slug}`;
+  const folder = String(b.folder || slug).trim();
+  if (!/^[A-Za-z0-9._-]{1,60}$/.test(folder) || /^\.+$/.test(folder)) throw new UserError('folder must be a simple name (letters, digits, . _ -)');
+  const brief = String(b.brief || '').slice(0, MAX_CONTENT - 500);
+  const existing = !!b.existing;
+  if (existing && !(host.info.folders || []).some((f) => f.name === folder)) throw new UserError(`no folder "${folder}" in ${host.info.projects_dir || 'the projects folder'}`);
+  const agents = (Array.isArray(b.agents) ? b.agents : []).slice(0, 12).map((a) => ({
+    name: cleanName(a.name), tool: String(a.tool || 'claude'), model: String(a.model || '').trim(),
+    role: String(a.role || '').trim().slice(0, 200), instruction: String(a.instruction || '').trim().slice(0, 2000),
+  }));
+  const seen = new Set();
+  for (const a of agents) {
+    if (!a.name) throw new UserError('every agent needs a name');
+    const low = a.name.toLowerCase();
+    if (RESERVED.has(low) || low === HUMAN_NAME.toLowerCase()) throw new UserError(`"${a.name}" is a reserved name`);
+    if (seen.has(low)) throw new UserError(`duplicate agent name "${a.name}"`);
+    seen.add(low);
+    if (!['claude', 'opencode', 'qwen', 'codex'].includes(a.tool)) throw new UserError(`${a.name}: CLI must be claude, opencode, qwen or codex`);
+    if (a.model && !/^[A-Za-z0-9._:/@-]{1,80}$/.test(a.model)) throw new UserError(`${a.name}: invalid model id`);
+  }
+  const lead = b.lead ? cleanName(b.lead) : '';
+  if (lead && !seen.has(lead.toLowerCase())) throw new UserError('the lead must be one of the agents');
+  const files = (Array.isArray(b.files) ? b.files : []).map(Number).filter(Boolean);
+  const room = ensureRoom(roomId, String(b.topic || name || '').slice(0, 300));
+  if (b.topic || name) { q.setTopic.run(String(b.topic || name).slice(0, 300), roomId); broadcast({ type: 'room', room: q.getRoom.get(roomId) }); }
+  setWakeSettings(roomId, { lead });
+  const intro = [existing ? `🧩 **Team added to existing project: ${name || slug}** (\`${folder}\`)` : `🆕 **New project: ${name || slug}**`, brief ? `\n${brief}` : '',
+    files.length ? `\nFiles are saved in \`${ATT_DIR}/\`.` : ''].join('\n').trim();
+  const msg = postMessage({ room: roomId, sender: HUMAN_NAME, kind: 'human', content: intro, attachments: files });
+  const job = { id: require('node:crypto').randomUUID(), type: 'create_project', room_id: roomId, slug, name: name || slug, folder,
+    brief, agents, lead, existing, start: b.start !== false, trust: b.trust !== false, kickoff: String(b.kickoff || '').slice(0, 4000),
+    human: HUMAN_NAME, status: 'queued', log: [], message_id: msg.id };
+  jobs.set(job.id, job);
+  host.queue.push({ ...job, log: undefined });
+  for (const f of [...host.waiters]) f();
+  return { job: jobView(job), room: q.getRoom.get(roomId) || room };
+}));
+
+// delete a whole project: its room (messages, cursors, wake settings) and optionally its agents
+api.delete('/projects/:slug', wrap((req) => {
+  const slug = slugify(req.params.slug);
+  const roomId = `project:${slug}`;
+  const room = q.getRoom.get(roomId);
+  const agents = req.query.agents === '1' || req.query.agents === 'true'
+    ? q.listAgents.all().filter((a) => (a.project || '').toLowerCase() === slug) : [];
+  if (!room && !agents.length) throw new UserError(`project "${slug}" not found`);
+  if (room) { purgeRoomFiles(roomId); q.deleteRoom.run(roomId); broadcast({ type: 'room_deleted', room_id: roomId }); }
+  for (const a of agents) { q.deleteAgent.run(a.name); broadcast({ type: 'agent_deleted', name: a.name }); }
+  watchers.delete(roomId);
+  for (const k of [...wakeState.keys()]) if (k.startsWith(roomId + '\0')) { clearTimeout(wakeState.get(k).timer); wakeState.delete(k); }
+  return { ok: true, room_deleted: !!room, agents_deleted: agents.map((a) => a.name) };
+}));
+
 app.use('/api', api);
 
-app.get('/health', (req, res) => res.json({ ok: true }));
+const PKG_VERSION = (() => { try { return require('./package.json').version; } catch { return ''; } })();
+app.get('/health', (req, res) => res.json({ ok: true, app: 'ai-irc', version: PKG_VERSION, features: ['team', 'wake-routing', 'project-delete', 'files', 'host'] }));
 app.get('/agent-guide.md', (req, res) => res.type('text/markdown').sendFile(path.join(__dirname, 'AGENT_GUIDE.md')));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -940,7 +1451,7 @@ setInterval(() => {
 }, 30000).unref();
 
 server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
-  console.log(`AI-IRC listening on http://localhost:${PORT}  (MCP: /mcp, API: /api, UI: /)`);
+  console.log(`TropaAI chat (AI-IRC) listening on http://localhost:${PORT}  (MCP: /mcp, API: /api, UI: /)`);
 });
 
 function shutdown() { server.close(); try { db.close(); } catch {} process.exit(0); }

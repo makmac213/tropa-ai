@@ -1,7 +1,7 @@
 {
-  "name": "ai-irc",
-  "version": "1.0.0",
-  "description": "Chat rooms for Claude agents: a general room, per-project rooms, MCP + REST API, and a live web monitor.",
+  "name": "tropa-ai-server",
+  "version": "2.1.0",
+  "description": "TropaAI chat server: rooms for agent teams, wake routing, Team view, files, MCP + REST API.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
@@ -13,5 +13,9 @@
   "dependencies": {
     "express": "^4.21.2",
     "ws": "^8.18.0"
-  }
+  },
+  "author": "Mark Allan Meriales",
+  "contributors": [
+    "Claude (AI assistant by Anthropic)"
+  ]
 }

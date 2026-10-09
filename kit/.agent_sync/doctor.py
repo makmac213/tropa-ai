@@ -15,6 +15,15 @@ OK, WARN, FAIL = "✅", "⚠️ ", "❌"
 problems = {"fail": 0, "warn": 0}
 
 
+def install_hint(pkg):
+    if sys.platform == "darwin":
+        return f"brew install {pkg}"
+    for pm, cmd in (("apt-get", "sudo apt-get install -y"), ("dnf", "sudo dnf install -y"), ("pacman", "sudo pacman -S")):
+        if shutil.which(pm):
+            return f"{cmd} {pkg}"
+    return f"install {pkg} with your package manager"
+
+
 def say(level, msg, fix=None):
     if level == FAIL: problems["fail"] += 1
     if level == WARN: problems["warn"] += 1
@@ -58,6 +67,8 @@ def mcp_url_for(a, ws):
             return load_json(os.path.join(ws, "opencode.json"))["mcp"]["ai-irc"]["url"]
         if t == "qwen":
             return load_json(os.path.join(ws, ".qwen", "settings.json"))["mcpServers"]["ai-irc"]["httpUrl"]
+        if t == "codex":   # passed at launch with -c; nothing on disk to go stale
+            return None
     except Exception:
         return None
 
@@ -66,6 +77,7 @@ CONFIG_FILES = {
     "claude": ["AGENT.md", "CLAUDE.md", ".mcp.json", ".claude/settings.json"],
     "opencode": ["AGENT.md", "opencode.json"],
     "qwen": ["AGENT.md", "QWEN.md", ".qwen/settings.json"],
+    "codex": ["AGENT.md"],
 }
 HOME = os.path.expanduser("~")
 
@@ -84,6 +96,9 @@ def signin_hint(tool, ws):
         if not glob.glob(os.path.join(HOME, ".local/share/opencode/auth.json")):
             say(WARN, "OpenCode: no saved credentials found (~/.local/share/opencode/auth.json)",
                 "run `opencode auth login` (skip if you use env-var API keys)")
+    elif tool == "codex":
+        if not (os.path.exists(os.path.join(HOME, ".codex", "auth.json")) or os.environ.get("OPENAI_API_KEY")):
+            say(WARN, "Codex: not signed in (~/.codex/auth.json) and no OPENAI_API_KEY", "run `codex login`")
     elif tool == "qwen":
         has = (glob.glob(os.path.join(HOME, ".qwen/oauth_creds.json"))
                or any(os.environ.get(k) for k in ("DASHSCOPE_API_KEY", "OPENAI_API_KEY", "QWEN_API_KEY")))
@@ -99,16 +114,20 @@ def main():
 
     print("Tools")
     for b in ("tmux", "python3", "curl"):
-        say(OK, f"{b}: {version(b)}") if shutil.which(b) else say(FAIL, f"{b} not installed", f"brew install {b}")
+        say(OK, f"{b}: {version(b)}") if shutil.which(b) else say(FAIL, f"{b} not installed", install_hint(b))
     for b, why in (("docker", "runs AI-IRC in a container"), ("node", "runs AI-IRC without Docker (needs ≥ 22.13)")):
         say(OK, f"{b}: {version(b)}") if shutil.which(b) else say(WARN, f"{b} not installed ({why})")
 
     print("\nAI-IRC")
     server_ok = False
     try:
-        http(cfg["server"] + "/health")
+        h = http(cfg["server"] + "/health") or {}
         server_ok = True
-        say(OK, f"up at {cfg['server']}")
+        if "wake-routing" in (h.get("features") or []):
+            say(OK, f"up at {cfg['server']} (AI-IRC {h.get('version', '?')})")
+        else:
+            say(FAIL, f"{cfg['server']} is an older AI-IRC without wake routing / Team view — agents won't be woken",
+                "docker rm -f ai-irc && tropa server up   (or point this project at another port: tropa init -p 8080)")
         st = http(cfg["server"] + "/api/state")
         human = (st or {}).get("human", "")
         if human and human.lower() != cfg["human"].lower():
@@ -165,6 +184,8 @@ def main():
                            capture_output=True)
         url = mcp_url_for(a, ws)
         expect = f"{cfg['server']}/mcp?agent={name}&project={cfg['project']}"
+        if not url and tool == "codex":
+            url = f"{cfg['server']}/mcp?agent={name}&project={cfg['project']}"   # what start_agent.sh passes
         if not url:
             say(FAIL, "no ai-irc MCP entry in its config")
         else:

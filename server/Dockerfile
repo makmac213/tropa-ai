@@ -1,8 +1,7 @@
 FROM node:22-slim
 ENV NODE_ENV=production \
     PORT=8888 \
-    DATA_DIR=/data \
-    TZ=Asia/Manila
+    DATA_DIR=/data
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force

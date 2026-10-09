@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI-IRC</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%236d8cff'/><text x='16' y='22' font-size='16' font-family='monospace' text-anchor='middle' fill='white'>#</text></svg>">
+<title>TropaAI</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%236d8cff'/><text x='16' y='22' font-size='16' font-family='monospace' text-anchor='middle' fill='white'>T</text></svg>">
 <style>
   :root {
     --bg: #0f1115; --panel: #161920; --panel2: #1c2029; --line: #272c37;
@@ -176,27 +176,158 @@
   .set-row input[type=range] { flex: 1; margin: 0; padding: 0; }
   #settingsDlg select { width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; color: var(--text); }
   #settingsDlg select:disabled { opacity: .5; }
+  .about { font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; margin: 4px 0 12px; }
   .linkbtn { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; margin-left: auto; }
+  /* project rows: delete on hover */
+  .room .del { opacity: 0; color: var(--muted); padding: 0 2px; border-radius: 4px; }
+  .room:hover .del { opacity: 1; }
+  .room .del:hover { color: var(--danger); }
+  .dot.busy { background: var(--ok); box-shadow: 0 0 0 3px rgba(63,207,142,.25); } .dot.wait { background: var(--human); } .dot.idle { background: #6b7280; }
+  /* Team view: every agent's screen, live */
+  .team { flex: 1; overflow-y: auto; padding: 12px 20px 16px; min-height: 0; }
+  .team[hidden], .msgs[hidden] { display: none; }
+  .team-bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 12px; margin-bottom: 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; color: var(--muted); }
+  .team-bar label { display: flex; gap: 6px; align-items: center; }
+  .team-bar select, .team-bar input { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; color: var(--text); font-size: 12.5px; }
+  .team-bar input[type=number] { width: 64px; }
+  .team-bar .sp { flex: 1; }
+  .tbtn { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+  .tbtn:hover { border-color: var(--accent); }
+  .tbtn.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .tbtn.off { background: var(--human); border-color: var(--human); color: #fff; }
+  .tbtn.warn { color: var(--danger); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+  .card.s-approval { border-color: var(--human); box-shadow: 0 0 0 1px var(--human); }
+  .card.s-working { border-color: var(--ok); }
+  .card .ch { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .card .ch .model { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .card .ch .sp { flex: 1; }
+  .card .st { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; border-radius: 10px; padding: 1px 7px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .card.s-working .st { color: var(--ok); border-color: var(--ok); }
+  .card.s-approval .st { color: #fff; background: var(--human); border-color: var(--human); }
+  .card .ago { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .card .appr { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 7px 10px; background: var(--mention); border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .card .appr span { flex: 1 1 160px; min-width: 0; }
+  .card pre.screen { margin: 0; padding: 8px 10px; height: 260px; overflow: auto; background: var(--code); font: 11.5px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; color: var(--text); }
+  .team .empty { margin-top: 10vh; }
+  /* attachments */
+  .atts { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin: 6px 0 2px; }
+  .att { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel2); border-radius: 8px; padding: 6px 10px; color: var(--text); text-decoration: none; font-size: 13px; max-width: 100%; }
+  .att small { color: var(--muted); }
+  .att:hover { border-color: var(--accent); }
+  .att.img { flex-direction: column; align-items: stretch; padding: 4px; gap: 3px; }
+  .att.img img { display: block; max-width: min(320px, 70vw); max-height: 240px; border-radius: 5px; object-fit: contain; background: var(--code); }
+  .att.img span { font-size: 11.5px; color: var(--muted); padding: 0 4px 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(320px, 70vw); }
+  .att.pending { color: var(--muted); border-style: dashed; }
+  .att.failed { color: var(--danger); border-color: var(--danger); }
+  .msgs.blurred .att img { filter: blur(14px); }
+  .pending-files { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .pending-files[hidden] { display: none; }
+  .pchip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); background: var(--panel2); border-radius: 14px; padding: 2px 4px 2px 10px; font-size: 12.5px; }
+  .pchip.up { border-style: dashed; color: var(--muted); }
+  .pchip.bad { border-color: var(--danger); color: var(--danger); }
+  .pchip button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 4px; }
+  .attach { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; }
+  .attach:hover { color: var(--text); border-color: var(--accent); }
+  .composer.drop, .msgs.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
+  /* new project dialog */
+  #projDlg { width: min(760px, 96vw); max-height: 92vh; overflow: auto; }
+  #projDlg label.f { display: block; font-size: 12px; color: var(--muted); margin: 0 0 4px; }
+  #projDlg label.f small { opacity: .8; margin-left: 6px; }
+  #projDlg textarea, #projDlg select { width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; color: var(--text); margin-bottom: 10px; font: inherit; resize: vertical; }
+  .np-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .np-mode { display: flex; gap: 18px; margin: 0 0 12px; font-size: 13px; }
+  .np-mode label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .np-mode input { width: auto; margin: 0; }
+  #npExisting[hidden], #npFolderBox[hidden] { display: none; }
+  .np-folder { display: flex; align-items: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 10px; }
+  .np-folder span { color: var(--muted); padding-left: 10px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; flex: none; }
+  .np-folder input { border: 0 !important; margin: 0 !important; background: none !important; padding-left: 2px !important; flex: 1; width: auto !important; min-width: 0; }
+  .np-host { font-size: 12.5px; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; }
+  .np-host.ok { background: rgba(63,207,142,.12); color: var(--ok); }
+  .np-host.off { background: var(--mention); color: var(--human); }
+  .np-host code { background: var(--code); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+  .np-drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 14px; text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  .np-drop.over { border-color: var(--accent); background: var(--accent-weak); }
+  .np-files { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .np-team-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 6px 0 6px; flex-wrap: wrap; }
+  .np-presets { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .np-presets button { background: var(--panel2); border: 1px solid var(--line); color: var(--muted); border-radius: 12px; padding: 2px 10px; cursor: pointer; font-size: 12px; }
+  .np-presets button:hover { color: var(--text); border-color: var(--accent); }
+  .np-row { display: grid; grid-template-columns: 1fr 112px 1fr 1.6fr 34px 28px; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .np-row input, .np-row select { margin: 0 !important; padding: 6px 8px !important; font-size: 13px; }
+  .np-row .lead { display: grid; place-items: center; cursor: pointer; color: var(--muted); font-size: 16px; border: 1px solid var(--line); border-radius: 6px; height: 32px; }
+  .np-row .lead input { display: none; }
+  .np-row .lead.on { color: #fff; background: var(--human); border-color: var(--human); }
+  .np-row .rm { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; }
+  .np-row .rm:hover { color: var(--danger); }
+  #projDlg .err { color: var(--danger); font-size: 12.5px; min-height: 16px; margin: 4px 0 8px; }
+  #projDlg .btns { align-items: center; }
+  @media (max-width: 640px) { .np-grid { grid-template-columns: 1fr; }
+    .np-row { grid-template-columns: 1fr 1fr 34px 28px; grid-template-areas: "n t l x" "m r r r"; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+    .np-row .n { grid-area: n; } .np-row .t { grid-area: t; } .np-row .m { grid-area: m; } .np-row .r { grid-area: r; } .np-row .lead { grid-area: l; } .np-row .rm { grid-area: x; } }
+  /* layouts */
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { background: var(--panel2); border: 0; border-right: 1px solid var(--line); color: var(--muted); padding: 3px 9px; cursor: pointer; font-size: 12.5px; }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .grid.cols-1 { grid-template-columns: minmax(0, 1fr); }
+  .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid.cols-1 pre.screen, .graph-side pre.screen { height: 440px; }
+  /* graph */
+  .graphwrap { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .graph { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+  .graph svg { width: 100%; height: auto; display: block; }
+  .graph .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 4px 8px 6px; font-size: 12px; color: var(--muted); }
+  .graph .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  .edge { fill: none; stroke: var(--muted); stroke-width: 1.6; opacity: .45; }
+  .edge.recent { stroke: var(--accent); opacity: 1; stroke-width: 2.2; stroke-dasharray: 7 6; animation: flow .9s linear infinite; }
+  .ecount { font-size: 11px; fill: var(--muted); }
+  @keyframes flow { to { stroke-dashoffset: -26; } }
+  .node { cursor: pointer; }
+  .node .core { fill: var(--panel2); stroke: var(--muted); stroke-width: 2; transition: fill .3s, stroke .3s; }
+  .node.s-idle .core { fill: #6b7280; stroke: #6b7280; }
+  .node.s-working .core { fill: var(--ok); stroke: var(--ok); }
+  .node.s-approval .core { fill: var(--human); stroke: var(--human); }
+  .node.s-offline .core { fill: var(--panel2); stroke: var(--muted); stroke-dasharray: 4 3; }
+  .node.s-human .core { fill: var(--accent); stroke: var(--accent); }
+  .node.sel .core { stroke: var(--text); stroke-width: 3.5; }
+  .node .ini { fill: #fff; font-weight: 700; font-size: 15px; text-anchor: middle; pointer-events: none; }
+  .node.s-offline .ini { fill: var(--muted); }
+  .node .lbl { fill: var(--text); font-size: 13.5px; font-weight: 600; text-anchor: middle; }
+  .node .sub { fill: var(--muted); font-size: 11.5px; text-anchor: middle; }
+  .node.s-working .sub { fill: var(--ok); } .node.s-approval .sub { fill: var(--human); }
+  .node .pulse { fill: none; stroke: var(--ok); stroke-width: 3; opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .node.s-working .pulse { animation: pulse 1.6s ease-out infinite; }
+  .node.s-approval .pulse { stroke: var(--human); animation: pulse 1.2s ease-out infinite; }
+  @keyframes pulse { from { transform: scale(1); opacity: .7; } to { transform: scale(1.6); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .edge.recent, .node .pulse { animation: none; } }
+  @media (max-width: 1100px) { .graphwrap { grid-template-columns: minmax(0, 1fr); } .grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 760px) {
     .app { grid-template-columns: 1fr; }
     aside { position: fixed; inset: 0 25% 0 0; z-index: 10; transform: translateX(-100%); transition: transform .2s; }
     .app.nav aside { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.5); }
     .menu-btn { display: block; }
     header .search { width: 110px; }
-    .msg, header, .composer { padding-left: 12px; padding-right: 12px; }
+    .msg, header, .composer, .team { padding-left: 12px; padding-right: 12px; }
+    .card pre.screen, .grid.cols-1 pre.screen, .graph-side pre.screen { height: 240px; }
+    .grid.cols-2, .grid.cols-3 { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
 </head>
 <body>
 <div class="app" id="app">
   <aside>
-    <div class="brand"><div class="logo">#</div><b>AI-IRC</b><span class="conn" id="conn" title="disconnected"></span></div>
+    <div class="brand"><div class="logo">T</div><b>TropaAI</b><span class="conn" id="conn" title="disconnected"></span></div>
     <div class="side-scroll">
       <div class="sec">Feeds</div>
       <div id="feeds"></div>
       <div class="sec">Projects <button id="newRoom" title="New project room">+</button></div>
       <div id="projects"></div>
-      <div class="sec">Agents <span id="agentCount" style="margin-left:6px"></span></div>
+      <div class="sec">Agents <span id="agentCount" style="margin-left:6px"></span><button id="agentScope" hidden style="font-size:11px;text-transform:none;letter-spacing:0"></button></div>
       <div id="agents"></div>
     </div>
     <div class="me">You are <input id="myName" spellcheck="false"><button class="gear" id="settingsBtn" title="Settings">⚙</button></div>
@@ -217,17 +348,22 @@
           <button data-dl="json">JSON<span>.json</span></button>
         </div>
       </div>
+      <button class="dl-btn" id="teamBtn" hidden title="See every agent's screen live">▦ Team</button>
       <input class="search" id="search" placeholder="Search…">
     </header>
     <div class="msgs" id="msgs"></div>
+    <div class="team" id="team" hidden></div>
     <div class="composer" id="composer">
       <div class="replying" id="replying" hidden></div>
       <div class="cmds" id="cmds" hidden></div>
+      <div class="pending-files" id="pendingFiles" hidden></div>
       <div class="row">
+        <button class="attach" id="attachBtn" type="button" title="Attach files (or drop / paste them here)">📎</button>
+        <input type="file" id="fileInput" multiple hidden>
         <textarea id="input" rows="1" placeholder="Message #general  —  @agent to mention"></textarea>
         <button class="send" id="sendBtn">Send</button>
       </div>
-      <div class="hint">Enter to send · Shift+Enter for new line · @name mentions an agent · /help for commands</div>
+      <div class="hint">Enter to send · Shift+Enter for new line · @name mentions an agent · 📎 drop or paste files · /help for commands</div>
     </div>
   </main>
 </div>
@@ -299,8 +435,49 @@
       <label class="h" for="macVoice">Mac voice</label>
       <select id="macVoice"></select>
     </div>
+    <div class="about">TropaAI · built by Mark Allan Meriales with Claude (Anthropic)</div>
     <div class="btns"><button type="button" id="ttsTest">▶ Test voice</button><button class="primary" value="close">Done</button></div>
   </form>
+</dialog>
+
+<dialog id="delProjDlg">
+  <form method="dialog">
+    <h3 id="delProjTitle">Delete project</h3>
+    <p id="delProjText" style="color:var(--muted);margin:0 0 12px;font-size:13px"></p>
+    <label class="set-radio"><input type="checkbox" id="delProjAgents" checked><span>Also remove this project's agents<small id="delProjAgentList"></small></span></label>
+    <div class="btns" style="margin-top:12px"><button value="cancel">Cancel</button><button value="ok" class="primary" style="background:var(--danger);border-color:var(--danger)">Delete project</button></div>
+  </form>
+</dialog>
+
+<dialog id="projDlg">
+  <form id="projForm" novalidate>
+    <h3>New project</h3>
+    <div class="np-host" id="npHost"></div>
+    <div class="np-mode" id="npMode"><label><input type="radio" name="npMode" value="new" checked> New folder</label><label><input type="radio" name="npMode" value="existing"> Existing project folder</label></div>
+    <div id="npExisting" hidden><label class="f" for="npFolderPick">Folder <small>in <span id="npBase2">~/projects/</span> · the code is left as it is; the team kit is added next to it</small></label>
+      <select id="npFolderPick"></select></div>
+    <div class="np-grid">
+      <div><label class="f" for="npName">Name</label><input id="npName" placeholder="e.g. Recipe Finder" autocomplete="off"></div>
+      <div id="npFolderBox"><label class="f" for="npFolder">Folder</label><div class="np-folder"><span id="npBase">~/projects/</span><input id="npFolder" placeholder="recipe-finder" autocomplete="off" spellcheck="false"></div></div>
+    </div>
+    <label class="f" for="npBrief">Brief / spec <small id="npBriefHint">saved as docs/SPEC.md · markdown</small></label>
+    <textarea id="npBrief" rows="7" placeholder="What are we building and for whom? Must-haves, tech constraints, and what “done” means…"></textarea>
+    <label class="f">Files <small>mockups, docs, images · saved in docs/attachments/</small></label>
+    <div class="np-drop" id="npDrop">Drop files here or <button type="button" class="linkbtn" id="npPick" style="margin:0">choose files</button><input type="file" id="npFiles" multiple hidden></div>
+    <div class="np-files" id="npFileList"></div>
+    <div class="np-team-head">TEAM <span>· ★ = lead (gets your un-addressed messages)</span>
+      <span class="np-presets"><button type="button" data-preset="web">Web app · 5</button><button type="button" data-preset="small">Small · 3</button><button type="button" data-preset="solo">Solo</button></span></div>
+    <div id="npTeam"></div>
+    <button type="button" class="linkbtn" id="npAdd" style="margin:2px 0 12px">+ Add agent</button>
+    <label class="f" for="npKickoff">Kickoff message <small>posted as you once the team is up · leave empty to say hi yourself</small></label>
+    <textarea id="npKickoff" rows="2"></textarea>
+    <label class="set-radio"><input type="checkbox" id="npStart" checked><span>Start the team now</span></label>
+    <label class="set-radio" id="npTrustRow"><input type="checkbox" id="npTrust" checked><span>Pre-trust the project in Claude Code / Codex<small>skips the first-run “trust this folder?” prompt (backups of ~/.claude.json and ~/.codex/config.toml are kept)</small></span></label>
+    <div class="err" id="npErr"></div>
+    <div class="btns"><button type="button" id="npRoomOnly" title="Just create the chat room — no folder, no agents">Room only</button><span style="flex:1"></span>
+      <button type="button" id="npCancel">Cancel</button><button type="submit" class="primary" id="npCreate">Create project</button></div>
+  </form>
+  <datalist id="npModels-claude"></datalist><datalist id="npModels-opencode"></datalist><datalist id="npModels-qwen"></datalist><datalist id="npModels-codex"></datalist>
 </dialog>
 
 <dialog id="roomDlg">
@@ -317,12 +494,20 @@
   const $ = (s) => document.querySelector(s);
   const ALL = '__all__';
   const state = {
-    rooms: [], agents: [], human: 'Mark',
+    rooms: [], agents: [], human: '',
     current: localGet('airc.room') || 'general',
     messages: new Map(),      // roomId -> array (for ALL: merged)
     seen: JSON.parse(localGet('airc.seen') || '{}'), // roomId -> last seen id
     replyTo: null, searching: null,
+    agentScope: localGet('airc.agentScope') || 'project',   // 'project' | 'all'
+    view: localGet('airc.view') === 'team' ? 'team' : 'chat',
+    team: {},                 // roomId -> { watching, agents, panes, settings, tmux_session }
+    teamLayout: localGet('airc.teamLayout') || 'auto',   // auto | 1 | 2 | 3 | graph
+    graphSel: null,
+    pending: [],              // composer attachments: { key, name, size, att, error }
+    host: { connected: false },
   };
+  const projectOf = (id) => (id && id.startsWith('project:') ? id.slice(8) : null);
   function localGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
   function localSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
 
@@ -385,18 +570,26 @@
     };
     $('#feeds').innerHTML = btn(ALL, 'All activity') + btn('general', 'general');
     const projects = state.rooms.filter((r) => r.kind === 'project');
-    $('#projects').innerHTML = projects.length ? projects.map((r) => btn(r.id, r.project)).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">No project rooms yet</span></div>`;
-    const online = state.agents.filter((a) => a.online).length;
-    $('#agentCount').textContent = state.agents.length ? `${online}/${state.agents.length}` : '';
-    $('#agents').innerHTML = state.agents.length ? state.agents.map((a) => `
+    $('#projects').innerHTML = projects.length ? projects.map((r) => btn(r.id, r.project, `<span class="del" data-del-project="${esc(r.project)}" title="Delete project">×</span>`)).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">No project rooms yet</span></div>`;
+    const proj = projectOf(state.current);
+    const scoped = proj && state.agentScope === 'project';
+    const list = scoped ? state.agents.filter((a) => (a.project || '').toLowerCase() === proj) : state.agents;
+    const panes = (proj && state.team[state.current]?.panes) || {};
+    const online = list.filter((a) => a.online).length;
+    $('#agentCount').textContent = list.length ? `${online}/${list.length}${scoped ? ' · ' + proj : ''}` : '';
+    $('#agentScope').hidden = !proj;
+    $('#agentScope').textContent = scoped ? 'show all' : `only ${proj}`;
+    $('#agentScope').title = scoped ? 'Show agents from every project' : `Show only agents in ${proj}`;
+    const dotCls = (a) => { const st = panes[a.name]?.state; return st === 'working' ? 'busy' : st === 'approval' ? 'wait' : st === 'idle' ? 'idle' : a.online ? 'on' : ''; };
+    $('#agents').innerHTML = list.length ? list.map((a) => `
       <div class="agent" title="${esc(a.description || '')}">
-        <span class="dot ${a.online ? 'on' : ''}"></span>
+        <span class="dot ${dotCls(a)}"></span>
         <div class="meta" data-edit-agent="${esc(a.name)}"><div class="n">${esc(a.name)}</div>
-          <div class="s">${esc([a.project, a.status].filter(Boolean).join(' · ') || (a.last_seen ? 'seen ' + fmtTime(a.last_seen) : ''))}</div>
+          <div class="s">${esc([scoped ? panes[a.name]?.state : a.project, a.status].filter(Boolean).join(' · ') || (a.last_seen ? 'seen ' + fmtTime(a.last_seen) : ''))}</div>
           ${a.provider || a.model ? `<div class="s s2">${esc([a.provider, a.model].filter(Boolean).join(' · '))}</div>` : ''}</div>
         <button class="x" data-edit-agent="${esc(a.name)}" title="Edit agent">✎</button>
         <button class="x" style="margin-left:0" data-del-agent="${esc(a.name)}" title="Remove agent">×</button>
-      </div>`).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">No agents yet</span></div>`;
+      </div>`).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">${scoped ? `No agents in ${esc(proj)} yet` : 'No agents yet'}</span></div>`;
   }
 
   // ---------- messages ----------
@@ -404,6 +597,10 @@
     const r = state.rooms.find((x) => x.id === state.current);
     $('#roomTitle').textContent = state.searching ? `Search: “${state.searching}”` : roomLabel(state.current);
     $('#roomTopic').textContent = state.searching ? '' : state.current === ALL ? 'Every room, newest at the bottom' : (r?.topic || '');
+    const proj = projectOf(state.current);
+    $('#teamBtn').hidden = !proj || !!state.searching;
+    $('#teamBtn').textContent = state.view === 'team' && proj ? '☰ Chat' : '▦ Team';
+    $('#teamBtn').title = state.view === 'team' && proj ? 'Back to the chat' : "See every agent's screen live";
     const readOnly = state.current === ALL || !!state.searching;
     $('#input').placeholder = readOnly ? 'Read-only view — pick a room to post (slash commands still work)' : `Message ${roomLabel(state.current)}  —  @agent to mention, / for commands`;
   }
@@ -423,10 +620,23 @@
           ${showRoom ? `<span class="roomtag" data-room="${esc(m.room_id)}">${esc(roomLabel(m.room_id))}</span>` : ''}
           <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><span class="rid">#${m.id}</span></div>`}
         ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
-        <div class="body">${md(m.content)}</div>
+        <div class="body">${md(m.content)}</div>${attsHtml(m)}
       </div>
       <div class="actions"><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? '■ Stop' : '▶ Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>
     </div>`;
+  }
+  const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+  const fileIcon = (mime) => (/pdf/.test(mime) ? '📕' : /^text\/(markdown|plain)/.test(mime) ? '📝' : /html|css|javascript|json|xml|yaml/.test(mime) ? '🧩' : /spreadsheet|csv/.test(mime) ? '📊' : /presentation/.test(mime) ? '📽' : /^video/.test(mime) ? '🎞' : /^audio/.test(mime) ? '🔊' : /zip/.test(mime) ? '🗜' : '📄');
+  function attsHtml(m) {
+    const list = m.attachments || [];
+    if (!list.length) return '';
+    const inProject = String(m.room_id || '').startsWith('project:');
+    return `<div class="atts">${list.map((a) => {
+      if (!a.stored) return `<span class="att ${a.error ? 'failed' : 'pending'}" title="${esc(a.path)}">${a.error ? '⚠️' : '⏳'} ${esc(a.name)} <small>${a.error ? esc(a.error) : `waiting for ${esc(a.uploader)}'s upload…`}</small></span>`;
+      const where = !inProject ? 'stored on the chat server' : a.error ? `not saved in the project: ${a.error}` : a.synced ? `in the project: ${a.path}` : `copying into the project (${a.path})…`;
+      if (a.is_image) return `<a class="att img" href="${a.url}" target="_blank" rel="noopener" title="${esc(where)}"><img src="${a.url}" alt="${esc(a.name)}" loading="lazy"><span>${a.synced || !inProject ? '' : '⏳ '}${esc(a.name)} · ${fmtSize(a.size)}</span></a>`;
+      return `<a class="att file" href="${a.url}" target="_blank" rel="noopener" title="${esc(where)}">${fileIcon(a.mime)} <b>${esc(a.name)}</b> <small>${fmtSize(a.size)}${a.synced || !inProject ? '' : ' · ⏳'}</small></a>`;
+    }).join('')}</div>`;
   }
   function agentTag(name) {
     const a = state.agents.find((x) => x.name.toLowerCase() === String(name).toLowerCase());
@@ -439,6 +649,7 @@
     return null;
   }
   function renderMessages({ keepScroll = false, stick = true } = {}) {
+    if (state.searching) { $('#msgs').hidden = false; $('#team').hidden = true; }
     const box = $('#msgs');
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     const prevHeight = box.scrollHeight;
@@ -477,12 +688,14 @@
 
   async function selectRoom(id) {
     state.current = id; state.searching = null; state.replyTo = null; $('#search').value = '';
+    if (state.pending.length) { state.pending = []; renderPending(); }
     localSet('airc.room', id);
     renderReply(); renderHeader(); renderSidebar();
     $('#msgs').innerHTML = '';
     try { await loadRoom(id); } catch (e) { $('#msgs').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
     markSeen(id);
     renderMessages();
+    applyView();
     $('#app').classList.remove('nav');
     if (id !== ALL) $('#input').focus();
   }
@@ -521,7 +734,7 @@
     ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
     ws.onopen = async () => {
       retry = 0; $('#conn').classList.add('on'); $('#conn').title = 'live';
-      await refreshState(); await loadRoom(state.current).catch(() => {}); renderMessages();
+      await refreshState(); await loadRoom(state.current).catch(() => {}); renderMessages(); applyView();
     };
     ws.onclose = () => { $('#conn').classList.remove('on'); $('#conn').title = 'reconnecting…'; setTimeout(connect, Math.min(10000, 500 * 2 ** retry++)); };
     ws.onmessage = (ev) => {
@@ -543,10 +756,24 @@
         renderSidebar(); renderMessages({ stick: false });
       }
       else if (e.type === 'agent_deleted') { state.agents = state.agents.filter((a) => a.name !== e.name); renderSidebar(); }
+      else if (e.type === 'team') { state.team[e.team.room_id] = e.team; if (e.team.room_id === state.current) { renderSidebar(); if (state.view === 'team') renderTeam(); } }
+      else if (e.type === 'panes') {
+        const t = state.team[e.room_id] || (state.team[e.room_id] = { room_id: e.room_id, watching: true, agents: Object.keys(e.panes), panes: {}, settings: {} });
+        t.watching = true; t.panes = { ...t.panes, ...e.panes };
+        if (e.room_id === state.current) { renderSidebar(); if (state.view === 'team') updateCards(); }
+      }
+      else if (e.type === 'attachment') {
+        const a = e.attachment; let hit = false;
+        for (const arr of state.messages.values()) for (const m of arr) if (m.id === a.message_id) { m.attachments = (m.attachments || []).map((x) => (x.id === a.id ? a : x)); hit = true; }
+        if (hit) renderMessages({ stick: false });
+      }
+      else if (e.type === 'host') { state.host = e.host; if ($('#projDlg').open) renderHostNote(); }
+      else if (e.type === 'wake_settings') { const t = state.team[e.room_id]; if (t) { t.settings = e.settings; if (e.room_id === state.current && state.view === 'team') renderTeamBar(); } }
       else if (e.type === 'message_deleted') { for (const [k, arr] of state.messages) state.messages.set(k, arr.filter((m) => m.id !== e.id)); renderMessages({ stick: false }); }
     };
   }
   function onMessage(m) {
+    setTimeout(() => { if (state.view === 'team' && state.teamLayout === 'graph' && m.room_id === state.current && $('#graph')) $('#graph').innerHTML = graphSvg(state.team[state.current] || {}); }, 0);
     for (const key of [m.room_id, ALL]) {
       const arr = state.messages.get(key);
       if (arr && !arr.some((x) => x.id === m.id)) arr.push(m);
@@ -563,14 +790,14 @@
     const me = myName().toLowerCase();
     if (document.visibilityState !== 'visible' && m.sender.toLowerCase() !== me) {
       const unreadTotal = state.rooms.reduce((a, r) => a + (r.unread_live || 0), 0);
-      document.title = `(${unreadTotal}) AI-IRC`;
+      document.title = `(${unreadTotal}) TropaAI`;
       if ((m.mentions || []).includes(me) && 'Notification' in window && Notification.permission === 'granted') {
         new Notification(`${m.sender} in ${roomLabel(m.room_id)}`, { body: state.blurred ? 'New message (hidden while blurred)' : m.content.slice(0, 200) });
       }
     }
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') { document.title = 'AI-IRC'; if (!state.searching) markSeen(state.current); }
+    if (document.visibilityState === 'visible') { document.title = 'TropaAI'; if (!state.searching) markSeen(state.current); }
   });
 
   // ---------- composer ----------
@@ -584,14 +811,16 @@
   async function send() {
     const input = $('#input');
     let content = input.value.trim();
-    if (!content) return;
+    const ready = state.pending.filter((p) => p.att);
+    if (!content && !ready.length) return;
+    if (state.pending.some((p) => !p.att && !p.error)) { alertInline('Wait for the files to finish uploading.'); return; }
     if (content.startsWith('//')) content = content.slice(1);          // "//text" posts a literal "/text"
     else if (content.startsWith('/')) { runCommand(content); return; }
     if (state.current === ALL || state.searching) { alertInline('Pick a room in the sidebar to post a message.'); return; }
     $('#sendBtn').disabled = true;
     try {
-      await api(`/rooms/${encodeURIComponent(state.current)}/messages`, { method: 'POST', body: { sender: myName(), sender_kind: 'human', content, reply_to: state.replyTo } });
-      input.value = ''; autosize(); state.replyTo = null; renderReply();
+      await api(`/rooms/${encodeURIComponent(state.current)}/messages`, { method: 'POST', body: { sender: myName(), sender_kind: 'human', content, reply_to: state.replyTo, attachments: ready.map((p) => p.att.id) } });
+      input.value = ''; autosize(); state.replyTo = null; renderReply(); state.pending = []; renderPending();
     } catch (e) { alertInline(e.message); }
     finally { $('#sendBtn').disabled = false; input.focus(); }
   }
@@ -866,6 +1095,210 @@
     infoInline(`Reading ${n === 1 ? 'the last message' : `the last ${n} messages`}${tts.engine === 'kokoro' ? ' with Kokoro' : ' with a Mac voice'} · /stop to stop`);
   }
 
+  // ---------- team view: every agent's screen, live ----------
+  async function loadTeam(id) {
+    try { state.team[id] = await api(`/rooms/${encodeURIComponent(id)}/team`); } catch { state.team[id] = { room_id: id, watching: false, agents: [], panes: {}, settings: {} }; }
+  }
+  async function applyView() {
+    const proj = projectOf(state.current);
+    const team = state.view === 'team' && proj && !state.searching;
+    $('#msgs').hidden = !!team; $('#team').hidden = !team;
+    renderHeader();
+    if (proj && !state.team[state.current]) { await loadTeam(state.current); renderSidebar(); }
+    if (team) renderTeam();
+  }
+  function teamAgents(t) {
+    const lead = (t.settings?.lead || '').toLowerCase();
+    const waiting = (n) => (t.panes?.[n]?.state === 'approval' ? 1 : 0);   // approvals first, then the lead
+    return [...(t.agents || [])].sort((a, b) => waiting(b) - waiting(a) || (b.toLowerCase() === lead) - (a.toLowerCase() === lead) || a.localeCompare(b));
+  }
+  const agoText = (ms) => { if (!ms) return ''; const s = Math.round((Date.now() - ms) / 1000); return s < 8 ? 'active now' : s < 90 ? `quiet ${s}s` : s < 5400 ? `quiet ${Math.round(s / 60)}m` : `quiet ${Math.round(s / 3600)}h`; };
+  function cardHtml(name, t) {
+    const p = t.panes?.[name] || { text: '', state: 'idle' };
+    const a = state.agents.find((x) => x.name.toLowerCase() === name.toLowerCase());
+    const lead = (t.settings?.lead || '').toLowerCase() === name.toLowerCase();
+    return `<div class="card s-${esc(p.state)}" data-card="${esc(name)}">
+      <div class="ch"><b>${esc(name)}</b>${lead ? '<span title="lead">★</span>' : ''}
+        <span class="model">${esc([a?.provider, a?.model].filter(Boolean).join(' · '))}</span><span class="sp"></span>
+        <span class="ago" data-ago="${p.changed_at || 0}">${agoText(p.changed_at)}</span><span class="st">${esc(p.state)}</span>
+        <button class="tbtn" data-wake="${esc(name)}" title="Tell ${esc(name)} to read the room now">Wake</button></div>
+      ${p.state === 'approval' ? `<div class="appr"><span>Waiting for approval${p.prompt ? `: <b>${esc(p.prompt)}</b>` : ''}</span>
+        <button class="tbtn" data-approve="${esc(name)}" data-act="yes">Approve</button>
+        <button class="tbtn" data-approve="${esc(name)}" data-act="always" title="Yes, and don't ask again this session">Always</button>
+        <button class="tbtn warn" data-approve="${esc(name)}" data-act="no">Deny</button></div>` : ''}
+      <pre class="screen">${esc(p.text || '(no screen yet)')}</pre></div>`;
+  }
+  // ---- graph layout ----
+  function graphSelected(t) {
+    const names = t.agents || [];
+    if (state.graphSel && names.includes(state.graphSel)) return state.graphSel;
+    return teamAgents(t)[0];
+  }
+  function graphModel(t) {
+    const W = 800, H = 560, cx = 400, cy = 285, R = 195;
+    const human = state.human || 'you';
+    const agents = t.agents || [];
+    const lead = agents.find((a) => a.toLowerCase() === String(t.settings?.lead || '').toLowerCase());
+    const pos = { [human]: { x: cx, y: 58 } };
+    if (lead) pos[lead] = { x: cx, y: cy };
+    const ring = agents.filter((a) => a !== lead).sort((a, b) => a.localeCompare(b));
+    const n = ring.length;
+    ring.forEach((a, i) => {   // spread on an arc through the bottom, leaving the top for the human
+      const ang = (n === 1 ? 90 : -25 + (230 * i) / (n - 1)) * Math.PI / 180;
+      pos[a] = { x: cx + R * Math.cos(ang) * 1.12, y: cy + R * Math.sin(ang) * (lead ? 1 : 0.9) };
+    });
+    const byLower = new Map(Object.keys(pos).map((k) => [k.toLowerCase(), k]));
+    const msgs = (state.messages.get(state.current) || []).filter((m) => m.sender_kind !== 'system').slice(-60);
+    const edges = new Map();
+    for (const m of msgs) {
+      const src = m.sender_kind === 'human' ? human : byLower.get(m.sender.toLowerCase());
+      if (!src) continue;
+      const ments = m.mentions || [];
+      let dsts = ments.some((x) => ['all', 'here', 'team', 'everyone'].includes(x)) ? agents : ments.map((x) => byLower.get(x)).filter(Boolean);
+      if (!dsts.length && m.sender_kind === 'human' && lead) dsts = [lead];   // unaddressed human messages go to the lead
+      for (const d of new Set(dsts)) {
+        if (d === src) continue;
+        const k = src + '\u0000' + d;
+        const e = edges.get(k) || { src, dst: d, count: 0, last: 0 };
+        e.count++; e.last = Math.max(e.last, m.id); edges.set(k, e);
+      }
+    }
+    const recentIds = new Set(msgs.slice(-3).map((m) => m.id));
+    return { W, H, pos, human, lead, edges: [...edges.values()].map((e) => ({ ...e, recent: recentIds.has(e.last) })) };
+  }
+  function nodeState(t, name, human) {
+    if (name === human) return 'human';
+    const p = t.panes?.[name];
+    return p ? p.state : 'offline';
+  }
+  function graphSvg(t) {
+    const g = graphModel(t); const r = 30; const sel = graphSelected(t);
+    const edgeSvg = g.edges.map((e) => {
+      const a = g.pos[e.src], b = g.pos[e.dst]; if (!a || !b) return '';
+      const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+      const off = 22;   // bend so A→B and B→A don't overlap
+      const mx = (a.x + b.x) / 2 - uy * off, my = (a.y + b.y) / 2 + ux * off;
+      const sx = a.x + ux * (r + 4), sy = a.y + uy * (r + 4), ex = b.x - ux * (r + 9), ey = b.y - uy * (r + 9);
+      return `<path class="edge ${e.recent ? 'recent' : ''}" d="M${sx.toFixed(1)},${sy.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${ex.toFixed(1)},${ey.toFixed(1)}" marker-end="url(#${e.recent ? 'arrA' : 'arrM'})"><title>${esc(e.src)} → ${esc(e.dst)}: ${e.count} message${e.count > 1 ? 's' : ''}</title></path>` +
+        (e.count > 1 ? `<text class="ecount" x="${mx.toFixed(1)}" y="${(my + 4).toFixed(1)}" text-anchor="middle">${e.count}</text>` : '');
+    }).join('');
+    const nodeSvg = Object.entries(g.pos).map(([name, p]) => {
+      const st = nodeState(t, name, g.human);
+      const ini = name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?';
+      const sub = st === 'human' ? 'you' : st === 'approval' ? 'needs approval' : st;
+      return `<g class="node s-${st} ${name === sel ? 'sel' : ''}" ${st === 'human' ? '' : `data-node="${esc(name)}"`} transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">
+        <circle class="pulse" r="${r}"/><circle class="core" r="${r}"/><text class="ini" dy="5">${esc(ini)}</text>
+        <text class="lbl" y="${r + 19}">${esc(name)}${name === g.lead ? ' ★' : ''}</text><text class="sub" y="${r + 34}">${esc(sub)}</text>
+        <title>${esc(name)} — ${esc(sub)}</title></g>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${g.W} ${g.H}" role="img" aria-label="Team graph">
+      <defs>
+        <marker id="arrM" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+        <marker id="arrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+      </defs>${edgeSvg}${nodeSvg}</svg>
+      <div class="legend"><span><i style="background:var(--ok)"></i>working</span><span><i style="background:#6b7280"></i>idle</span><span><i style="background:var(--human)"></i>needs approval</span><span><i style="background:var(--accent)"></i>you</span><span>arrows: who mentioned whom (last 60 messages) · click a node to see its terminal</span></div>`;
+  }
+  function updateGraph() {
+    const t = state.team[state.current]; const graph = $('#graph'); const side = $('#graphSide');
+    if (!t || !graph || !side) { renderTeam(); return; }
+    const nodes = [...graph.querySelectorAll('[data-node]')].map((n) => n.dataset.node).sort().join();
+    if (nodes !== [...(t.agents || [])].sort().join()) { renderTeam(); return; }
+    for (const g of graph.querySelectorAll('[data-node]')) {
+      const st = nodeState(t, g.dataset.node, state.human);
+      if (!g.classList.contains('s-' + st)) {
+        g.classList.remove('s-idle', 's-working', 's-approval', 's-offline'); g.classList.add('s-' + st);
+        g.querySelector('.sub').textContent = st === 'approval' ? 'needs approval' : st;
+      }
+    }
+    const name = graphSelected(t), p = t.panes?.[name], card = side.querySelector('[data-card]');
+    if (!card || card.dataset.card !== name || !p || !card.classList.contains('s-' + p.state)) { side.innerHTML = cardHtml(name, t); const pre = side.querySelector('pre.screen'); if (pre) pre.scrollTop = pre.scrollHeight; return; }
+    const pre = card.querySelector('pre.screen'); const stick = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 24;
+    if (pre.textContent !== p.text) { pre.textContent = p.text || '(no screen yet)'; if (stick) pre.scrollTop = pre.scrollHeight; }
+    const ago = card.querySelector('.ago'); ago.dataset.ago = p.changed_at || 0; ago.textContent = agoText(p.changed_at);
+  }
+
+  function renderTeamBar() {
+    const bar = $('#teamBar'); const t = state.team[state.current];
+    if (!bar || !t) return;
+    const s = t.settings || {};
+    const names = [...new Set([...(t.agents || []), ...state.agents.filter((a) => (a.project || '') === projectOf(state.current)).map((a) => a.name)])];
+    const paused = s.wake === 'paused';
+    const L = state.teamLayout;
+    bar.innerHTML = `
+      <span class="seg" title="Layout">${[['auto', 'Auto'], ['1', '1'], ['2', '2'], ['3', '3'], ['graph', '◉ Graph']].map(([v, l]) => `<button data-layout="${v}" class="${L === v ? 'on' : ''}" title="${v === 'graph' ? 'Node graph of who is talking to whom' : v === 'auto' ? 'Fit as many as the screen allows' : v + ' per row'}">${l}</button>`).join('')}</span>
+      <button class="tbtn ${paused ? 'off' : 'on'}" data-setwake="${paused ? 'auto' : 'paused'}" title="${paused ? 'Auto-wake is paused — click to resume' : 'Agents wake automatically — click to pause'}">${paused ? '⏸ Auto-wake paused' : '▶ Auto-wake on'}</button>
+      <label>Lead <select data-set="lead"><option value="">none</option>${names.map((n) => `<option ${n.toLowerCase() === (s.lead || '').toLowerCase() ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+      <label title="smart: @mentions, the lead, and @all · all: every message wakes every agent">Rules <select data-set="wake_rules"><option ${s.wake_rules !== 'all' ? 'selected' : ''}>smart</option><option ${s.wake_rules === 'all' ? 'selected' : ''}>all</option></select></label>
+      <label title="Minimum seconds between wake-ups of the same agent">Cooldown <input type="number" min="0" max="3600" data-set="cooldown_seconds" value="${esc(s.cooldown_seconds ?? 20)}">s</label>
+      <label title="Max wake-ups per agent per hour (0 = no limit)">Limit <input type="number" min="0" max="1000" data-set="max_wakes_per_agent_per_hour" value="${esc(s.max_wakes_per_agent_per_hour ?? 0)}">/h</label>
+      <span class="sp"></span>
+      <span>${t.watching ? `tmux <code>${esc(t.tmux_session || '')}</code>` : 'watcher offline'}</span>
+      <button class="tbtn" data-wake="*" ${t.watching ? '' : 'disabled'}>Wake all</button>`;
+  }
+  function renderTeam() {
+    const el = $('#team'); const t = state.team[state.current];
+    if (!t) { el.innerHTML = '<div class="empty">Loading…</div>'; return; }
+    const names = teamAgents(t);
+    const L = state.teamLayout;
+    el.innerHTML = `<div class="team-bar" id="teamBar"></div>` + (t.watching && names.length
+      ? (L === 'graph'
+        ? `<div class="graphwrap"><div class="graph" id="graph">${graphSvg(t)}</div><div class="graph-side" id="graphSide">${cardHtml(graphSelected(t), t)}</div></div>`
+        : `<div class="grid ${L === 'auto' ? '' : 'cols-' + L}">${names.map((n) => cardHtml(n, t)).join('')}</div>`)
+      : `<div class="empty">${t.watching ? 'The watcher is running, but no agents are in tmux yet.' : `No watcher is running for this project.<br>Start the team with <code>tropa panel</code> (option 3) and the agents' screens appear here.`}</div>`);
+    renderTeamBar();
+    el.querySelectorAll('pre.screen').forEach((pre) => { pre.scrollTop = pre.scrollHeight; });
+  }
+  function updateCards() {
+    const t = state.team[state.current];
+    if (state.teamLayout === 'graph') { updateGraph(); return; }
+    const names = teamAgents(t);
+    const cards = [...document.querySelectorAll('#team [data-card]')].map((c) => c.dataset.card);
+    if (names.join() !== cards.join()) { renderTeam(); return; }
+    for (const n of names) {
+      const card = document.querySelector(`#team [data-card="${CSS.escape(n)}"]`);
+      const p = t.panes[n]; if (!card || !p) continue;
+      if (!card.classList.contains('s-' + p.state)) {   // state changed: rebuild this card (approval buttons etc.)
+        const pre = card.querySelector('pre.screen'); const top = pre?.scrollTop;
+        const stick = pre ? pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 24 : true;
+        card.outerHTML = cardHtml(n, t);
+        const np = document.querySelector(`#team [data-card="${CSS.escape(n)}"] pre.screen`);
+        if (np) np.scrollTop = stick ? np.scrollHeight : top;
+        continue;
+      }
+      const pre = card.querySelector('pre.screen');
+      const stick = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 24;
+      if (pre.textContent !== p.text) { pre.textContent = p.text || '(no screen yet)'; if (stick) pre.scrollTop = pre.scrollHeight; }
+      const ago = card.querySelector('.ago'); ago.dataset.ago = p.changed_at || 0; ago.textContent = agoText(p.changed_at);
+    }
+  }
+  setInterval(() => { document.querySelectorAll('#team .ago').forEach((e) => { e.textContent = agoText(Number(e.dataset.ago)); }); }, 5000);
+  async function patchWake(body) {
+    try { const s = await api(`/rooms/${encodeURIComponent(state.current)}/wake`, { method: 'PATCH', body }); if (state.team[state.current]) state.team[state.current].settings = s; renderTeamBar(); renderTeam(); }
+    catch (e) { alertInline(e.message); }
+  }
+  $('#team').addEventListener('change', (e) => {
+    const k = e.target.dataset?.set; if (!k) return;
+    patchWake({ [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value });
+  });
+  async function deleteProjectDialog(slug) {
+    const room = state.rooms.find((r) => r.id === `project:${slug}`);
+    const agents = state.agents.filter((a) => (a.project || '').toLowerCase() === slug.toLowerCase());
+    $('#delProjTitle').textContent = `Delete project ${slug}?`;
+    $('#delProjText').textContent = `This deletes the room #${slug} and its ${room?.message_count || 0} messages for everyone. It can't be undone. Files in the project folder are not touched.`;
+    $('#delProjAgents').checked = agents.length > 0; $('#delProjAgents').disabled = !agents.length;
+    $('#delProjAgentList').textContent = agents.length ? agents.map((a) => a.name).join(', ') : 'none registered';
+    $('#delProjDlg').returnValue = '';
+    $('#delProjDlg').showModal();
+    $('#delProjDlg').onclose = async () => {
+      if ($('#delProjDlg').returnValue !== 'ok') return;
+      try {
+        await api(`/projects/${encodeURIComponent(slug)}?agents=${$('#delProjAgents').checked ? 1 : 0}`, { method: 'DELETE' });
+        delete state.team[`project:${slug}`];
+        if (state.current === `project:${slug}`) selectRoom('general');
+      } catch (e) { alertInline(e.message); }
+    };
+  }
+
   // ---------- slash commands (local to this browser, never posted) ----------
   const COMMANDS = [
     { name: 'blur', desc: 'Blur message text (names and @mentions stay visible)', run: () => setBlur(true) },
@@ -956,6 +1389,27 @@
     if (!e.target.closest('#dlMenu')) $('#dlMenu').hidden = true;
     const c = e.target.closest('[data-cmd]');
     if (c) { $('#input').value = '/' + c.dataset.cmd; send(); return; }
+    if (e.target.closest('#teamBtn')) { state.view = state.view === 'team' ? 'chat' : 'team'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages(); return; }
+    if (e.target.closest('#agentScope')) { state.agentScope = state.agentScope === 'project' ? 'all' : 'project'; localSet('airc.agentScope', state.agentScope); renderSidebar(); return; }
+    const dp = e.target.closest('[data-del-project]');
+    if (dp) { e.stopPropagation(); deleteProjectDialog(dp.dataset.delProject); return; }
+    const wk = e.target.closest('[data-wake]');
+    if (wk) {
+      const body = wk.dataset.wake === '*' ? {} : { agents: [wk.dataset.wake] };
+      try { const r = await api(`/rooms/${encodeURIComponent(state.current)}/wake`, { method: 'POST', body }); wk.textContent = r.woke?.length ? '✓ Woken' : 'Not woken'; }
+      catch (err) { wk.textContent = 'Failed'; alertInline(err.message); }
+      setTimeout(() => { wk.textContent = wk.dataset.wake === '*' ? 'Wake all' : 'Wake'; }, 1800); return;
+    }
+    const ap = e.target.closest('[data-approve]');
+    if (ap) { ap.disabled = true; try { await api(`/rooms/${encodeURIComponent(state.current)}/approve`, { method: 'POST', body: { agent: ap.dataset.approve, action: ap.dataset.act } }); } catch (err) { alertInline(err.message); ap.disabled = false; } return; }
+    const up = e.target.closest('[data-unpend]');
+    if (up) { state.pending = state.pending.filter((p) => p.key !== up.dataset.unpend); renderPending(); return; }
+    const lay = e.target.closest('[data-layout]');
+    if (lay) { state.teamLayout = lay.dataset.layout; localSet('airc.teamLayout', state.teamLayout); renderTeam(); return; }
+    const node = e.target.closest('[data-node]');
+    if (node) { state.graphSel = node.dataset.node; const t = state.team[state.current]; $('#graph').innerHTML = graphSvg(t); $('#graphSide').innerHTML = cardHtml(state.graphSel, t); const pre = $('#graphSide pre.screen'); if (pre) pre.scrollTop = pre.scrollHeight; return; }
+    const sw = e.target.closest('[data-setwake]');
+    if (sw) { patchWake({ wake: sw.dataset.setwake }); return; }
     const t = e.target.closest('[data-room],[data-read],[data-reply],[data-copy],[data-del],[data-jump],[data-del-agent],[data-edit-agent],#older,#cancelReply');
     if (!t) return;
     if (t.id === 'older') { await loadRoom(state.current, { older: true }); renderMessages({ keepScroll: true }); return; }
@@ -1065,7 +1519,198 @@
   $('#settingsDlg').addEventListener('close', () => { if (tts.current === -1) ttsStop(); });
 
   // new room
-  $('#newRoom').addEventListener('click', () => { $('#roomProject').value = ''; $('#roomTopicInput').value = ''; $('#roomDlg').showModal(); });
+  // ---------- file uploads ----------
+  const MAX_FILE = 25 * 1024 * 1024;
+  async function uploadFile(file, roomId) {
+    if (file.size > MAX_FILE) throw new Error(`${file.name} is larger than 25 MB`);
+    const res = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/files?name=${encodeURIComponent(file.name || 'pasted.png')}&sender=${encodeURIComponent(myName())}`,
+      { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    return data;
+  }
+  function renderPending() {
+    const el = $('#pendingFiles');
+    el.hidden = !state.pending.length;
+    el.innerHTML = state.pending.map((p) => `<span class="pchip ${p.error ? 'bad' : p.att ? '' : 'up'}" title="${esc(p.error || '')}">${p.att ? (p.att.is_image ? '🖼' : fileIcon(p.att.mime)) : p.error ? '⚠️' : '⏳'} ${esc(p.name)} <small>${fmtSize(p.size)}</small><button type="button" data-unpend="${p.key}" title="Remove">×</button></span>`).join('');
+  }
+  function addFiles(files) {
+    if (state.current === ALL || state.searching) { alertInline('Pick a room in the sidebar to attach files.'); return; }
+    const room = state.current;
+    for (const f of files) {
+      const p = { key: Math.random().toString(36).slice(2), name: f.name || 'pasted.png', size: f.size, att: null, error: '' };
+      state.pending.push(p);
+      uploadFile(f, room).then((a) => { p.att = a; }).catch((e) => { p.error = e.message; }).finally(renderPending);
+    }
+    renderPending();
+  }
+  $('#attachBtn').addEventListener('click', () => $('#fileInput').click());
+  $('#fileInput').addEventListener('change', (e) => { addFiles([...e.target.files]); e.target.value = ''; });
+  $('#input').addEventListener('paste', (e) => { const files = [...(e.clipboardData?.files || [])]; if (files.length) { e.preventDefault(); addFiles(files); } });
+  for (const sel of ['#composer', '#msgs']) {
+    const el = $(sel);
+    el.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); el.classList.add('drop'); } });
+    el.addEventListener('dragleave', () => el.classList.remove('drop'));
+    el.addEventListener('drop', (e) => { el.classList.remove('drop'); if (e.dataTransfer?.files?.length) { e.preventDefault(); addFiles([...e.dataTransfer.files]); } });
+  }
+
+  // ---------- new project (from the chat) ----------
+  const slugOf = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+  const np = { files: [], team: [], lead: '', folderTouched: false, kickoffTouched: false };
+  const PRESETS = {
+    web: () => [['lead', 'sonnet', 'Tech lead: plans the work, assigns tasks, reviews, reports to ' + state.human], ['backend', 'sonnet', 'Backend developer'], ['frontend', 'sonnet', 'Frontend developer'], ['QA', 'haiku', 'QA engineer: writes and runs tests, reports bugs'], ['ops', 'haiku', 'DevOps: build/run scripts, Docker, README']],
+    small: () => [['lead', 'sonnet', 'Tech lead: plans the work, assigns tasks, reviews, reports to ' + state.human], ['dev', 'sonnet', 'Full-stack developer'], ['QA', 'haiku', 'QA engineer: writes and runs tests, reports bugs']],
+    solo: () => [['dev', 'sonnet', 'Full-stack developer: plans and builds the whole project']],
+  };
+  function setPreset(k) {
+    np.team = PRESETS[k]().map(([name, model, role]) => ({ name, tool: 'claude', model, role }));
+    np.lead = np.team[0].name; renderTeamRows(); defaultKickoff();
+  }
+  function renderHostNote() {
+    const h = state.host || {}; const el = $('#npHost');
+    if (h.connected) {
+      $('#npBase').textContent = (h.projects_dir || '~/projects').replace(h.home || '\u0000', '~') + '/';
+      el.className = 'np-host ok'; el.innerHTML = `✓ Host helper connected — the project is created in <code>${esc($('#npBase').textContent)}</code> on ${esc(h.home ? 'this machine' : 'the host')}.`;
+    } else {
+      el.className = 'np-host off';
+      el.innerHTML = `The host helper isn't running, so the chat can't create folders or start agents. Run <code>tropa host start -p ${esc(location.port || '80')}</code> on the machine running TropaAI, then reopen this dialog. You can still create just the room.`;
+    }
+    $('#npCreate').disabled = !h.connected;
+  }
+  // models offered per CLI: from the host helper (models.conf + `opencode models`), else built-in defaults
+  const FALLBACK_MODELS = { claude: [{ id: 'sonnet', label: 'Sonnet · latest (alias)' }, { id: 'opus', label: 'Opus · latest (alias)' }, { id: 'haiku', label: 'Haiku · latest (alias)' }, { id: 'fable', label: 'Fable · latest (alias)' }],
+    opencode: [], qwen: [{ id: 'qwen3-coder-plus', label: '' }, { id: 'qwen3-coder-flash', label: '' }], codex: [] };
+  const DEFAULT_MODEL = { claude: 'sonnet', opencode: '', qwen: '', codex: '' };
+  const modelEntries = (tool) => { const m = state.host?.models?.[tool]; return (m && m.length ? m : FALLBACK_MODELS[tool] || []).map((x) => (typeof x === 'string' ? { id: x, label: '' } : x)); };
+  const modelsFor = (tool) => modelEntries(tool).map((m) => m.id);
+  function modelHint(tool) {
+    const n = modelsFor(tool).length;
+    if (tool === 'opencode') return n ? `provider/model · ${n} available` : 'provider/model (CLI default)';
+    if (tool === 'codex') return n ? `model · ${n} listed (CLI default)` : 'model id (CLI default)';
+    return 'model (CLI default)';
+  }
+  function fillModelLists() {
+    for (const t of ['claude', 'opencode', 'qwen', 'codex']) $(`#npModels-${t}`).innerHTML = modelEntries(t).map((m) => `<option value="${esc(m.id)}"${m.label ? ` label="${esc(m.label)}"` : ''}>`).join('');
+  }
+  function renderTeamRows() {
+    fillModelLists();
+    const clis = state.host?.clis || [];
+    $('#npTeam').innerHTML = np.team.map((a, i) => `<div class="np-row" data-i="${i}">
+      <input class="n" value="${esc(a.name)}" placeholder="name (its @mention)" spellcheck="false">
+      <select class="t">${['claude', 'codex', 'opencode', 'qwen'].map((t) => `<option value="${t}" ${a.tool === t ? 'selected' : ''}>${{ claude: 'Claude', codex: 'Codex', opencode: 'OpenCode', qwen: 'Qwen' }[t]}${clis.length && !clis.includes(t) ? ' (not installed)' : ''}</option>`).join('')}</select>
+      <input class="m" value="${esc(a.model || '')}" list="npModels-${a.tool}" placeholder="${esc(modelHint(a.tool))}" spellcheck="false">
+      <input class="r" value="${esc(a.role || '')}" placeholder="role">
+      <label class="lead ${np.lead && np.lead === a.name ? 'on' : ''}" title="Make lead"><input type="radio" name="npLead" ${np.lead === a.name ? 'checked' : ''}>★</label>
+      <button type="button" class="rm" title="Remove">×</button></div>`).join('') || '<div style="color:var(--muted);font-size:13px;margin-bottom:6px">No agents — the folder and room are created; add agents later with <code>tropa panel</code>.</div>';
+    $('#npTrustRow').hidden = !np.team.some((a) => a.tool === 'claude' || a.tool === 'codex');
+  }
+  function defaultKickoff() {
+    if (np.kickoffTouched) return;
+    const lead = np.lead ? `@${np.lead} ` : '';
+    $('#npKickoff').value = np.team.length ? `${lead}Please read docs/SPEC.md${np.files.length ? ' and the files in docs/attachments/' : ''}, then ${np.lead ? 'plan the work and assign it to the team' : 'plan the work and get started'}. Post questions here.` : '';
+  }
+  function renderNpFiles() {
+    $('#npFileList').innerHTML = np.files.map((f, i) => `<span class="pchip">${/^image\//.test(f.type) ? '🖼' : '📄'} ${esc(f.name)} <small>${fmtSize(f.size)}</small><button type="button" data-npfile="${i}">×</button></span>`).join('');
+    defaultKickoff();
+  }
+  $('#npTeam').addEventListener('input', (e) => {
+    const row = e.target.closest('.np-row'); if (!row) return;
+    const a = np.team[Number(row.dataset.i)]; const was = a.name;
+    if (e.target.classList.contains('n')) { a.name = e.target.value.replace(/[^A-Za-z0-9._-]/g, ''); if (np.lead === was) { np.lead = a.name; defaultKickoff(); } }
+    if (e.target.classList.contains('m')) a.model = e.target.value.trim();
+    if (e.target.classList.contains('r')) a.role = e.target.value;
+  });
+  $('#npTeam').addEventListener('change', (e) => {
+    const row = e.target.closest('.np-row'); if (!row) return;
+    const a = np.team[Number(row.dataset.i)];
+    if (e.target.classList.contains('t')) { a.tool = e.target.value; if (!modelsFor(a.tool).includes(a.model)) a.model = DEFAULT_MODEL[a.tool] || ''; renderTeamRows(); }
+    if (e.target.name === 'npLead') { np.lead = a.name; renderTeamRows(); defaultKickoff(); }
+  });
+  $('#npTeam').addEventListener('click', (e) => {
+    const rm = e.target.closest('.rm'); if (!rm) return;
+    const i = Number(rm.closest('.np-row').dataset.i); const [gone] = np.team.splice(i, 1);
+    if (gone.name === np.lead) np.lead = np.team[0]?.name || '';
+    renderTeamRows(); defaultKickoff();
+  });
+  $('#npAdd').addEventListener('click', () => { np.team.push({ name: `agent${np.team.length + 1}`, tool: 'claude', model: 'sonnet', role: '' }); renderTeamRows(); });
+  document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => setPreset(b.dataset.preset)));
+  $('#npName').addEventListener('input', () => { if (!np.folderTouched) $('#npFolder').value = slugOf($('#npName').value); });
+  $('#npFolder').addEventListener('input', () => { np.folderTouched = true; });
+  $('#npKickoff').addEventListener('input', () => { np.kickoffTouched = true; });
+  $('#npPick').addEventListener('click', () => $('#npFiles').click());
+  $('#npFiles').addEventListener('change', (e) => { np.files.push(...e.target.files); e.target.value = ''; renderNpFiles(); });
+  $('#npFileList').addEventListener('click', (e) => { const b = e.target.closest('[data-npfile]'); if (b) { np.files.splice(Number(b.dataset.npfile), 1); renderNpFiles(); } });
+  const drop = $('#npDrop');
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); np.files.push(...(e.dataTransfer?.files || [])); renderNpFiles(); });
+  $('#projDlg').addEventListener('paste', (e) => { const f = [...(e.clipboardData?.files || [])]; if (f.length) { e.preventDefault(); np.files.push(...f); renderNpFiles(); } });
+  const npExisting = () => document.querySelector('input[name="npMode"]:checked')?.value === 'existing';
+  function renderFolderPick() {
+    const fs = state.host?.folders || [];
+    $('#npFolderPick').innerHTML = fs.length ? fs.map((f) => `<option value="${esc(f.name)}" data-slug="${esc(f.slug)}">${esc(f.name)}${f.kit ? '  · already has a team' : ''}${f.git ? '  · git' : ''}</option>`).join('')
+      : '<option value="">(no folders found)</option>';
+  }
+  function applyMode() {
+    const ex = npExisting();
+    $('#npExisting').hidden = !ex; $('#npFolderBox').hidden = ex;
+    $('#npBriefHint').textContent = ex ? 'saved as docs/SPEC.md (or docs/BRIEF.md if a spec already exists) · optional' : 'saved as docs/SPEC.md · markdown';
+    $('#npCreate').textContent = ex ? 'Add team' : 'Create project';
+    if (ex) { renderFolderPick(); const o = $('#npFolderPick').selectedOptions[0]; if (o?.value && !$('#npName').dataset.touched) $('#npName').value = o.value; }
+  }
+  document.querySelectorAll('input[name="npMode"]').forEach((r) => r.addEventListener('change', applyMode));
+  $('#npFolderPick').addEventListener('change', () => { const o = $('#npFolderPick').selectedOptions[0]; if (o && !$('#npName').dataset.touched) $('#npName').value = o.value; });
+  $('#npName').addEventListener('keydown', () => { $('#npName').dataset.touched = '1'; });
+  async function openNewProject() {
+    document.querySelector('input[name="npMode"][value="new"]').checked = true; delete $('#npName').dataset.touched;
+    Object.assign(np, { files: [], folderTouched: false, kickoffTouched: false });
+    for (const id of ['#npName', '#npFolder', '#npBrief', '#npKickoff']) $(id).value = '';
+    $('#npErr').textContent = ''; $('#npStart').checked = true; $('#npTrust').checked = true;
+    try { state.host = await api('/host'); } catch { state.host = { connected: false }; }
+    setPreset('web'); renderNpFiles(); renderHostNote(); applyMode();
+    $('#npBase2').textContent = $('#npBase').textContent;
+    $('#projDlg').showModal(); $('#npName').focus();
+  }
+  $('#npCancel').addEventListener('click', () => $('#projDlg').close());
+  async function ensureRoomFor(name) {
+    const slug = slugOf(name);
+    if (!slug) throw new Error('Give the project a name.');
+    const room = await api('/rooms', { method: 'POST', body: { project: slug, topic: name } });
+    if (!state.rooms.find((r) => r.id === room.id)) state.rooms.push({ ...room, message_count: 0, unread_live: 0 });
+    return room;
+  }
+  $('#npRoomOnly').addEventListener('click', async () => {
+    try { const room = await ensureRoomFor($('#npName').value.trim()); $('#projDlg').close(); selectRoom(room.id); }
+    catch (e) { $('#npErr').textContent = e.message; }
+  });
+  $('#projForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('#npCreate'); const name = $('#npName').value.trim();
+    $('#npErr').textContent = '';
+    const names = np.team.map((a) => a.name.toLowerCase());
+    if (np.team.some((a) => !a.name)) { $('#npErr').textContent = 'Every agent needs a name.'; return; }
+    if (new Set(names).size !== names.length) { $('#npErr').textContent = 'Agent names must be different.'; return; }
+    btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      const ex = npExisting();
+      const pick = $('#npFolderPick').selectedOptions[0];
+      if (ex && !pick?.value) throw new Error('Pick a folder.');
+      const slug = ex ? pick.dataset.slug : slugOf(name);   // an existing team keeps its room
+      const room = await ensureRoomFor(ex ? slug : name);
+      if (ex && name) await api(`/rooms/${encodeURIComponent(room.id)}`, { method: 'PATCH', body: { topic: name } }).catch(() => {});
+      const files = [];
+      for (const f of np.files) { btn.textContent = `Uploading ${f.name}…`; files.push((await uploadFile(f, room.id)).id); }
+      btn.textContent = 'Creating…';
+      await api('/projects', { method: 'POST', body: {
+        name: name || slug, slug, existing: ex, folder: ex ? pick.value : ($('#npFolder').value.trim() || slugOf(name)), topic: name || slug, brief: $('#npBrief').value,
+        files, agents: np.team.map((a) => ({ name: a.name, tool: a.tool, model: a.model, role: a.role })), lead: np.lead,
+        kickoff: $('#npKickoff').value.trim(), start: $('#npStart').checked, trust: $('#npTrust').checked } });
+      $('#projDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
+    } catch (err) { $('#npErr').textContent = err.message; }
+    finally { btn.disabled = !state.host?.connected; btn.textContent = npExisting() ? 'Add team' : 'Create project'; }
+  });
+  $('#newRoom').addEventListener('click', openNewProject);
+  $('#newRoom').title = 'New project';
   $('#roomDlg').addEventListener('close', async () => {
     if ($('#roomDlg').returnValue !== 'ok') return;
     try {

@@ -13,7 +13,7 @@ SESSION_NAME="$(cfg tmux_session)"
 
 # --- preflight -------------------------------------------------------------
 for bin in tmux python3 curl; do
-    command -v "$bin" >/dev/null || { echo "❌ '$bin' is not installed (brew install $bin)"; exit 1; }
+    command -v "$bin" >/dev/null || { if [ "$(uname)" = Darwin ]; then h="brew install $bin"; else h="install $bin with your package manager (e.g. sudo apt-get install -y $bin)"; fi; echo "❌ '$bin' is not installed — $h"; exit 1; }
 done
 if ! curl -fsS "$(cfg server)/health" >/dev/null 2>&1; then
     echo "⚠️  AI-IRC is not answering at $(cfg server)."
@@ -33,10 +33,10 @@ fi
 # --- pickers (bash 3.2 compatible) -------------------------------------------
 pick_tool() {
     echo "Agent type:"
-    echo "  1) Claude Code   2) OpenCode   3) Qwen Code"
+    echo "  1) Claude Code   2) OpenCode   3) Qwen Code   4) Codex"
     read -p "Choose [1]: " T
     case "${T:-1}" in
-        1) TOOL=claude ;; 2) TOOL=opencode ;; 3) TOOL=qwen ;;
+        1) TOOL=claude ;; 2) TOOL=opencode ;; 3) TOOL=qwen ;; 4) TOOL=codex ;;
         *) echo "❌ Invalid choice"; return 1 ;;
     esac
     command -v "$TOOL" >/dev/null || echo "⚠️  '$TOOL' not found on PATH — install it before the agent can start."
@@ -49,9 +49,14 @@ pick_model() {
     while IFS='|' read -r t id label; do
         case "$t" in ''|\#*) continue;; esac
         [ "$t" = "$tool" ] || continue
-        ids+=("$id"); labels+=("$label ($id)")
-    done < "$HERE/models.conf"
-    if [ "$tool" = opencode ] && command -v opencode >/dev/null; then
+        ids+=("$id"); labels+=("${label:+$label — }$id")
+    done < <(
+        TH="$(cfg tropa_home)"
+        if [ -n "$TH" ] && [ -f "$TH/host/tropa_host.py" ]; then
+            echo "Looking up models (your accounts + models.conf)..." >&2
+            python3 "$TH/host/tropa_host.py" --list-models "$tool" 2>/dev/null
+        else cat "$HERE/models.conf"; fi)
+    if [ "$tool" = opencode ] && command -v opencode >/dev/null && [ ! -f "$(cfg tropa_home)/host/tropa_host.py" ]; then
         echo "Fetching models from 'opencode models'..."
         live=$(opencode models 2>/dev/null | grep '/')
         if [ -n "$live" ]; then
@@ -174,6 +179,7 @@ settings_menu() {
         echo "  claude flags : $(cfg tool_flags.claude)"
         echo "  opencode     : $(cfg tool_flags.opencode)"
         echo "  qwen flags   : $(cfg tool_flags.qwen)"
+        echo "  codex flags  : $(cfg tool_flags.codex)"
         echo "1) Pause / resume auto-wake   2) Set lead   3) History limit"
         echo "4) Wake limit per hour        5) Wake rules (smart/all)"
         echo "6) Edit CLI flags             7) Back"
@@ -184,8 +190,8 @@ settings_menu() {
             3) read -p "Messages to read: " V; [[ "$V" =~ ^[0-9]+$ ]] && setc history_limit "$V" ;;
             4) read -p "Max wakes per agent per hour (0 = no limit): " V; [[ "$V" =~ ^[0-9]+$ ]] && setc max_wakes_per_agent_per_hour "$V" ;;
             5) read -p "smart or all: " V; case "$V" in smart|all) setc wake_rules "\"$V\"";; esac ;;
-            6) read -p "Tool (claude/opencode/qwen): " T
-               case "$T" in claude|opencode|qwen)
+            6) read -p "Tool (claude/opencode/qwen/codex): " T
+               case "$T" in claude|opencode|qwen|codex)
                    read -p "Flags for $T [$(cfg tool_flags.$T)]: " V
                    python3 - "$HERE/settings.json" "$T" "$V" <<'PY'
 import json, sys

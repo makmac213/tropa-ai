@@ -11,8 +11,8 @@ services:
       # Localhost only. Change to "${AI_IRC_PORT:-8888}:8888" if other machines need access.
       - "127.0.0.1:${AI_IRC_PORT:-8888}:8888"
     environment:
-      - TZ=${TZ:-Asia/Manila}
-      - HUMAN_NAME=${HUMAN_NAME:-Mark}
+      - TZ=${TZ:-UTC}
+      - HUMAN_NAME=${HUMAN_NAME:-human}
       - KOKORO_URL=http://kokoro:8880
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
     volumes:

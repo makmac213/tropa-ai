@@ -12,17 +12,30 @@ ROOT = os.path.dirname(HERE)                      # the project folder this kit 
 PATH = os.path.join(HERE, "settings.json")
 
 DEFAULTS = {
-    "project": "", "human": "Mark", "lead": "", "server": "http://localhost:8888",
+    "project": "", "human": "", "lead": "", "server": "http://localhost:8888",
     "tmux_session": "ai-team", "tropa_home": "", "wake": "auto", "wake_rules": "smart",
-    "max_wakes_per_agent_per_hour": 0, "history_limit": 20, "poll_seconds": 3,
-    "debounce_seconds": 4, "cooldown_seconds": 20, "docs_dir": "docs",
-    "tool_flags": {"claude": "--permission-mode auto", "opencode": "", "qwen": "--approval-mode auto-edit"},
+    "max_wakes_per_agent_per_hour": 0, "history_limit": 20,
+    "debounce_seconds": 2, "cooldown_seconds": 20, "docs_dir": "docs",
+    "tool_flags": {"claude": "--permission-mode auto", "opencode": "", "qwen": "--approval-mode auto-edit",
+                   "codex": "--sandbox workspace-write --ask-for-approval on-request"},
     "approval_patterns": [],
+    "claude_allow": [],
+    "approval_keys": {"claude": {"yes": ["1"], "always": ["2"], "no": ["Escape"]},
+                      "qwen": {"yes": ["1"], "always": ["2"], "no": ["Escape"]},
+                      "opencode": {"yes": ["Enter"], "always": ["Right", "Enter"], "no": ["Escape"]},
+                      "codex": {"yes": ["Enter"], "always": ["Down", "Enter"], "no": ["Escape"]}},
 }
 
 
 def slug(s):
     return re.sub(r"[^a-z0-9._-]+", "-", s.lower()).strip("-") or "project"
+
+
+def default_human():
+    import getpass
+    n = os.environ.get("TROPA_HUMAN") or os.environ.get("USER") or getpass.getuser() or "human"
+    n = re.sub(r"[^A-Za-z0-9._-]", "", n.split()[0] if n.split() else n)
+    return (n[:1].upper() + n[1:]) if n else "human"
 
 
 def load():
@@ -33,6 +46,9 @@ def load():
     except FileNotFoundError:
         pass
     data["tool_flags"] = {**DEFAULTS["tool_flags"], **data.get("tool_flags", {})}
+    data["approval_keys"] = {**DEFAULTS["approval_keys"], **data.get("approval_keys", {})}
+    if not data["human"]:
+        data["human"] = default_human()
     data["project"] = slug(data["project"]) if data["project"] else slug(os.path.basename(ROOT))
     data["room"] = f"project:{data['project']}"
     data["root"] = ROOT

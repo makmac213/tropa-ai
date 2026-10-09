@@ -1,27 +1,22 @@
 {
   "project": "",
-  "human": "Mark",
+  "human": "",
   "lead": "",
   "server": "http://localhost:8888",
   "tmux_session": "ai-team",
-
   "wake": "auto",
   "wake_rules": "smart",
   "max_wakes_per_agent_per_hour": 0,
   "history_limit": 20,
-
-  "poll_seconds": 3,
-  "debounce_seconds": 4,
+  "debounce_seconds": 2,
   "cooldown_seconds": 20,
-
   "docs_dir": "docs",
-
   "tool_flags": {
     "claude": "--permission-mode auto",
     "opencode": "",
-    "qwen": "--approval-mode auto-edit"
+    "qwen": "--approval-mode auto-edit",
+    "codex": "--sandbox workspace-write --ask-for-approval on-request"
   },
-
   "approval_patterns": [
     "Do you want to (proceed|make this edit|create|overwrite|allow|run)",
     "Allow once",
@@ -30,6 +25,67 @@
     "Allow execution",
     "Waiting for (your )?(approval|confirmation)",
     "\\(y/n\\)",
-    "\\[Y/n\\]"
-  ]
+    "\\[Y/n\\]",
+    "Do you trust the files in this folder",
+    "Yes, proceed",
+    "Would you like to (run|make|apply|allow)",
+    "trust the (files|contents)"
+  ],
+  "claude_allow": [
+    "Bash(node:*)",
+    "Bash(npm:*)",
+    "Bash(npx:*)",
+    "Bash(curl:*)",
+    "Bash(ls:*)",
+    "Bash(mkdir:*)",
+    "Bash(cat:*)"
+  ],
+  "approval_keys": {
+    "claude": {
+      "yes": [
+        "1"
+      ],
+      "always": [
+        "2"
+      ],
+      "no": [
+        "Escape"
+      ]
+    },
+    "qwen": {
+      "yes": [
+        "1"
+      ],
+      "always": [
+        "2"
+      ],
+      "no": [
+        "Escape"
+      ]
+    },
+    "opencode": {
+      "yes": [
+        "Enter"
+      ],
+      "always": [
+        "Right",
+        "Enter"
+      ],
+      "no": [
+        "Escape"
+      ]
+    },
+    "codex": {
+      "yes": [
+        "Enter"
+      ],
+      "always": [
+        "Down",
+        "Enter"
+      ],
+      "no": [
+        "Escape"
+      ]
+    }
+  }
 }
