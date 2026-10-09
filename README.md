@@ -1,160 +1,322 @@
-# Tropa AI
+# TropaAI
 
-Turn any project folder into a multi-agent team you talk to through one AI-IRC chatroom.
-Agents run in Claude Code, Codex, OpenCode or Qwen Code, each in its own tmux window; a watcher
-wakes them when the room has something for them.
+**Turn any project folder into a team of AI agents you run from one chat room.**
+
+TropaAI starts a team of coding agents (Claude Code, Codex, OpenCode or Qwen Code) in tmux, one terminal per agent, and connects them to a shared chat room. You talk to the team in the browser, and they talk to each other with @mentions. A `@QA` mention wakes QA, and a message to nobody in particular goes to the lead. You can watch every agent's terminal live, approve their permission prompts from the chat, and share files and mockups both ways.
+
+*Tropa* is Filipino for a crew or squad.
+
+```
+ you (browser) ──►  TropaAI chat server  ◄──── agents (MCP tools: send_message, share_file, …)
+                        │  decides who to wake
+                        ▼
+                 watcher (your machine) ──► types "[tropa] read the room" into the agent's tmux window
+```
+
+**Contents:**
+[Requirements](#requirements) ·
+[Install](#install) ·
+[Quick start](#quick-start) ·
+[Existing projects](#add-a-team-to-an-existing-project) ·
+[Working with your team](#working-with-your-team) ·
+[Models](#choosing-models) ·
+[Commands](#commands) ·
+[Configuration](#configuration) ·
+[How it works](#how-it-works) ·
+[Update and uninstall](#update-and-uninstall) ·
+[Troubleshooting](#troubleshooting) ·
+[Contributing](#contributing)
+
+---
+
+## Requirements
+
+macOS or Linux (on Windows, use WSL).
+
+| Need | Install |
+|---|---|
+| `tmux`, `python3`, `curl` | macOS: `brew install tmux` (python3 and curl ship with macOS) · Debian/Ubuntu: `sudo apt-get install -y tmux python3 curl` |
+| **Docker** (recommended) **or Node.js 22.13+** to run the chat server | [Docker Desktop](https://www.docker.com/products/docker-desktop/) · or `brew install node` / your distro's Node 22 |
+| At least one agent CLI, **signed in** | [Claude Code](https://code.claude.com) (`claude`) · [Codex](https://github.com/openai/codex) (`codex`) · [OpenCode](https://opencode.ai) (`opencode`) · [Qwen Code](https://github.com/QwenLM/qwen-code) (`qwen`) |
 
 ## Install
 
-### 1. Requirements (macOS or Linux; on Windows use WSL)
-
-```bash
-brew install tmux                 # macOS (python3 and curl come with it)
-sudo apt-get install -y tmux python3 curl   # Debian/Ubuntu
-```
-
-You also need **one** way to run the AI-IRC chat server:
-- **Docker Desktop** (recommended), or
-- **Node.js 22.13 or newer** (`brew install node`, or your distro's/nvm's Node 22)
-
-You also need at least one agent CLI, signed in: [Claude Code](https://code.claude.com) (`claude`), [Codex](https://github.com/openai/codex) (`codex`), [OpenCode](https://opencode.ai) (`opencode`) or [Qwen Code](https://github.com/QwenLM/qwen-code) (`qwen`).
-
-### 2. Install tropa
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.sh | bash
+tropa version
 ```
 
-This downloads the latest release (or `main` if there are no releases yet) into `~/.tropa/app` and links the `tropa` command into `/usr/local/bin`, or `~/.local/bin` if that isn't writable.
-
-If the installer says to add a folder to your PATH, run the line it prints, for example:
+The installer puts tropa in `~/.tropa/app` and links the `tropa` command into `/usr/local/bin`, or into `~/.local/bin` if that isn't writable. If it asks you to add a folder to your PATH, run the line it prints, for example:
 
 ```bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && exec zsh
 ```
 
-### 3. Check it works
-
-```bash
-tropa version
-```
-
-### 4. Set up your first project
-
-```bash
-cd ~/projects/my-app
-tropa init -p 8080       # sets up this folder and starts AI-IRC on port 8080
-tropa doctor             # confirms tools, server and sign-ins
-tropa panel              # create your agents
-```
-
-### Other ways to install
-
-| Want to… | Run |
+| Other ways | Run |
 |---|---|
-| Install a specific version | `curl -fsSL https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.sh \| TROPA_VERSION=0.1.0 bash` |
-| Install somewhere else | `… \| TROPA_DIR=~/tools/tropa BIN_DIR=~/bin bash` |
-| Install from a clone (for development) | `git clone git@github.com:makmac213/tropa-ai.git && cd tropa-ai && ./tropa install` |
+| A specific version | `curl -fsSL https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.sh \| TROPA_VERSION=0.4.0 bash` |
+| A different location | `… \| TROPA_DIR=~/tools/tropa BIN_DIR=~/bin bash` |
+| From a clone (for development) | `git clone https://github.com/makmac213/tropa-ai.git && cd tropa-ai && ./tropa install` |
 
-### Update
+---
+
+## Quick start
+
+### Option A: start a project from the chat (recommended)
+
+1. **Start the server** on a port of your choice:
+   ```bash
+   tropa server up -p 8181
+   ```
+   This starts the chat server (in Docker, or Node if Docker isn't running) and the **host helper**, which creates project folders and starts agents for you.
+2. **Open the chat** at http://localhost:8181.
+3. **Create a project:** click **+** next to *Projects* and fill in:
+   - **Name.** The folder is created at `~/projects/<name>`.
+   - **Brief / spec**, saved as `docs/SPEC.md`: what to build, must-haves, and what "done" means.
+   - **Files** (optional): mockups, docs and images, saved in `docs/attachments/`.
+   - **Team:** start from a preset (*Web app · 5*, *Small · 3* or *Solo*) or build your own. Pick each agent's CLI, model and role, and give one agent the ★ to make it the **lead**.
+   - **Kickoff message:** posted as you once the team is up.
+4. Click **Create project**. Progress appears in the room: folder created, agents created, team started, kickoff sent.
+5. Click **▦ Team** to watch every agent work, and chat with them in the room.
+
+### Option B: from a terminal
 
 ```bash
-tropa self-update        # update tropa itself (does a git pull if installed from a clone)
-cd ~/projects/my-app && tropa update   # refresh that project's kit; settings and agents are kept
+mkdir -p ~/projects/my-app && cd ~/projects/my-app
+tropa init -p 8181        # adds the team kit here and starts the chat server
+tropa panel               # 1 = create an agent (name, CLI, model, role, lead); 3 = start all agents + the watcher
+open http://localhost:8181   # Linux: xdg-open
 ```
 
-### Uninstall
+Write your spec in `docs/SPEC.md`, then post in the project room, e.g. *"Please read docs/SPEC.md and plan the work."* With no @mention, the message goes to the lead.
 
+> **First run of a CLI:** each CLI needs to be signed in once (`claude`, `codex login`, `opencode auth login`, `qwen`). Run `tropa doctor` to check everything.
+
+---
+
+## Add a team to an existing project
+
+tropa never changes your code. It adds a small team kit next to it:
+
+- `.agent_sync/`
+- `agents/`
+- a marked block in `AGENTS.md`
+- `docs/`
+
+**From the chat:**
+1. Click **+**, then choose **Existing project folder** and pick the folder. The list shows folders in your projects folder; ones that already have a team or use git are marked.
+2. Add a brief and files if you like. The brief is saved as `docs/SPEC.md`, or as `docs/BRIEF.md` if you already have a spec.
+3. Add the team and click **Add team**. Agents are told it's an existing codebase and to follow its conventions.
+
+**From a terminal (works for any folder):**
 ```bash
-rm "$(command -v tropa)"
-rm -rf ~/.tropa/app ~/.tropa/versions   # keeps ~/.tropa/ai-irc-* chat data; remove ~/.tropa to delete everything
+cd path/to/your-project
+tropa init -p 8181
+tropa panel
 ```
 
-In each project, the kit lives in `.agent_sync/`, `agents/` and the `tropa` block in `AGENTS.md`. Delete those to remove it.
+**What's kept:**
+- **`AGENTS.md`:** your content stays, and the team protocol is appended in a marked block.
+- **`CLAUDE.md`:** kept, and Claude agents still read it.
+- **`docs/SPEC.md`:** never overwritten.
+- **`.gitignore`:** entries are appended.
+- **Your code:** untouched.
 
-### Troubleshooting
+**Projects outside `~/projects`:** use `tropa host start -p 8181 --projects-dir ~/code`, or set `TROPA_PROJECTS_DIR=~/code`.
 
-| Problem | Fix |
+---
+
+## Working with your team
+
+### Who gets woken
+
+@mentions decide which agent wakes up. A mention is an assignment.
+
+| You or an agent posts… | Wakes |
 |---|---|
-| `tropa: command not found` | The install folder isn't on your PATH. See step 2. |
-| `download failed` | The repo is private or the network is blocked. Clone it and run `./tropa install`. |
-| `Need Docker (running) or Node ≥ 22.13` | Start Docker Desktop, or `brew install node`. |
-| Anything else | Run `tropa doctor` in the project; each problem comes with a fix. |
+| `@QA please test the login flow` | **QA** only |
+| `@all` (also `@here`, `@team`, `@everyone`) | everyone except the sender |
+| a message from **you** with no @mention | the **lead**, or everyone if there's no lead |
+| a message from an **agent** with no @mention | nobody (it's informational) |
 
-### Releasing (maintainer)
-`scripts/release.sh 0.2.0` bumps `VERSION`, commits, tags `v0.2.0`, pushes and creates the GitHub release (needs `gh`). From then on, `install.sh` installs the newest release.
+Agents are woken by a short `[tropa] …` prompt typed into their terminal, telling them to read the room. Each room has a cooldown, an optional hourly wake limit and a pause switch. The chat room is the team's memory: agents catch up from it when they start.
 
-## Use
+### ▦ Team view
+
+In a project room, click **▦ Team** to see every agent's terminal live, labelled **working**, **idle** or **needs approval**.
+
+- **Layouts:** **Auto**, **1 / 2 / 3 per row**, or **◉ Graph**, a node view of the team. In the graph, green means working, gray idle and amber needs approval. Arrows show who mentioned whom, and the newest message animates along its arrow. Click a node to open its terminal.
+- **Wake** buttons for each agent, plus **Wake all**.
+- **Settings bar:** auto-wake on or paused, lead, rules (*smart* or *all*), cooldown and the hourly limit. These stay in sync with `.agent_sync/settings.json`, so you can edit either one.
+
+### Approvals
+
+When an agent stops at a permission prompt, the prompt is posted to the room once and its card turns amber. To answer it:
+
+- click **Approve**, **Always** or **Deny** in the Team view, or
+- type it in the chat:
+  ```
+  @watcher approve QA     → yes, once
+  @watcher always QA      → yes, and don't ask again this session
+  @watcher deny QA        → no
+  ```
+
+The agent's held wake-up is delivered as soon as the prompt clears.
+
+### Files
+
+- **You:** click 📎, drag and drop, or paste a screenshot. Each file is copied into the project at `docs/attachments/<id>-<name>`, and agents see that path in the message.
+- **Agents:** they save a file in the project and call the `share_file` tool to show you mockups, screenshots, PDFs or docs.
+- **In the chat:** images show inline and other files download. Shared files open with scripts blocked, and `.env` files and keys can't be shared.
+
+### Rooms and agents
+
+- **Sidebar:** shows the open project's agents. Click **show all** to see agents from every project.
+- **Delete a project:** use the × on its row. It removes the room and its messages, and optionally its agents. Files on disk are not touched.
+- **Other rooms:** `#general` is for talk across projects. **All activity** shows every room together.
+- **Slash commands in the chat box:** `/help`, `/download md|txt|json` (transcript), `/read` (read aloud), `/blur`.
+
+---
+
+## Choosing models
 
 ```bash
-cd ~/projects/my-app
-tropa init -p 8080       # kit + docs/ in this folder, AI-IRC on port 8080 (started if not running)
-tropa panel              # create agents (type, model, role, lead), start them + the watcher
-tmux attach -t ai-my-app # watch the agents
-open http://localhost:8080   # chat as yourself
-tropa doctor             # check tools, server, agent MCP configs, sign-in, tmux
+tropa models              # everything each CLI can use
+tropa models codex        # just one CLI
 ```
+
+The model lists in the panel and the New project dialog combine two sources:
+
+1. **`kit/.agent_sync/models.conf`**: aliases and pinned ids you choose. Format: `tool|model-id|label`.
+2. **What your own accounts report**, so versioned ids stay current:
+
+| CLI | Discovered from |
+|---|---|
+| Claude Code | Anthropic models API (`ANTHROPIC_API_KEY`) |
+| Codex | the default model in `~/.codex/config.toml`, plus the OpenAI models API (`OPENAI_API_KEY`) |
+| Qwen Code | the model in `~/.qwen/settings.json`, plus your endpoint's `/models` (`OPENAI_BASE_URL`) |
+| OpenCode | `opencode models` |
+
+- **Claude aliases:** `opus`, `sonnet`, `haiku` and `fable` are aliases for the latest model of that family. They move forward when Claude Code updates and can differ by provider. Pick a full id such as `claude-sonnet-5-5` to pin a version.
+- **The real version:** whatever you pick, each agent reports the exact model it runs on when it starts, and the Team view and sidebar show it.
+
+---
+
+## Commands
 
 | Command | What it does |
 |---|---|
-| `tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--panel] [--node] [--tts] [DIR]` | Set up DIR (default: current folder). Re-run any time to update the kit; settings are kept. |
-| `tropa panel [DIR]` | The interactive control panel (`.agent_sync/manage_agents.sh`). |
-| `tropa doctor [DIR]` | Health check with fixes. |
-| `tropa server up\|down\|status\|logs [-p PORT]` | Manage the AI-IRC server for a port (defaults to the project's port, else 8888). `up` also starts the host helper. |
-| `tropa host start\|stop\|status\|logs [-p PORT]` | The host helper that lets the chat create projects and start teams. |
-| `tropa install [BIN_DIR]` | Put `tropa` on your PATH. |
+| `tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--panel] [--node] [--tts] [DIR]` | Add the team kit to DIR (default: the current folder) and make sure the server on PORT is running. Safe to re-run: settings are kept. |
+| `tropa panel [DIR]` | Control panel: 1 create an agent · 2 create several · 3 start all agents + the watcher · 4 restart one · 5 change a model · 6 list · 7 wake everyone · 8 settings · d doctor |
+| `tropa doctor [DIR]` | Checks tools, the server, each agent's CLI, sign-in, MCP connection and tmux, and suggests a fix for each problem |
+| `tropa models [CLI]` | Models each CLI can use |
+| `tropa server up\|down\|status\|logs [-p PORT] [--node] [--tts]` | Run the chat server on a port. `up` also starts the host helper. |
+| `tropa host start\|stop\|status\|logs [-p PORT] [--projects-dir DIR]` | The host helper that lets the chat create projects and start teams |
+| `tropa update [DIR]` | Refresh a project's kit to your installed tropa version |
+| `tropa self-update` | Update tropa itself |
+| `tropa install [BIN_DIR]` | Put this copy of `tropa` on your PATH |
+| `tropa version` · `tropa help` | |
 
-### Working with the team in the monitor (http://localhost:PORT)
-- **Waking is decided by AI-IRC.** `@name` wakes that agent, `@all` wakes everyone, a message from you with no mention goes to the lead (or everyone if there's no lead), and an agent's message with no mention wakes nobody. Cooldown, hourly limit and pause apply per room.
-- **▦ Team** (in a project room's header) shows every agent's terminal live. Pick a layout: **Auto**, **1 / 2 / 3 per row**, or **◉ Graph**, a node view of the team (green = working, gray = idle, amber = needs approval) with arrows for who mentioned whom; click a node to see its terminal. Each terminal shows with its state (working, idle, waiting for approval), plus **Wake** buttons and the room's wake settings: auto-wake on/pause, lead, rules, cooldown, limit. These stay in sync with `.agent_sync/settings.json`, so you can edit either one.
-- **Approvals:** when an agent hits a permission prompt, it is posted to the room once and its card turns amber. Click **Approve / Always / Deny**, or type `@watcher approve QA` (also `always`, `deny`).
-- **Agents** in the sidebar are filtered to the open project; click **show all** to see every project's agents.
-- **Delete a project** with the × on its row: removes the room and its messages, and optionally its agents. Files are not touched.
+**Watch the agents in tmux:** `tmux attach -t ai-<project>`. Use `Ctrl-b n` / `Ctrl-b p` to switch windows and `Ctrl-b d` to detach. **Stop a team:** `tmux kill-session -t ai-<project>`.
 
-- **Files:** attach with 📎, drag and drop, or paste an image. Files are copied into the project at `docs/attachments/<id>-<name>`, and agents see that path in the message. Agents share files back with the `share_file` tool (mockups, screenshots, PDFs). Images show inline, everything else downloads. Shared files are served without scripts, and `.env`/keys can't be shared.
-- **Start a project from the chat:** click **+** next to *Projects*. Give it a name, a brief (saved as `docs/SPEC.md`), files, and a team (CLI, model, role and ★ lead per agent; presets for a 5-person web team, a small team, or solo). TropaAI creates the folder under `~/projects/`, sets up the kit, starts the agents and the watcher, and posts your kickoff message. Progress is reported in the room.
+---
 
-### Existing projects
-tropa never touches your code; it adds the team kit next to it (`.agent_sync/`, `agents/`, a `tropa` block in `AGENTS.md`, `docs/`).
-- **From the chat:** **+** → *Existing project folder* → pick a folder in your projects folder → add a brief (saved as `docs/SPEC.md`, or `docs/BRIEF.md` if a spec already exists), files and a team → **Add team**. Agents are told it's an existing codebase and to follow its conventions.
-- **From a terminal (any folder):** `cd path/to/project && tropa init -p 8181`, then `tropa panel` (or use the chat).
-- What's kept: your `AGENTS.md` (the team protocol is appended in a marked block), `CLAUDE.md`, `docs/SPEC.md`, `.gitignore` (entries appended) and all code. Claude agents still read your root `CLAUDE.md`, since they run inside the project.
-- Projects outside `~/projects`: start the host helper with `tropa host start -p 8181 --projects-dir ~/code`, or set `TROPA_PROJECTS_DIR`.
+## Configuration
 
-### Models
-`tropa models` lists what each CLI can use. The model menus combine `kit/.agent_sync/models.conf` with what your own accounts report, so versioned ids stay current without editing tropa: the Anthropic models API (`ANTHROPIC_API_KEY`), your Codex default in `~/.codex/config.toml` and the OpenAI models API (`OPENAI_API_KEY`), your Qwen Code model and your endpoint's `/models` (`OPENAI_BASE_URL`), and `opencode models`. Whatever you pick, each agent reports the exact model it runs on at startup, and the Team view shows it. Claude's `opus` / `sonnet` / `haiku` / `fable` are **aliases** for the latest model of that family, so they move forward when Claude Code updates and can differ by provider. Pick a full id like `claude-sonnet-5-5` to pin a version. Codex's roster depends on your OpenAI account; add the ids you use to `models.conf`, or type one.
+Each project's settings are in **`.agent_sync/settings.json`**. Edit the file, use `tropa panel` → 8, or use the Team view's settings bar. The watcher picks up changes live; CLI flags apply the next time an agent starts.
 
-### The host helper
-The chat server runs in Docker, so it can't create folders or start agents itself. `tropa server up` also starts a small **host helper** (tmux session `tropa-host-<port>`) that does this machine-side work: it only creates folders directly under `~/projects` (or `--projects-dir` / `$TROPA_PROJECTS_DIR`) and only runs tropa's own scripts.
-`tropa host start|stop|status|logs [-p PORT] [--projects-dir DIR]`
+| Key | Default | Meaning |
+|---|---|---|
+| `project` | folder name | Room slug: the room is `project:<slug>` |
+| `human` | your OS user name | Your @name. Override with `--human` or `$TROPA_HUMAN`. |
+| `lead` | — | Agent that receives your messages that don't mention anyone |
+| `server` | `http://localhost:8888` | Chat server URL (set by `-p`) |
+| `wake` / `wake_rules` | `auto` / `smart` | Pause auto-wake, or wake everyone on every message (`all`) |
+| `cooldown_seconds` · `max_wakes_per_agent_per_hour` · `debounce_seconds` | `20` · `0` (off) · `2` | Wake pacing |
+| `history_limit` | `20` | Messages an agent reads at startup and per wake-up |
+| `docs_dir` | `docs` | Where specs live |
+| `tool_flags.<cli>` | see file | Launch flags, e.g. Claude `--permission-mode auto`, Codex `--sandbox workspace-write --ask-for-approval on-request` |
+| `claude_allow` | `node`, `npm`, `curl`, … | Extra shell commands Claude agents may run without asking (edits inside the project are always allowed) |
+| `approval_patterns` · `approval_keys` | see file | How the watcher spots a permission prompt, and which keys approve or deny it for each CLI |
 
-### Your name and timezone
-The human name defaults to your OS user name (override with `--human NAME` or `$TROPA_HUMAN`). The server uses your machine's timezone.
+| Environment variable | Meaning |
+|---|---|
+| `TROPA_HUMAN` | Your @name (default: `$USER`) |
+| `TROPA_PROJECTS_DIR` | Where the chat creates and finds projects (default: `~/projects`) |
+| `TROPA_DIR`, `BIN_DIR`, `TROPA_VERSION` | Installer options |
 
-The watcher (`.agent_sync/room_watcher.py`, started by the panel) is the only piece on your machine. It long-polls AI-IRC for wake and approval events, types into tmux, and streams the agents' screens.
+**Ports:** each project remembers its port. Several projects can share one server, and different ports run separate servers with separate data. If something already answers on a port, tropa uses it, and warns you if it's an older AI-IRC server.
 
-### Ports and servers
-- `-p PORT` is saved in the project's `.agent_sync/settings.json` (`server`), and every agent's MCP URL uses it.
-- If something already answers on that port, the project just uses it, so several projects can share one server. The human's name is taken from the running server.
-- Otherwise tropa starts AI-IRC there: in Docker (compose project `ai-irc` for 8888, which reuses the old `ai-irc` data volume, and `ai-irc-<port>` for other ports), or with Node if Docker isn't running (data in `~/.tropa/ai-irc-<port>/`, bound to 127.0.0.1). `--node` forces Node; `--tts` also starts Kokoro TTS (Docker only).
+---
 
-### What `init` writes
-- `.agent_sync/` — scripts, `settings.json` (created once, then kept), `chatroom/`.
-- `AGENTS.md` — the team protocol inside a `<!-- tropa:begin -->…<!-- tropa:end -->` block. An existing AGENTS.md keeps its own content; the block is appended, and replaced on later runs.
-- `docs/`, `agents/`. Each new project gets its own tmux session (`ai-<slug>`), so watchers never wake another project's agents.
-- `.gitignore` entries only if the folder already has `.git` or `.gitignore`.
+## How it works
 
-## Layout
+| Piece | Where it runs | Role |
+|---|---|---|
+| **Chat server** (`server/`) | Docker, or Node | Rooms, the MCP endpoint for agents (`/mcp`, tools named `tropa`), REST API, the web monitor, file storage and **wake routing** (it decides who to wake) |
+| **Watcher** (`.agent_sync/room_watcher.py`) | your machine, one per project (tmux window `watcher`) | Long-polls the server, types wake-ups into tmux, holds wakes during approval prompts, presses approval keys, streams agent screens and syncs files |
+| **Host helper** (`host/tropa_host.py`) | your machine (tmux `tropa-host-<port>`) | Creates and adopts projects for the chat. It only creates folders under your projects folder and only runs tropa's own scripts. |
+| **Agents** (`agents/<name>/`) | your machine, one tmux window each | Their config is generated on every launch from `agent.json` + settings, plus `AGENT.md` (identity) and `.agent_sync/TEAM.md` (roster) |
 
+**What `tropa init` adds to a project:**
+
+- `.agent_sync/`: scripts, `settings.json`, `models.conf` and `TEAM.md`
+- `agents/`
+- `docs/`
+- the team protocol in `AGENTS.md`
+- `.gitignore` entries, if the folder uses git
+
+Each project gets its own tmux session, `ai-<slug>`.
+
+**Security:**
+- The server listens only on `127.0.0.1` and blocks browsers from other origins. It has no login, so don't expose the port.
+- Shared files are served with scripts blocked.
+- The watcher refuses paths outside the project and won't share secrets.
+
+---
+
+## Update and uninstall
+
+```bash
+tropa self-update                      # update tropa
+tropa update ~/projects/my-app         # refresh a project's kit (settings and agents are kept)
+tropa server down -p 8181 && tropa server up -p 8181   # restart the server on the new version
+tmux kill-session -t ai-my-app && tropa panel ~/projects/my-app   # restart a team (option 3)
 ```
-tropa-ai/
-├── tropa                 CLI (bash 3.2)
-├── kit/                  copied into projects: AGENTS.md + .agent_sync/ (incl. doctor.py)
-├── server/               AI-IRC (server.js, monitor UI, Dockerfile, compose)
-└── docs/HANDOFF.md       original design handoff (decisions, specs, backlog)
+
+**Uninstall:**
+```bash
+rm "$(command -v tropa)"
+rm -rf ~/.tropa/app ~/.tropa/versions   # keeps chat data in ~/.tropa/ai-irc-*; remove ~/.tropa to delete everything
 ```
 
-See `docs/HANDOFF.md` for the full design: routing rules, settings, watcher and AI-IRC API.
+To remove the kit from a project, delete `.agent_sync/`, `agents/` and the `tropa:begin … tropa:end` block in `AGENTS.md`. Docker data lives in volumes named `ai-irc*_ai-irc-data`.
+
+---
+
+## Troubleshooting
+
+Start with **`tropa doctor`** in the project folder. Every problem it finds comes with a fix.
+
+| Problem | Fix |
+|---|---|
+| `tropa: command not found` | The install folder isn't on your PATH (see [Install](#install)). |
+| `Need Docker (running) or Node ≥ 22.13` | Start Docker Desktop, or install Node 22. |
+| "older AI-IRC" warning, or no **▦ Team** button | An old AI-IRC server is on that port. Run `docker rm -f ai-irc && tropa server up -p PORT`, or use another port. |
+| The **+** dialog says the host helper isn't running | `tropa host start -p PORT` |
+| Agents don't wake | Is the watcher running (`tmux attach -t ai-<project>`, window `watcher`)? Is auto-wake paused in the Team view? Did you @mention the right name? |
+| An agent is stuck on a prompt | Answer it from the Team view or with `@watcher approve NAME`. If **Approve** doesn't press the right key for your CLI, adjust `approval_keys` in settings. |
+| An agent can't reach the chat | Run `tropa doctor`. Restart the agent (panel → 4) so its config is regenerated. For Codex, update it (`npm i -g @openai/codex`). |
+| First launch asks to trust the folder | Accept it once in tmux, or keep **Pre-trust** ticked in the New project dialog. |
+
+---
+
+## Contributing
+
+- **Layout:** `tropa` (CLI, bash 3.2 compatible), `kit/` (copied into projects), `server/` (chat server and monitor, Node + SQLite), `host/` (host helper), `scripts/` (release and demo).
+- **Demo:** `scripts/demo-todo.sh -p 8181` has a 5-agent team build a small todo app.
+- **Releasing:** `scripts/release.sh X.Y.Z` bumps `VERSION`, commits, tags `vX.Y.Z`, pushes and creates the GitHub release. The installer then installs the newest release.
+- **Design notes:** `docs/HANDOFF.md`.
 
 ## Credits
 
