@@ -11,7 +11,9 @@
     "node": ">=22.13"
   },
   "dependencies": {
+    "dompurify": "3.2.6",
     "express": "^4.21.2",
+    "marked": "15.0.12",
     "ws": "^8.18.0"
   },
   "author": "Mark Allan Meriales",

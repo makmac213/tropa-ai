@@ -1,14 +1,24 @@
 #!/bin/bash
 # tropa — turn any folder into a TropaAI agent team.  (macOS bash 3.2 compatible)
 #
-#   tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--panel] [DIR]
+#   tropa start [-p PORT] [--docker] [--no-open]   start TropaAI (chat server + host helper) and open it in the browser
+#   tropa stop [-p PORT]                    stop it
+#   tropa autostart on|off|status [-p PORT] start TropaAI when you log in
+#   tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--no-tts] [--panel] [DIR]
 #   tropa panel  [DIR]                      open the agent control panel
 #   tropa doctor [DIR]                      check tools, server, agents, tmux
-#   tropa server up|down|status|logs [-p PORT] [--tts] [--node] [--human NAME]
+#   tropa server up|down|status|logs [-p PORT] [--no-tts] [--node] [--human NAME]
 #   tropa host start|stop|status|logs [-p PORT] [--projects-dir DIR]   (lets the chat create projects)
+#   tropa design list | show ID | use ID [DIR]   design systems (e.g. use carbon) for a project's UI
+#   tropa guardrails on|off|status|scan [DIR]    secret scan on commit + safety rules for agents (on by default)
+#   tropa share PORT [--hours N] | list | stop ID   public ngrok link to a local port (optional; needs ngrok)
+#   tropa openrouter key|clear|status|models [--project NAME]   OpenRouter API key, global or for one project (or ⚙ Settings → API keys)
+#   tropa gemini key|clear|status [--project NAME]               Gemini API key for Gemini CLI agents, global or for one project
+#   tropa claude-token set|status|clear  long-lived Claude login for agents (from `claude setup-token`; no 401 expiries)
+#   tropa tts start|stop|status|logs        Kokoro voices for "Read aloud" (one per machine, started by server up)
 #   tropa update [DIR]                      refresh a project's kit to this tropa version
 #   tropa self-update                       update tropa itself
-#   tropa models [claude|codex|opencode|qwen]   models each CLI can use (incl. your accounts' versioned ids)
+#   tropa models [claude|codex|opencode|qwen|gemini]   models each CLI can use (incl. your accounts' versioned ids)
 #   tropa install [BIN_DIR]                 put this copy of `tropa` on your PATH
 #   tropa help
 #
@@ -21,12 +31,14 @@ TROPA_HOME="$(cd "$(dirname "$SRC")" && pwd)"   # logical path: keeps ~/.tropa/a
 KIT="$TROPA_HOME/kit"
 SERVER_DIR="$TROPA_HOME/server"
 STATE_DIR="${TROPA_STATE:-$HOME/.tropa}"
+[ -x "$STATE_DIR/node/bin/node" ] && PATH="$STATE_DIR/node/bin:$PATH"   # the Node the installer put there (if any)
+export PATH
 VERSION="$(cat "$TROPA_HOME/VERSION" 2>/dev/null || echo dev)"
 TROPA_REPO="${TROPA_REPO:-makmac213/tropa-ai}"
 
 die()  { echo "❌ $*" >&2; exit 1; }
 info() { echo "$*"; }
-usage() { sed -n '2,16p' "$TROPA_HOME/tropa" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,26p' "$TROPA_HOME/tropa" | sed 's/^# \{0,1\}//'; }
 
 abspath() { mkdir -p "$1" && (cd "$1" && pwd -P); }
 health()  { curl -fsS --max-time 3 "http://localhost:$1/health" >/dev/null 2>&1; }
@@ -42,11 +54,95 @@ default_human() {   # $TROPA_HUMAN, else your OS user name, capitalised
     [ -n "$n" ] || n=human
     printf '%s%s' "$(printf %s "$n" | cut -c1 | tr '[:lower:]' '[:upper:]')" "$(printf %s "$n" | cut -c2-)"
 }
+is_wsl() { [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; }
+wsl_dir_note() {     # $1 = project dir: Windows drives are slow and miss file events inside WSL
+    is_wsl || return 0
+    case "$1" in /mnt/[a-zA-Z]/*)
+        info "⚠️  This folder is on a Windows drive ($1). Inside WSL that is much slower and file"
+        info "   watching (dev servers, hot reload) is unreliable. Prefer a folder in your Linux home, e.g. ~/projects"
+        info "   (in File Explorer: \\\\wsl.localhost\\${WSL_DISTRO_NAME:-Ubuntu}$(printf '%s' "$HOME" | tr '/' '\\')\\projects)." ;;
+    esac
+}
+wsl_open_note() {    # $1 = port
+    is_wsl || return 0
+    info "   On Windows: open http://localhost:$1 in your browser. Linux files are in File Explorer at \\\\wsl.localhost\\${WSL_DISTRO_NAME:-Ubuntu}"
+}
+
 host_tz() {          # IANA timezone of this machine (macOS + Linux), for the server's timestamps
     [ -n "$TZ" ] && { echo "$TZ"; return; }
     local l; l=$(readlink /etc/localtime 2>/dev/null) && case "$l" in *zoneinfo/*) echo "${l##*zoneinfo/}"; return;; esac
     [ -f /etc/timezone ] && { head -1 /etc/timezone; return; }
     echo UTC
+}
+git_ok() {           # git installed AND working (macOS ships a stub that only opens an installer)
+    command -v git >/dev/null 2>&1 && git --version >/dev/null 2>&1
+}
+git_hint() {
+    if [ "$(uname)" = Darwin ]; then echo "xcode-select --install   (or, with Homebrew: brew install git)"
+    elif command -v apt-get >/dev/null; then echo "sudo apt-get install -y git"
+    elif command -v dnf >/dev/null; then echo "sudo dnf install -y git"
+    elif command -v pacman >/dev/null; then echo "sudo pacman -S git"
+    elif command -v zypper >/dev/null; then echo "sudo zypper install -y git"
+    elif command -v apk >/dev/null; then echo "sudo apk add git"
+    else echo "install git from https://git-scm.com/downloads"; fi
+}
+interactive() { [ -t 0 ] && [ -t 1 ] && [ -z "${TROPA_NONINTERACTIVE:-}" ]; }
+only_tropa_files() {  # folder holds nothing but what tropa just created (safe to commit as-is)
+    local f
+    for f in "$1"/* "$1"/.[!.]*; do
+        [ -e "$f" ] || continue
+        case "$(basename "$f")" in .agent_sync|agents|docs|AGENTS.md|.gitignore|.git|.DS_Store) ;; *) return 1 ;; esac
+    done
+    return 0
+}
+check_git() {         # $1 = project dir. Never fatal: the team still works without git, just without branches.
+    local dir="$1" a cmd
+    [ "$(C get git_workflow)" = off ] && return 0
+    if ! git_ok; then
+        echo ""
+        echo "⚠️  git isn't installed (or isn't working) on this machine."
+        echo "   The team's default workflow needs it: a branch per task, a worktree per developer,"
+        echo "   the lead reviews and merges. Without git, agents share one folder and coordinate by hand."
+        echo "   Install it:  $(git_hint)"
+        cmd=$(git_hint | sed 's/   (.*//')
+        if interactive && case "$cmd" in sudo*|xcode-select*) true;; *) false;; esac; then
+            read -p "   Run '$cmd' now? [y/N]: " a
+            if [ "$a" = y ] || [ "$a" = Y ]; then
+                sh -c "$cmd" || true
+                if [ "$(uname)" = Darwin ]; then echo "   Finish the installer window, then run 'tropa init' here again."; return 0; fi
+                git_ok && echo "   ✅ $(git --version)"
+            fi
+        fi
+        git_ok || { echo "   Then run 'tropa init' here again (or 'tropa doctor' to check)."; return 0; }
+    fi
+    if git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git -C "$dir" rev-parse --verify -q HEAD >/dev/null 2>&1 || {
+            echo "ℹ️  This repo has no commits yet; developer worktrees need one. Review .gitignore, then:"
+            echo "   git -C \"$dir\" add -A && git -C \"$dir\" commit -m \"Initial commit\""; }
+        return 0
+    fi
+    a=y
+    if interactive; then
+        read -p "🌿 This folder isn't a git repository. Make it one (branch 'main') so developers can work on branches and worktrees? [Y/n]: " a
+    else
+        echo "ℹ️  Not a git repository. For the branch / worktree workflow run:  git -C \"$dir\" init -b main   (then 'tropa init' again)"
+        return 0
+    fi
+    case "$a" in n|N|no|No) echo "   Skipped. Agents will share the folder; run 'git init -b main' any time to switch."; return 0 ;; esac
+    git -C "$dir" init -q -b main 2>/dev/null || { git -C "$dir" init -q && git -C "$dir" symbolic-ref HEAD refs/heads/main; }
+    info "  + git repository (branch main)"
+    GIT_JUST_INIT=1
+}
+first_commit() {      # $1 = project dir; only right after we created the repo
+    local dir="$1" h; [ "${GIT_JUST_INIT:-0}" = 1 ] || return 0
+    h=$(C get human)
+    if only_tropa_files "$dir"; then
+        git -C "$dir" add -A && git -C "$dir" -c user.name="$h" -c user.email="$(echo "$h" | tr 'A-Z' 'a-z')@tropa.local" \
+            commit -q -m "Add TropaAI team kit" && info "  + first commit on main"
+    else
+        echo "ℹ️  Your existing files aren't committed yet, and developer worktrees start from 'main'."
+        echo "   Check .gitignore (no secrets, no node_modules), then:  git add -A && git commit -m \"Initial commit\""
+    fi
 }
 install_hint() {     # package-manager hint for $1
     if [ "$(uname)" = Darwin ]; then echo "brew install $1"
@@ -76,6 +172,50 @@ node_ok() {
     node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)'
 }
 docker_ok() { command -v docker >/dev/null && docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; }
+
+# ---------------------------------------------------------------- Kokoro (read-aloud voices)
+# One Kokoro per machine, published on 127.0.0.1 only, shared by every chat server
+# (Docker servers reach it via host.docker.internal; Node servers via 127.0.0.1).
+KOKORO_IMAGE="${TROPA_KOKORO_IMAGE:-ghcr.io/remsky/kokoro-fastapi-cpu:latest}"
+KOKORO_NAME="tropa-kokoro"
+KOKORO_PORT="${TROPA_KOKORO_PORT:-8880}"
+kokoro_up_already() { curl -fsS --max-time 3 "http://127.0.0.1:$KOKORO_PORT/v1/audio/voices" >/dev/null 2>&1; }
+tts_start() {
+    [ "${TROPA_TTS:-1}" = 0 ] && return 0
+    if kokoro_up_already; then info "🔊 Kokoro voices ready on 127.0.0.1:$KOKORO_PORT"; return 0; fi
+    if ! docker_ok; then
+        info "🔈 Read aloud uses your system's voices (Kokoro's natural voices need Docker running)."; return 0
+    fi
+    if docker ps --format '{{.Names}}' | grep -qx "$KOKORO_NAME"; then
+        info "🔊 Kokoro is starting up (container $KOKORO_NAME) — read aloud uses system voices until it's ready"; return 0
+    fi
+    if docker ps -a --format '{{.Names}}' | grep -qx "$KOKORO_NAME"; then
+        docker start "$KOKORO_NAME" >/dev/null && info "🔊 Kokoro started (container $KOKORO_NAME)"; return 0
+    fi
+    mkdir -p "$STATE_DIR"
+    local run="docker run -d --name $KOKORO_NAME --restart unless-stopped -p 127.0.0.1:$KOKORO_PORT:8880 $KOKORO_IMAGE"
+    if docker image inspect "$KOKORO_IMAGE" >/dev/null 2>&1; then
+        $run >/dev/null && info "🔊 Kokoro started (container $KOKORO_NAME)"
+    else
+        # first time: a few GB to download — don't make the user wait for it
+        (nohup sh -c "$run" >>"$STATE_DIR/kokoro.log" 2>&1 </dev/null &)
+        info "🔊 Downloading Kokoro voices in the background (first time only, a few GB)."
+        info "   Read aloud uses your system's voices until it's ready — check with: tropa tts status"
+    fi
+}
+cmd_tts() {
+    case "$1" in
+        start) TROPA_TTS=1 tts_start ;;
+        stop) if docker_ok && docker ps -a --format '{{.Names}}' | grep -qx "$KOKORO_NAME"; then docker stop "$KOKORO_NAME" >/dev/null && info "🔇 Kokoro stopped"; else info "Kokoro isn't running"; fi ;;
+        status)
+            if kokoro_up_already; then info "✅ Kokoro ready on http://127.0.0.1:$KOKORO_PORT ($(curl -fsS "http://127.0.0.1:$KOKORO_PORT/v1/audio/voices" | python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("voices", [])))' 2>/dev/null) voices)"
+            elif docker_ok && docker ps --format '{{.Names}}' | grep -qx "$KOKORO_NAME"; then info "⏳ Kokoro container is running but not ready yet (first start loads the model)"
+            elif [ -f "$STATE_DIR/kokoro.log" ] && pgrep -f "docker run -d --name $KOKORO_NAME" >/dev/null 2>&1; then info "⬇️  Kokoro is still downloading (see: tropa tts logs)"
+            else info "⏹  Kokoro not running — read aloud uses system voices. Start it: tropa tts start"; return 1; fi ;;
+        logs) if docker_ok && docker ps -a --format '{{.Names}}' | grep -qx "$KOKORO_NAME"; then docker logs --tail 60 "$KOKORO_NAME"; else tail -n 40 "$STATE_DIR/kokoro.log" 2>/dev/null || info "No Kokoro logs"; fi ;;
+        *) die "usage: tropa tts start|stop|status|logs" ;;
+    esac
+}
 
 # ---------------------------------------------------------------- host helper
 host_session() { echo "tropa-host-$1"; }
@@ -119,31 +259,54 @@ server_up() {
         if is_tropa_server "$port"; then
             info "✅ TropaAI already running on http://localhost:$port (human: @$(server_human "$port"))"
             [ "${TROPA_NO_HOST:-0}" = 1 ] || host_start "$port"
+            [ "$tts" = 0 ] || tts_start
         else
             old_server_note "$port"
         fi
         return 0
     fi
     name=$(compose_name "$port")
+    # Docker and node keep separate databases, so stick with the backend this port used before
+    # (otherwise a Docker that isn't running yet silently gives you an empty node server).
+    local mf="$STATE_DIR/server-$port.mode" prev=""
+    [ -f "$mf" ] && prev=$(cat "$mf")
+    if [ -z "$mode" ]; then
+        if [ "$prev" = docker ]; then
+            docker_ok || die "Port $port's chats are stored in Docker, but Docker isn't running. Start Docker Desktop and run this again.
+   (To start an empty node server on $port anyway: tropa server up -p $port --node)"
+            mode=docker
+        elif [ "$prev" = node ]; then mode=node
+        elif docker_ok && docker volume inspect "${name}_ai-irc-data" >/dev/null 2>&1; then mode=docker
+        elif [ -f "$STATE_DIR/ai-irc-$port/ai-irc.db" ]; then mode=node
+        fi
+    fi
     if [ "$mode" != node ] && docker_ok; then
+        mkdir -p "$STATE_DIR" && echo docker >"$mf"
         info "🐳 Starting TropaAI in Docker (project '$name', port $port)..."
-        local svc="ai-irc"; [ "$tts" = 1 ] && svc="ai-irc kokoro"
         (cd "$SERVER_DIR" && AI_IRC_PORT="$port" HUMAN_NAME="$human" TZ="$(host_tz)" \
-            docker compose -p "$name" up -d --build $svc) || die "docker compose failed"
+            KOKORO_URL="http://host.docker.internal:$KOKORO_PORT" \
+            docker compose -p "$name" up -d --build --remove-orphans ai-irc) || die "docker compose failed"
+    elif [ "$mode" = docker ]; then
+        die "Docker isn't running (needed for port $port's chats). Start Docker Desktop and run this again."
     elif node_ok; then
         info "🟢 Starting TropaAI with node (port $port)..."
+        [ "$prev" = docker ] && info "⚠️  Port $port's earlier chats are in Docker; this node server starts with its own, separate history."
+        mkdir -p "$STATE_DIR" && echo node >"$mf"
         mkdir -p "$STATE_DIR/ai-irc-$port"
-        [ -d "$SERVER_DIR/node_modules/express" ] || (cd "$SERVER_DIR" && npm install --omit=dev --no-audit --no-fund >/dev/null) || die "npm install failed"
+        { [ -d "$SERVER_DIR/node_modules/express" ] && [ -d "$SERVER_DIR/node_modules/marked" ] && [ -d "$SERVER_DIR/node_modules/dompurify" ]; } || (cd "$SERVER_DIR" && npm install --omit=dev --no-audit --no-fund >/dev/null) || die "npm install failed"
         (cd "$SERVER_DIR" || exit 1
          PORT="$port" HOST=127.0.0.1 DATA_DIR="$STATE_DIR/ai-irc-$port" HUMAN_NAME="$human" TZ="$(host_tz)" \
+            KOKORO_URL="http://127.0.0.1:$KOKORO_PORT" \
             nohup node --no-warnings server.js </dev/null >>"$STATE_DIR/ai-irc-$port.log" 2>&1 &
          echo $! >"$STATE_DIR/ai-irc-$port.pid")
     else
         die "Need Docker (running) or Node ≥ 22.13 to start TropaAI. Start Docker, or: $(install_hint node)"
     fi
     i=0; while [ $i -lt 60 ]; do health "$port" && break; sleep 1; i=$((i+1)); done
+    [ "$tts" = 0 ] || tts_start
     health "$port" || die "TropaAI did not come up on port $port (see 'tropa server logs -p $port')"
     info "✅ TropaAI up on http://localhost:$port"
+    wsl_open_note "$port"
     [ "${TROPA_NO_HOST:-0}" = 1 ] || host_start "$port"
 }
 
@@ -181,11 +344,12 @@ server_logs() {
 
 cmd_server() {
     local sub="$1"; shift
-    local port="" tts=0 mode="" human=""
+    local port="" tts=1 mode="" human=""
     while [ $# -gt 0 ]; do
         case "$1" in
             -p|--port) port="$2"; shift ;;
             --tts) tts=1 ;;
+            --no-tts) tts=0 ;;
             --node) mode=node ;;
             --human) human="$2"; shift ;;
             *) die "unknown option '$1'" ;;
@@ -206,8 +370,118 @@ cmd_server() {
     esac
 }
 
+# ---------------------------------------------------------------- start / stop / autostart
+open_url() {   # open $1 in the user's browser (macOS, Linux desktop, WSL → Windows)
+    if [ "$(uname)" = Darwin ]; then open "$1" >/dev/null 2>&1
+    elif is_wsl && command -v cmd.exe >/dev/null; then cmd.exe /c start "" "$1" >/dev/null 2>&1
+    elif command -v xdg-open >/dev/null; then xdg-open "$1" >/dev/null 2>&1 &
+    else return 1; fi
+}
+cmd_start() {   # the everyday command: server (Node unless this port already keeps its chats in Docker) + host helper
+    local port="" mode="" open=1 human=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -p|--port) port="$2"; shift ;;
+            --docker) mode=docker ;;
+            --node) mode=node ;;
+            --no-open) open=0 ;;
+            --human) human="$2"; shift ;;
+            *) die "unknown option '$1' (usage: tropa start [-p PORT] [--docker] [--no-open])" ;;
+        esac; shift
+    done
+    port="${port:-8888}"; human="${human:-$(default_human)}"
+    if [ -z "$mode" ] && [ "$(cat "$STATE_DIR/server-$port.mode" 2>/dev/null)" != docker ] && ! docker volume inspect "$(compose_name "$port")_ai-irc-data" >/dev/null 2>&1; then
+        node_ok && mode=node   # lighter than Docker; Docker stays the fallback
+    fi
+    [ "$mode" = docker ] && mode=""   # server_up uses Docker unless told node
+    TROPA_NO_HOST=0 server_up "$port" "$human" 0 "$mode"
+    local url="http://localhost:$port/?setup=1"
+    info ""
+    info "👉 TropaAI: http://localhost:$port"
+    [ "$open" = 1 ] && { open_url "$url" || info "   Open it in your browser."; }
+    return 0
+}
+cmd_stop() {
+    local port=""
+    while [ $# -gt 0 ]; do case "$1" in -p|--port) port="$2"; shift ;; *) die "unknown option '$1'" ;; esac; shift; done
+    server_down "${port:-8888}"
+}
+cmd_autostart() {   # start TropaAI at login: launchd (macOS) or a systemd user service (Linux)
+    local sub="${1:-status}" port=8888; shift || true
+    while [ $# -gt 0 ]; do case "$1" in -p|--port) port="$2"; shift ;; *) die "unknown option '$1'" ;; esac; shift; done
+    valid_port "$port" || die "invalid port '$port'"
+    local bin="$TROPA_HOME/tropa" label="ai.tropa.server-$port"
+    if [ "$(uname)" = Darwin ]; then
+        local plist="$HOME/Library/LaunchAgents/$label.plist"
+        case "$sub" in
+            on) mkdir -p "$HOME/Library/LaunchAgents" "$STATE_DIR"
+                cat >"$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key><array><string>$bin</string><string>start</string><string>-p</string><string>$port</string><string>--no-open</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>$PATH</string><key>HOME</key><string>$HOME</string></dict>
+  <key>StandardOutPath</key><string>$STATE_DIR/autostart-$port.log</string>
+  <key>StandardErrorPath</key><string>$STATE_DIR/autostart-$port.log</string>
+</dict></plist>
+EOF
+                launchctl unload "$plist" 2>/dev/null; launchctl load "$plist" && info "✅ TropaAI (port $port) now starts when you log in. Turn off: tropa autostart off" ;;
+            off) launchctl unload "$plist" 2>/dev/null; rm -f "$plist"; info "⏹  Autostart off (port $port)" ;;
+            status) if [ -f "$plist" ]; then info "✅ Autostart on (port $port)"; else info "⏹  Autostart off (port $port)"; return 1; fi ;;
+            *) die "usage: tropa autostart on|off|status [-p PORT]" ;;
+        esac
+    elif command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; then
+        local unit="$HOME/.config/systemd/user/tropa-$port.service"
+        case "$sub" in
+            on) mkdir -p "$(dirname "$unit")"
+                cat >"$unit" <<EOF
+[Unit]
+Description=TropaAI chat server and host helper (port $port)
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+KillMode=process
+Environment=PATH=$PATH
+ExecStart=$bin start -p $port --no-open
+ExecStop=$bin stop -p $port
+
+[Install]
+WantedBy=default.target
+EOF
+                systemctl --user daemon-reload && systemctl --user enable --now "tropa-$port.service" >/dev/null && info "✅ TropaAI (port $port) now starts when you log in. Turn off: tropa autostart off" ;;
+            off) systemctl --user disable --now "tropa-$port.service" >/dev/null 2>&1; rm -f "$unit"; systemctl --user daemon-reload; info "⏹  Autostart off (port $port)" ;;
+            status) if systemctl --user is-enabled "tropa-$port.service" >/dev/null 2>&1; then info "✅ Autostart on (port $port)"; else info "⏹  Autostart off (port $port)"; return 1; fi ;;
+            *) die "usage: tropa autostart on|off|status [-p PORT]" ;;
+        esac
+    else
+        die "No launchd or systemd user services here$(is_wsl && echo ' (WSL without systemd)'). Run 'tropa start' after you log in, or enable systemd in WSL: https://learn.microsoft.com/windows/wsl/systemd"
+    fi
+}
+
 # ---------------------------------------------------------------- init
 C() { python3 "$S/config.py" "$@"; }   # uses the caller's $S (project .agent_sync)
+sync_skills() {       # $1 = project dir: copy tropa's default skills into .agents/skills (the team's single source)
+    case "$(C get default_skills)" in False|false|0) return 0 ;; esac
+    [ -d "$TROPA_HOME/skills" ] || return 0
+    python3 "$TROPA_HOME/host/sync_skills.py" "$TROPA_HOME/skills" "$1/.agents/skills"
+}
+
+guardrails_setup() {  # $1 = project dir: keep secrets out of git (.gitignore + pre-commit secret scan)
+    case "$(C get guardrails)" in False|false|0) return 0 ;; esac
+    if [ -d "$1/.git" ] || [ -f "$1/.gitignore" ]; then
+        if ! grep -qE '^/?\.env(\*|\.\*)?$' "$1/.gitignore" 2>/dev/null; then
+            printf '\n# tropa: secrets stay out of git (guardrails)\n.env\n.env.*\n!.env.example\n!.env.sample\n*.pem\n*.key\n' >>"$1/.gitignore"
+            info "  + .gitignore: .env, .env.*, *.pem, *.key"
+        fi
+    fi
+    [ -e "$1/.git" ] && python3 "$S/secret_scan.py" install "$1"
+    return 0
+}
+
 merge_agents_md() {   # $1 = project dir; keep the user's own AGENTS.md content
     python3 - "$KIT/AGENTS.md" "$1/AGENTS.md" <<'PY'
 import os, sys, time
@@ -232,7 +506,7 @@ PY
 }
 
 cmd_init() {
-    local dir="" port="" slug="" human="" no_server=0 panel=0 tts=0 mode=""
+    local dir="" port="" slug="" human="" no_server=0 panel=0 tts=1 mode=""
     while [ $# -gt 0 ]; do
         case "$1" in
             -p|--port) port="$2"; shift ;;
@@ -241,6 +515,7 @@ cmd_init() {
             --no-server) no_server=1 ;;
             --panel) panel=1 ;;
             --tts) tts=1 ;;
+            --no-tts) tts=0 ;;
             --node) mode=node ;;
             -h|--help) usage; exit 0 ;;
             -*) die "unknown option '$1' (see: tropa help)" ;;
@@ -269,6 +544,7 @@ cmd_init() {
     fi
     info "  ↻ .agent_sync scripts"
     merge_agents_md "$dir"
+    sync_skills "$dir"
 
     C set tropa_home "\"$TROPA_HOME\""
     [ -n "$slug" ]  && C set project "\"$slug\""
@@ -278,12 +554,19 @@ cmd_init() {
     else port=$(port_of "$dir"); port="${port:-8888}"; fi
     mkdir -p "$dir/$(C get docs_dir)"
 
+    check_git "$dir"
+    wsl_dir_note "$dir"
     if [ -d "$dir/.git" ] || [ -f "$dir/.gitignore" ]; then
         if ! grep -q "tropa:begin" "$dir/.gitignore" 2>/dev/null; then
-            printf '\n# tropa:begin\n.agent_sync/chatroom/\n.agent_sync/__pycache__/\n.agent_sync/TEAM.md\nagents/*/*\n!agents/*/agent.json\n# tropa:end\n' >>"$dir/.gitignore"
+            printf '\n# tropa:begin\n.agent_sync/chatroom/\n.agent_sync/__pycache__/\n.agent_sync/TEAM.md\nagents/*/*\n!agents/*/agent.json\n.worktrees/\n# tropa:end\n' >>"$dir/.gitignore"
             info "  + .gitignore entries"
         fi
+        if ! grep -qx '.worktrees/' "$dir/.gitignore" 2>/dev/null; then
+            printf '\n# tropa: developer worktrees\n.worktrees/\n' >>"$dir/.gitignore"; info "  + .gitignore: .worktrees/"
+        fi
     fi
+    guardrails_setup "$dir"
+    first_commit "$dir"
 
     if [ "$no_server" = 0 ]; then
         server_up "$port" "$(C get human)" "$tts" "$mode" || exit 1
@@ -299,6 +582,26 @@ cmd_init() {
             "http://localhost:$port/api/rooms" >/dev/null 2>&1 && info "  ✓ room $(C get room) ready"
     fi
     python3 "$S/setup_agent.py" refresh >/dev/null
+    # remember where this project lives, so the host helper (the chat's Start / Add agent buttons) finds it anywhere
+    python3 - "$HOME/.tropa/projects-$port.json" "$(C get project)" "$dir" <<'PYREG' || true
+import json, os, sys
+path, slug, root = sys.argv[1:4]
+os.makedirs(os.path.dirname(path), exist_ok=True)
+try:
+    reg = json.load(open(path))
+except (OSError, ValueError):
+    reg = {}
+if reg.get(slug) != root:
+    reg[slug] = root
+    with open(path, "w") as f:
+        json.dump(reg, f, indent=1)
+PYREG
+    # a watcher that is already running keeps the old scripts in memory: restart it on the new ones
+    local ts; ts=$(C get tmux_session)
+    if command -v tmux >/dev/null 2>&1 && tmux list-windows -t "$ts" -F '#{window_name}' 2>/dev/null | grep -qx watcher; then
+        tmux respawn-window -k -t "$ts:watcher" -c "$dir" "python3 \"$S/room_watcher.py\"; read -p 'watcher stopped — Enter to close'" \
+            && info "  ↻ room watcher restarted on the new scripts"
+    fi
 
     info ""
     info "✅ Ready: room $(C get room) on $(C get server)"
@@ -307,6 +610,76 @@ cmd_init() {
     info "          open $(C get server)   chat as @$(C get human)"
     [ "$panel" = 1 ] && exec "$S/manage_agents.sh"
     return 0
+}
+
+cmd_share() {    # optional public links with ngrok, through the chat so the team sees them
+    local act="start" port="" hours="" dir="." ref=""
+    case "${1:-}" in list|ls) act=list; shift ;; stop|off) act=stop; ref="${2:-}"; shift; shift 2>/dev/null ;; esac
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --hours|-t) hours="$2"; shift 2 ;;
+            -h|--help) act=help; shift ;;
+            *) if [ "$act" = start ] && [ -z "$port" ] && echo "$1" | grep -qE '^[0-9]+$'; then port="$1"; else dir="$1"; fi; shift ;;
+        esac
+    done
+    if [ "$act" = help ] || { [ "$act" = start ] && [ -z "$port" ]; } || { [ "$act" = stop ] && [ -z "$ref" ]; }; then
+        echo "usage: tropa share PORT [--hours N] [DIR]   open a public ngrok link to localhost:PORT (default 4 h; 0 = until stopped)"
+        echo "       tropa share list [DIR]  ·  tropa share stop ID|PORT [DIR]"
+        [ "$act" = help ] && return 0 || return 1
+    fi
+    if ! command -v ngrok >/dev/null 2>&1; then
+        info "ngrok is optional and not installed. To use public links:"
+        case "$(uname -s)" in Darwin) info "  brew install ngrok" ;; *) info "  see https://ngrok.com/download (apt, snap or a single binary)" ;; esac
+        info "  ngrok config add-authtoken <token>   # free token: https://dashboard.ngrok.com/get-started/your-authtoken"
+        return 1
+    fi
+    local d S srv room
+    if d=$( (cd "$dir" 2>/dev/null && pwd -P) ) && [ -f "$d/.agent_sync/config.py" ]; then
+        S="$d/.agent_sync"; srv=$(C get server); room="project:$(C get project)"
+    fi
+    if [ -n "$srv" ] && curl -fsS -m 3 "$srv/api/host" 2>/dev/null | grep -q '"connected":true'; then
+        python3 - "$act" "$srv" "$room" "$port" "$hours" "$ref" <<'PY'
+import json, sys, time, urllib.request, urllib.error
+act, srv, room, port, hours, ref = sys.argv[1:]
+def call(path, body=None, method=None):
+    req = urllib.request.Request(srv + "/api" + path, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Content-Type": "application/json"}, method=method or ("POST" if body is not None else "GET"))
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r: return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        sys.exit("❌ " + (json.loads(e.read().decode() or "{}").get("error") or f"HTTP {e.code}"))
+q = urllib.request.quote(room, safe="")
+rows = call(f"/shares?room={q}")
+if act == "list":
+    live = [s for s in rows if s["status"] in ("requested", "starting", "online")]
+    for s in live: print(f"  #{s['id']}  port {s['port']:<6} {s['status']:<10} {s['url'] or ''}")
+    if not live: print("  no open links for " + room)
+    sys.exit(0)
+if act == "stop":
+    hit = [s for s in rows if s["status"] in ("requested", "starting", "online") and (str(s["id"]) == ref.lstrip("#") or str(s["port"]) == ref)]
+    if not hit: sys.exit(f"❌ no open link #{ref} / port {ref} in {room}")
+    for s in hit: call(f"/shares/{s['id']}", method="DELETE"); print(f"⏹  stopping #{s['id']} (port {s['port']})")
+    sys.exit(0)
+body = {"port": int(port)}
+if hours != "": body["hours"] = float(hours)
+s = call(f"/rooms/{q}/shares", body)
+print(f"🌐 starting ngrok for localhost:{port} (share #{s['id']}, posted in {room})…")
+for _ in range(60):
+    if s["status"] in ("online", "failed", "stopped"): break
+    time.sleep(0.5)
+    s = next((x for x in call(f"/shares?room={q}") if x["id"] == s["id"]), s)
+if s["status"] == "online":
+    print(f"✅ {s['url']}  →  localhost:{port}")
+    print("   Anyone with this link can open it. " + (f"It stops in {s['hours']:g} h" if s["hours"] else "It stays open") + f"; stop it now with: tropa share stop {s['id']}")
+else:
+    sys.exit(f"❌ {s.get('error') or s['status']}")
+PY
+        return $?
+    fi
+    [ "$act" = start ] || die "the chat server or host helper isn't running for this folder (tropa server up)"
+    info "ℹ️  No TropaAI host helper for this folder, so running ngrok here. The link stops when you press Ctrl-C."
+    info "   Anyone with the link can open your app while it runs."
+    exec ngrok http "$port"
 }
 
 project_dir() {
@@ -326,12 +699,72 @@ cmd_install() {
 }
 
 case "${1:-help}" in
+    start) shift; cmd_start "$@" ;;
+    stop) shift; cmd_stop "$@" ;;
+    autostart) shift; cmd_autostart "$@" ;;
     init|bootstrap) shift; cmd_init "$@" ;;
     update) shift; cmd_init --no-server "$@" ;;
     panel)  shift; d=$(project_dir "$1") && cd "$d" && exec "$d/.agent_sync/manage_agents.sh" ;;
     doctor) shift; d=$(project_dir "$1") && exec python3 "$d/.agent_sync/doctor.py" ;;
     server) shift; cmd_server "$@" ;;
     host) shift; cmd_host "$@" ;;
+    tts) shift; cmd_tts "$@" ;;
+    openrouter|gemini) prov="$1"; shift
+        KEYS="$TROPA_HOME/kit/.agent_sync/keys.py"
+        sub="${1:-status}"; [ $# -gt 0 ] && shift
+        proj=""; if [ "${1:-}" = "--project" ]; then [ -n "${2:-}" ] || die "--project needs a project name"; proj="$2"; fi
+        pargs=(); [ -n "$proj" ] && pargs=(--project "$proj")
+        case "$prov" in openrouter) get="https://openrouter.ai/settings/keys" ;; *) get="https://aistudio.google.com/apikey" ;; esac
+        case "$sub" in
+            key)    printf "%s API key%s (%s), input hidden: " "$prov" "${proj:+ for project $proj}" "$get"; read -rs k; echo
+                    [ -n "$k" ] || die "no key given"
+                    printf '%s\n' "$k" | python3 "$KEYS" set "$prov" ${pargs[@]+"${pargs[@]}"} || exit 1
+                    info "   Saved outside any project folder. You can also manage keys in the chat: ⚙ Settings → API keys (or a project's 🔑 Keys)."
+                    info "   Running agents pick up a new key when they restart." ;;
+            clear)  python3 "$KEYS" clear "$prov" ${pargs[@]+"${pargs[@]}"} ;;
+            status) info "$prov key${proj:+ for project $proj}: $(python3 "$KEYS" where "$prov" ${pargs[@]+"${pargs[@]}"})"
+                    ps=$(python3 "$KEYS" projects "$prov" | xargs); if [ -n "$ps" ]; then info "   projects with their own key: $ps"; fi ;;
+            models) [ "$prov" = openrouter ] || die "usage: tropa gemini key|clear|status [--project NAME]"
+                    python3 "$TROPA_HOME/kit/.agent_sync/openrouter.py" list ;;
+            *) die "usage: tropa $prov key|clear|status [--project NAME]" ;;
+        esac ;;
+    claude-token) shift
+        TF="$HOME/.config/tropa/claude.token"
+        case "${1:-status}" in
+            set)    info "1) In another terminal run:  claude setup-token   (sign in; it prints a token valid for a year)"
+                    printf "2) Paste that token here, input hidden: "; read -rs k; echo
+                    [ -n "$k" ] || die "no token given"
+                    case "$k" in sk-ant-oat*) ;; *) info "⚠️  that doesn't look like a setup-token (sk-ant-oat…); saving anyway" ;; esac
+                    mkdir -p "$(dirname "$TF")" && (umask 077; printf '%s\n' "$k" > "$TF") && chmod 600 "$TF"
+                    info "✅ saved in ~/.config/tropa/claude.token. Restart Claude agents (tropa panel → 4) to use it." ;;
+            status) if [ -s "$TF" ]; then info "✅ Claude agents use the long-lived token in ~/.config/tropa/claude.token"
+                    else info "⏹  no token: Claude agents use your normal login (it can expire). Set one: tropa claude-token set"; fi ;;
+            clear)  rm -f "$TF" && info "🗑  removed; Claude agents fall back to your normal login after a restart" ;;
+            *) die "usage: tropa claude-token set|status|clear" ;;
+        esac ;;
+    design) shift
+        case "${1:-list}" in
+            list) echo "Design systems (tropa design use <id> [DIR]):"; python3 "$TROPA_HOME/host/design_systems.py" list ;;
+            show) python3 "$TROPA_HOME/host/design_systems.py" show "$2" ;;
+            use) [ -n "$2" ] || die "usage: tropa design use ID [DIR]"
+                 d=$(project_dir "${3:-.}") && python3 "$TROPA_HOME/host/design_systems.py" use "$2" "$d" &&
+                 echo "   Restart the team so agents pick it up (tropa panel → 3/4)." ;;
+            *) die "usage: tropa design list | show ID | use ID [DIR]" ;;
+        esac ;;
+    share) shift; cmd_share "$@" ;;
+    guardrails) shift
+        a="${1:-status}"; d=$(project_dir "${2:-.}") || exit 1; S="$d/.agent_sync"
+        case "$a" in
+            on)  C set guardrails true; guardrails_setup "$d"; python3 "$S/setup_agent.py" refresh >/dev/null 2>&1
+                 echo "🛡️  Guardrails on. Restart the team so agents pick it up (tropa panel → 3/4)." ;;
+            off) C set guardrails false; python3 "$S/secret_scan.py" uninstall "$d"; python3 "$S/setup_agent.py" refresh >/dev/null 2>&1
+                 echo "Guardrails off (the guardrails skill stays in .agents/skills; delete it if you don't want it)." ;;
+            scan) (cd "$d" && python3 "$S/secret_scan.py" --all) ;;
+            status) case "$(C get guardrails)" in False|false|0) echo "guardrails: off" ;; *) echo "guardrails: on" ;; esac
+                    h="$(git -C "$d" rev-parse --git-common-dir 2>/dev/null)"; case "$h" in /*) ;; ?*) h="$d/$h" ;; esac
+                    if [ -n "$h" ] && grep -q tropa:guardrails "$h/hooks/pre-commit" 2>/dev/null; then echo "pre-commit secret scan: installed"; else echo "pre-commit secret scan: not installed"; fi ;;
+            *) die "usage: tropa guardrails on|off|status|scan [DIR]" ;;
+        esac ;;
     models) shift; python3 "$TROPA_HOME/host/tropa_host.py" --list-models "${1:-all}" |
                 awk -F'|' '{ if ($1 != t) { t = $1; print "\n" t } printf "  %-34s %s\n", $2, $3 }' ;;
     install) shift; cmd_install "$@" ;;
@@ -339,7 +772,7 @@ case "${1:-help}" in
         if [ -d "$TROPA_HOME/.git" ]; then
             git -C "$TROPA_HOME" pull --ff-only && echo "✅ tropa $(cat "$TROPA_HOME/VERSION")"
         else
-            curl -fsSL "https://raw.githubusercontent.com/$TROPA_REPO/main/install.sh" | TROPA_REPO="$TROPA_REPO" bash
+            curl -fsSL "https://raw.githubusercontent.com/$TROPA_REPO/main/install.sh" | TROPA_REPO="$TROPA_REPO" TROPA_NO_START=1 bash
         fi
         echo "   Run 'tropa update' in each project to refresh its kit." ;;
     version|--version|-v) echo "tropa $VERSION — built by Mark Allan Meriales with Claude (Anthropic)" ;;

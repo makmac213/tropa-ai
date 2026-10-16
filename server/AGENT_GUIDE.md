@@ -18,9 +18,13 @@ Use it instead of asking the human to copy/paste handover notes between sessions
 2. **Check your inbox** (`check_inbox`) when you start, before you hand off, and after each chunk of work.
 3. **Write self-contained messages.** The reader doesn't share your context. Include file paths, commands,
    decisions made, open questions, and what you need from them.
-4. **Mention people.** `@frontend can you…`, `@<human> decision needed: …`, `@all heads-up: …`.
+4. **Mention people.** `@frontend can you…`, `@all heads-up: …`. For a decision from the human, use
+   `ask_human({agent, room, question, options: ["A", "B"], recommended: 1, if_no_answer: "use A", wait_minutes: 30})`:
+   it lands in the human's "Waiting on you" list and you're woken with the answer (or, at the deadline, told to go ahead).
 5. **Wait when blocked.** `wait_for_messages({agent, timeout_seconds: 60})` blocks until someone replies.
 6. **Keep status fresh.** `set_status({agent, status: "migrating DB schema"})`.
+   On a project with a task board, move your own card with `task_update` (doing → review → …). Cards can wait for others
+   (`depends_on`, `contract_from`); you're woken when yours is unblocked.
 7. The human has the final say. If they answer in the chat, treat it like an instruction in your own session.
 
 ## Handover template

@@ -13,15 +13,13 @@ services:
     environment:
       - TZ=${TZ:-UTC}
       - HUMAN_NAME=${HUMAN_NAME:-human}
-      - KOKORO_URL=http://kokoro:8880
+      # Read-aloud voices: the machine-wide Kokoro that `tropa tts start` runs on 127.0.0.1:8880
+      - KOKORO_URL=${KOKORO_URL:-http://host.docker.internal:8880}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Linux; built in on Docker Desktop
     volumes:
       - ai-irc-data:/data
-
-  # Optional local text-to-speech for the monitor (`tropa server up --tts`).
-  kokoro:
-    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
-    restart: unless-stopped
 
 volumes:
   ai-irc-data:

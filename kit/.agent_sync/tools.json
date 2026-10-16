@@ -1,0 +1,42 @@
+{
+  "_comment": "Optional tools a project can give its agents. Each is an official hosted MCP server. Add more entries in the same shape. url params: {key} placeholders are filled from the project's settings (tools[].params); empty ones are dropped.",
+  "tools": [
+    {
+      "id": "vercel",
+      "name": "Vercel",
+      "summary": "Deployments, build logs, projects, docs and Web Analytics.",
+      "url": "https://mcp.vercel.com",
+      "query": {},
+      "token_env": "",
+      "params": [],
+      "docs": "https://vercel.com/docs/agent-resources/vercel-mcp",
+      "rules": "Use it to check deployments, read build and runtime logs, and look up Vercel docs. Preview deployments are fine. Never promote to production, change domains, env vars or project settings, or delete anything without @{human}'s explicit OK in the room."
+    },
+    {
+      "id": "supabase",
+      "name": "Supabase",
+      "summary": "Postgres database, schema, SQL, edge functions, branches and docs.",
+      "url": "https://mcp.supabase.com/mcp",
+      "query": {"project_ref": "{project_ref}", "read_only": "{read_only}", "features": "{features}"},
+      "token_env": "SUPABASE_ACCESS_TOKEN",
+      "params": [
+        {"key": "project_ref", "label": "Project ref", "hint": "scopes it to one project (recommended): Project Settings → General", "default": ""},
+        {"key": "read_only", "label": "Read-only", "type": "bool", "default": true, "hint": "queries run as a read-only Postgres user"},
+        {"key": "features", "label": "Tool groups", "default": "docs,database,debugging,development,functions,branching", "hint": "comma-separated; leave as is unless you know you need fewer"}
+      ],
+      "docs": "https://supabase.com/docs/guides/getting-started/mcp",
+      "rules": "Prefer a Supabase branch (not production) for schema changes. Applying migrations, writing to production data, or turning off read-only needs @{human}'s explicit OK. Never paste secrets or personal data into the chat."
+    },
+    {
+      "id": "render",
+      "name": "Render",
+      "summary": "Services, deploys, logs, metrics and read-only SQL on Render Postgres.",
+      "url": "https://mcp.render.com/mcp",
+      "query": {},
+      "token_env": "RENDER_API_KEY",
+      "params": [],
+      "docs": "https://render.com/docs/mcp-server",
+      "rules": "Use it to inspect services, deploys, logs and metrics. Creating services or databases, triggering deploys, or changing environment variables needs @{human}'s explicit OK."
+    }
+  ]
+}

@@ -16,12 +16,21 @@ DEFAULTS = {
     "tmux_session": "ai-team", "tropa_home": "", "wake": "auto", "wake_rules": "smart",
     "max_wakes_per_agent_per_hour": 0, "history_limit": 20,
     "debounce_seconds": 2, "cooldown_seconds": 20, "docs_dir": "docs",
+    "git_workflow": "worktrees", "worktrees_dir": ".worktrees", "tools": [], "default_skills": True, "design_system": "", "guardrails": True,
+    "auto_approve": False, "ollama_url": "", "resume_sessions": True, "claude_feedback_survey": False, "claude_env": {}, "auto_plan": True,
+    # "needs attention" limits in minutes (0 = off): quiet in Doing, waiting in Review, on approval, Blocked, idle with ready work
+    "attention": {"doing_quiet": 15, "review_wait": 45, "approval_wait": 5, "blocked_wait": 60, "idle_ready": 20},
+    "auto_approve_flags": {"claude": "--dangerously-skip-permissions", "codex": "--dangerously-bypass-approvals-and-sandbox", "qwen": "--yolo", "opencode": "",
+                           "gemini": "--approval-mode yolo"},
     "tool_flags": {"claude": "--permission-mode auto", "opencode": "", "qwen": "--approval-mode auto-edit",
-                   "codex": "--sandbox workspace-write --ask-for-approval on-request"},
+                   "codex": "--sandbox workspace-write --ask-for-approval on-request", "gemini": "--approval-mode auto_edit"},
     "approval_patterns": [],
+    # CLI pop-ups the watcher clears by itself: {label, tool (omit = any CLI), pattern (regex on the bottom of the screen), keys}
+    "dismiss_prompts": [{"label": "Claude feedback survey", "tool": "claude", "pattern": "1: Bad\\s+2: Fine\\s+3: Good\\s+0: Dismiss", "keys": ["0"]}],
     "claude_allow": [],
     "approval_keys": {"claude": {"yes": ["1"], "always": ["2"], "no": ["Escape"]},
                       "qwen": {"yes": ["1"], "always": ["2"], "no": ["Escape"]},
+                      "gemini": {"yes": ["1"], "always": ["2"], "no": ["Escape"]},
                       "opencode": {"yes": ["Enter"], "always": ["Right", "Enter"], "no": ["Escape"]},
                       "codex": {"yes": ["Enter"], "always": ["Down", "Enter"], "no": ["Escape"]}},
 }
@@ -46,6 +55,7 @@ def load():
     except FileNotFoundError:
         pass
     data["tool_flags"] = {**DEFAULTS["tool_flags"], **data.get("tool_flags", {})}
+    data["auto_approve_flags"] = {**DEFAULTS["auto_approve_flags"], **data.get("auto_approve_flags", {})}
     data["approval_keys"] = {**DEFAULTS["approval_keys"], **data.get("approval_keys", {})}
     if not data["human"]:
         data["human"] = default_human()

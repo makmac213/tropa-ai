@@ -4,6 +4,8 @@
 The chat server can't touch your disk (it runs in Docker). This helper long-polls it for
 jobs and does the machine-side work with tropa's own scripts:
 
+  share / unshare: run or stop `ngrok http PORT` for a public link (optional; needs ngrok).
+
   create_project: make <projects_dir>/<folder>, run `tropa init`, write docs/SPEC.md from the
   brief, copy the attached files into docs/attachments/, create the agents, start them and
   the watcher in tmux, then post the kickoff message. Progress is posted to the room.
@@ -13,16 +15,58 @@ runs tropa's scripts; it never runs commands sent by the server.
 
   tropa_host.py --server http://localhost:8181 [--projects-dir ~/projects]
 """
-import argparse, json, os, re, shutil, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
+import argparse, glob, json, os, re, shutil, signal, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 
 TROPA_HOME = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TROPA = os.path.join(TROPA_HOME, "tropa")
 VERSION = open(os.path.join(TROPA_HOME, "VERSION")).read().strip() if os.path.exists(os.path.join(TROPA_HOME, "VERSION")) else "dev"
-CLIS = ["claude", "opencode", "qwen", "codex"]
+CLIS = ["claude", "opencode", "qwen", "codex", "gemini"]
 
 
 def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
+
+
+def git_version():
+    """'git version 2.x' if git is installed and works (macOS ships a stub that only opens an installer), else ''."""
+    try:
+        r = subprocess.run(["git", "--version"], capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return ""
+
+
+def git_hint():
+    if sys.platform == "darwin":
+        return "xcode-select --install, or brew install git"
+    for pm, cmd in (("apt-get", "sudo apt-get install -y git"), ("dnf", "sudo dnf install -y git"), ("pacman", "sudo pacman -S git"),
+                    ("zypper", "sudo zypper install -y git"), ("apk", "sudo apk add git")):
+        if shutil.which(pm):
+            return cmd
+    return "https://git-scm.com/downloads"
+
+
+def design_catalog():
+    """Design systems from <tropa>/design-systems/*.md (front matter drives the chat's preview)."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import design_systems
+        return [{k: v for k, v in d.items() if k != "file"} for d in design_systems.catalog()]
+    except Exception as e:
+        log(f"design systems: {e}")
+        return []
+
+
+def tools_catalog():
+    """The optional tools (hosted MCP servers) a project can enable, from the kit's tools.json."""
+    try:
+        with open(os.path.join(TROPA_HOME, "kit", ".agent_sync", "tools.json")) as f:
+            tools = json.load(f).get("tools", [])
+    except (OSError, ValueError):
+        return []
+    return [{"id": t["id"], "name": t.get("name", t["id"]), "summary": t.get("summary", ""), "docs": t.get("docs", ""),
+             "params": t.get("params", []), "token_env": t.get("token_env", ""),
+             "token_set": bool(t.get("token_env") and os.environ.get(t["token_env"]))} for t in tools]
 
 
 def slugify(s):
@@ -33,6 +77,171 @@ def _get_json(url, headers, timeout=8):
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode() or "null")
+
+
+def opencode_bin():
+    """the opencode binary: PATH first, then where its installers put it (often not on a service's PATH)."""
+    found = shutil.which("opencode")
+    if found:
+        return found
+    home = os.path.expanduser("~")
+    for c in (f"{home}/.opencode/bin/opencode", f"{home}/.local/bin/opencode", f"{home}/.bun/bin/opencode",
+              "/opt/homebrew/bin/opencode", "/usr/local/bin/opencode"):
+        if os.path.isfile(c) and os.access(c, os.X_OK):
+            return c
+    return None
+
+
+def _openrouter():
+    sys.path.insert(0, os.path.join(TROPA_HOME, "kit", ".agent_sync"))
+    import openrouter
+    return openrouter
+
+
+def openrouter_ready():
+    try:
+        return bool(_openrouter().key())
+    except Exception:
+        return False
+
+
+OR_ERROR = ""   # why the last OpenRouter model lookup failed (shown in the monitor)
+
+
+def openrouter_status():
+    """What the monitor shows in ⚙ Settings → OpenRouter (never the key itself)."""
+    try:
+        o = _openrouter()
+        return {"ready": bool(o.key()), "source": o.source(), "masked": o.masked(), "error": OR_ERROR if o.key() else ""}
+    except Exception as e:
+        return {"ready": False, "source": "", "masked": "", "error": str(e)}
+
+
+def _keys():
+    sys.path.insert(0, os.path.join(TROPA_HOME, "kit", ".agent_sync"))
+    import keys
+    return keys
+
+
+def keys_status():
+    """API keys for the monitor (never the keys themselves): global status per provider, and projects with their own key."""
+    try:
+        k = _keys()
+        out = {p: k.status(p) for p in k.PROVIDERS}
+        if "openrouter" in out:
+            out["openrouter"]["error"] = OR_ERROR if out["openrouter"]["ready"] else ""
+        projects = {}
+        for p in k.PROVIDERS:
+            for slug in k.projects(p):
+                projects.setdefault(slug, {})[p] = k.masked(k.get(p, slug)[0])
+        out["projects"] = projects
+        return out
+    except Exception as e:
+        log(f"keys: {e}")
+        return {}
+
+
+_CLAUDE = {"at": 0, "info": {}}
+
+
+def claude_status():
+    """Is Claude Code installed here (it runs the "New project" setup chat)? Cached for a minute."""
+    if time.time() - _CLAUDE["at"] < 60:
+        return _CLAUDE["info"]
+    exe, ver = shutil.which("claude"), ""
+    if exe:
+        try:
+            ver = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL).stdout.strip().split("\n")[0][:60]
+        except Exception:
+            pass
+    _CLAUDE.update(at=time.time(), info={"installed": bool(exe), "version": ver, "chat": True, "signed_in": claude_signed_in() if exe else False})
+    return _CLAUDE["info"]
+
+
+def claude_signed_in():
+    """Best guess whether Claude Code has a login (never reads the secret itself)."""
+    if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY"):
+        return True
+    home = os.path.expanduser("~")
+    if os.path.isfile(os.path.join(home, ".config", "tropa", "claude.token")) or os.path.isfile(os.path.join(home, ".claude", ".credentials.json")):
+        return True
+    if sys.platform == "darwin" and shutil.which("security"):   # macOS keeps it in the login keychain
+        try:
+            return subprocess.run(["security", "find-generic-password", "-s", "Claude Code-credentials"], capture_output=True,
+                                  timeout=10, stdin=subprocess.DEVNULL).returncode == 0
+        except Exception:
+            return False
+    return False
+
+
+CHAT_SYSTEM = """You are the project-setup assistant of TropaAI, a tool that runs a team of AI coding/research agents
+(each one a CLI in its own tmux window) that talk in a shared chat room with their human, {human}.
+Your job: turn the human's description into a project plan. Ask at most one or two short questions when something
+important is missing (what to build or research, a new folder or an existing one), otherwise propose a plan right away.
+Revise the plan whenever the human asks for changes. Keep replies short and friendly. Never invent facts about the
+human's work.
+
+What you can choose from on this computer (use ONLY these):
+{context}
+
+Team guidance:
+- Default to Claude Code agents (tool "claude"; models "sonnet", "opus", "haiku" or a listed id) unless the human asks
+  for another CLI or model. Use another CLI only if it is in "clis".
+- One lead (plans, assigns, reviews, merges or writes the final result) plus 1-4 others with clear, different jobs.
+  Software: e.g. lead, backend, frontend, qa. Research: e.g. lead, researchers split by topic or region, a fact-checker.
+- Agent names: short, lowercase, letters/digits/hyphens, unique (e.g. "lead", "researcher-eu", "qa").
+- Free models (ending in -free, big-pickle) are rate-limited: spread agents across different ones.
+- design_system only for apps with a UI, and only an id from the list (else ""). tools only ids from the list.
+- folder: a short lowercase slug for a new folder in {projects_dir}. For an existing folder set "path" (e.g.
+  "~/work/app" or a name from "folders" as "{projects_dir}/<name>") and leave folder "".
+- brief: a complete markdown brief for the team, written from the conversation (goal, scope, deliverables,
+  constraints, definition of done). kickoff: one short message to the lead to start.
+
+Answer with ONE JSON object and nothing else:
+{{"reply": "what you say to the human (markdown ok)",
+  "plan": null or {{"name": "Project name", "folder": "slug", "path": "", "brief": "markdown",
+    "lead": "lead", "agents": [{{"name": "lead", "tool": "claude", "model": "sonnet", "role": "one line"}}],
+    "design_system": "", "tools": [], "auto_approve": false, "kickoff": "message to the lead",
+    "settings": {{"team_growth": "ask", "auto_agents_per_hour": 2, "team_shrink": "auto"}}}}}}
+Put a plan in every answer once you have one (the latest plan wins), with "reply" summarising it in 1-3 sentences."""
+
+
+def opencode_model_ids():
+    """provider/model ids from `opencode models`, whatever its output looks like: one id per line (1.x),
+    a table or JSON (2.x). Tries --json first, then plain output; strips colours."""
+    ids = set()
+    exe = opencode_bin()
+    if not exe:
+        return ids
+    for args in ([exe, "models", "--json"], [exe, "models"]):
+        try:
+            r = subprocess.run(args, capture_output=True, text=True, timeout=40, stdin=subprocess.DEVNULL)
+        except Exception:
+            continue
+        out = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", (r.stdout or "") + "\n" + (r.stderr or ""))
+        try:   # JSON: a list of ids, of {"id"/"providerID"/"modelID"} objects, or {provider: [models]}
+            data = json.loads(r.stdout)
+            def walk(x, prov=None):
+                if isinstance(x, str) and re.fullmatch(r"[\w.-]+/[\w.:@/-]+", x):
+                    ids.add(x)
+                elif isinstance(x, dict):
+                    p, m = x.get("providerID") or x.get("provider"), x.get("modelID") or x.get("id")
+                    if isinstance(p, str) and isinstance(m, str):
+                        ids.add(m if "/" in m else f"{p}/{m}")
+                    for k, v in x.items():
+                        walk(v, k if isinstance(v, (list, dict)) else prov)
+                elif isinstance(x, list):
+                    for v in x:
+                        walk(v, prov)
+            walk(data)
+        except ValueError:
+            for line in out.splitlines():
+                m = re.search(r"(?<![\w/.-])([a-z0-9][\w.-]*/[\w.:@-]*[\w])(?![\w/])", line.strip())
+                if m and not re.match(r"^(https?|www)", m.group(1)) and "/" in m.group(1):
+                    ids.add(m.group(1))
+        if ids:
+            break
+    return {i for i in ids if not i.startswith(("usr/", "home/", "users/", "tmp/"))}
 
 
 def discover_models():
@@ -103,13 +312,48 @@ def discover_models():
         except Exception as e:
             log(f"{base}/models: {e}")
 
+    # 4b) Gemini CLI: the models your Gemini API key can use (aliases come from models.conf)
+    try:
+        k = _keys()
+        gk = k.get("gemini")[0] or next((k.get("gemini", p)[0] for p in k.projects("gemini")), "")   # global key, else a project's
+        if gk:
+            for m in _keys().gemini_models(gk):
+                add("gemini", m["id"], m["label"])
+    except Exception as e:
+        log(f"Gemini models API: {e}")
+
+    # 6) Ollama: local models that can call tools (agents need tools to use the room), as "ollama/<name>"
+    try:
+        sys.path.insert(0, os.path.join(TROPA_HOME, "kit", ".agent_sync"))
+        import ollama_local
+        info = ollama_local.models()
+        for m in info["models"]:
+            label = f"local Ollama · {m['size']}" + ("" if m["tools"] else " · no tool calling, won't work")
+            if not m["tools"]:
+                continue
+            for tool in ("codex", "opencode", "qwen") + (("claude",) if info["claude_ok"] else ()):
+                add(tool, "ollama/" + m["name"], label)
+    except Exception as e:
+        log(f"Ollama: {e}")
+
+    # 7) OpenRouter: tool-capable models for every CLI, as "openrouter/<author>/<slug>" (only once a key is set)
+    global OR_ERROR
+    try:
+        openrouter = _openrouter()
+        if openrouter.key("") or _keys().projects("openrouter"):   # the list itself is public; show it once any key is set
+            for m in openrouter.models():
+                for tool in (c for c in CLIS if c != "gemini"):   # Gemini CLI only talks to Google's API
+                    add(tool, "openrouter/" + m["id"], m["label"])
+        OR_ERROR = ""
+    except Exception as e:
+        OR_ERROR = f"couldn't load OpenRouter's model list: {getattr(e, 'reason', e)}"
+        log(f"OpenRouter: {e}")
+
     # 5) OpenCode: its own live list (provider/model, already versioned)
-    if shutil.which("opencode"):
+    if opencode_bin():
         try:
-            r = subprocess.run(["opencode", "models"], capture_output=True, text=True, timeout=25, stdin=subprocess.DEVNULL)
-            for l in sorted(set(r.stdout.splitlines())):
-                if "/" in l and " " not in l.strip():
-                    add("opencode", l.strip())
+            for l in sorted(opencode_model_ids()):
+                add("opencode", l)
         except Exception as e:
             log(f"opencode models: {e}")
     return out
@@ -125,12 +369,100 @@ class Host:
           codex    ~/.codex/config.toml `model`, OpenAI models API (OPENAI_API_KEY)
           qwen     ~/.qwen/settings.json model, OPENAI_BASE_URL /models (OPENAI_API_KEY / DASHSCOPE_API_KEY)
           opencode `opencode models` (provider/model ids)
+          gemini   Gemini API models list (a global Gemini API key), plus the aliases in models.conf
         """
         now = time.time()
-        if getattr(self, "_models_at", 0) > now - 600:
+        k = _keys()
+        fp = hash((k.get("openrouter")[0], k.get("gemini")[0], tuple(k.projects("openrouter")), tuple(k.projects("gemini"))))   # a new or removed key refreshes the list now
+        fresh = 60 if OR_ERROR else 600                              # retry a failed OpenRouter lookup sooner
+        if getattr(self, "_models_at", 0) > now - fresh and getattr(self, "_or_fp", None) == fp:
             return self._models
-        self._models, self._models_at = discover_models(), now
+        self._models, self._models_at, self._or_fp = discover_models(), now, fp
         return self._models
+
+    def openrouter_job(self, job):
+        """Save (after checking it with OpenRouter) or remove the OpenRouter key sent from the monitor."""
+        o = _openrouter()
+        res = {"ok": True}
+        try:
+            if job.get("clear"):
+                o.clear_key()
+                log("OpenRouter key removed (from the chat)")
+            else:
+                k = str(job.get("key") or "").strip()
+                o.check_key(k)
+                o.set_key(k)
+                log(f"OpenRouter key saved (from the chat): {o.masked(k)}")
+            self._models_at = 0
+            self.models()
+            res["models"] = sum(1 for m in self._models.get("claude", []) if m["id"].startswith("openrouter/"))
+        except ValueError as e:
+            res = {"ok": False, "error": str(e)}
+        except Exception as e:
+            res = {"ok": False, "error": f"couldn't save the key: {e}"}
+        res.update({k: v for k, v in openrouter_status().items() if k != "error" or not res.get("error")})
+        try:
+            self.http(f"/host/secret/{job['id']}", res)
+        except Exception as e:
+            log(f"could not answer the chat: {e}")
+
+    def key_job(self, job):
+        """Save (after checking it with the provider) or remove an API key sent from the monitor: global or for one project."""
+        k = _keys()
+        prov, proj = job.get("provider") or "openrouter", job.get("project") or None
+        res = {"ok": True}
+        try:
+            if prov not in k.PROVIDERS:
+                raise ValueError(f"unknown provider {prov}")
+            where = f" for project {slugify(proj)}" if proj else ""
+            if job.get("clear"):
+                k.clear(prov, slugify(proj) if proj else None)
+                log(f"{k.PROVIDERS[prov]['name']} key removed{where} (from the chat)")
+            else:
+                key = str(job.get("key") or "").strip()
+                res["note"] = k.check(prov, key)
+                k.set_key(prov, key, slugify(proj) if proj else None)
+                log(f"{k.PROVIDERS[prov]['name']} key saved{where} (from the chat): {k.masked(key)}")
+                if proj:
+                    root = self.project_root(slugify(proj))
+                    if root:   # .gemini/settings.json switches to API-key auth on the next start
+                        self.run([sys.executable, os.path.join(root, ".agent_sync", "setup_agent.py"), "refresh"], check=False)
+            self._models_at = 0
+            self.models()
+            if prov == "openrouter":
+                res["models"] = sum(1 for m in self._models.get("claude", []) if m["id"].startswith("openrouter/"))
+            else:
+                res["models"] = sum(1 for m in self._models.get("gemini", []) if "your API key" in m.get("label", ""))
+        except ValueError as e:
+            res = {"ok": False, "error": str(e)}
+        except Exception as e:
+            res = {"ok": False, "error": f"couldn't save the key: {e}"}
+        st = k.status(prov, slugify(proj) if proj else None)
+        res.update({"ready": st["ready"], "source": st["source"], "masked": st["masked"]})
+        try:
+            self.http(f"/host/secret/{job['id']}", res)
+        except Exception as e:
+            log(f"could not answer the chat: {e}")
+
+    def trust_gemini(self, root):
+        """Trust the project in ~/.gemini/trustedFolders.json, so Gemini CLI uses each agent's .gemini/settings.json
+        (in an untrusted folder it ignores them, and the tropa tool with them)."""
+        p = os.path.expanduser("~/.gemini/trustedFolders.json")
+        try:
+            d = json.load(open(p)) if os.path.exists(p) else {}
+            real = os.path.realpath(root)
+            if d.get(real) == "TRUST_FOLDER":
+                return
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            if os.path.exists(p):
+                shutil.copy(p, p + ".bak-tropa")
+            d[real] = "TRUST_FOLDER"
+            tmp = p + ".tmp-tropa"
+            with open(tmp, "w") as f:
+                json.dump(d, f, indent=2)
+            os.replace(tmp, p)
+        except Exception as e:
+            log(f"could not pre-trust the Gemini folder: {e}")
 
     def folders(self):
         """Top-level folders in projects_dir that the chat may adopt as existing projects."""
@@ -158,10 +490,133 @@ class Host:
         self._folders, self._folders_at = out, now
         return out
 
+    # ---------- projects outside the projects folder ----------
+    SKIP_HOME = {"Library", "Applications", "Pictures", "Music", "Movies", "Public", "node_modules", "snap", "go", "flutter", "VirtualBox VMs"}
+
+    def allowed_roots(self):
+        """Folders the chat may adopt projects from: your home (and TROPA_PROJECT_ROOTS, ':'-separated)."""
+        roots = [os.path.realpath(os.path.expanduser("~"))]
+        for r in os.environ.get("TROPA_PROJECT_ROOTS", "").split(os.pathsep):
+            if r.strip():
+                roots.append(os.path.realpath(os.path.expanduser(r.strip())))
+        return roots
+
+    def check_path(self, path):
+        """Resolve a folder the human typed or picked, and refuse anything that isn't a normal project folder."""
+        p = os.path.realpath(os.path.expanduser(str(path or "").strip()))
+        home = os.path.realpath(os.path.expanduser("~"))
+        if not str(path or "").strip() or not os.path.isabs(os.path.expanduser(str(path).strip())):
+            raise RuntimeError("give the folder's full path, e.g. ~/work/my-app")
+        if not os.path.isdir(p):
+            raise RuntimeError(f"{p} isn't a folder on this machine")
+        root = next((r for r in self.allowed_roots() if p == r or p.startswith(r + os.sep)), None)
+        if not root:
+            raise RuntimeError(f"{p} is outside your home folder; to allow it, add its parent to TROPA_PROJECT_ROOTS and restart the host helper")
+        if p in (home, root, self.projects_dir) or p == "/":
+            raise RuntimeError(f"{p} is a whole folder of folders, not a project; pick the project folder inside it")
+        rel = os.path.relpath(p, root).split(os.sep)
+        if any(x.startswith(".") for x in rel) or (root == home and rel[0] in self.SKIP_HOME):
+            raise RuntimeError(f"{p} is a hidden or system folder; tropa won't set up a team there")
+        return p
+
+    def elsewhere(self):
+        """Git repos (and tropa projects) under your home, outside the projects folder: offered as existing projects."""
+        now = time.time()
+        if getattr(self, "_elsewhere_at", 0) > now - 300:
+            return self._elsewhere
+        out, seen, deadline = [], set(), now + 2.5
+        reg = self.registry()
+        for path in reg.values():
+            if os.path.isdir(path):
+                seen.add(path)
+        def walk(d, depth):
+            if time.time() > deadline or len(seen) > 200:
+                return
+            try:
+                entries = sorted(os.scandir(d), key=lambda e: e.name.lower())
+            except OSError:
+                return
+            for e in entries:
+                if not e.is_dir(follow_symlinks=False) or e.name.startswith(".") or e.name in self.SKIP_HOME:
+                    continue
+                p = os.path.realpath(e.path)
+                if p == self.projects_dir:
+                    continue
+                if os.path.isdir(os.path.join(p, ".git")) or os.path.isdir(os.path.join(p, ".agent_sync")):
+                    seen.add(p)
+                elif depth < 3:
+                    walk(p, depth + 1)
+        for r in self.allowed_roots():
+            walk(r, 1)
+        home = os.path.realpath(os.path.expanduser("~"))
+        for p in sorted(seen, key=str.lower)[:200]:
+            if os.path.dirname(p) == self.projects_dir:
+                continue
+            kit = os.path.exists(os.path.join(p, ".agent_sync", "config.py"))
+            slug = ""
+            if kit:
+                try:
+                    slug = json.load(open(os.path.join(p, ".agent_sync", "settings.json"))).get("project") or ""
+                except Exception:
+                    pass
+            out.append({"name": os.path.basename(p), "path": p, "display": "~" + p[len(home):] if p.startswith(home + os.sep) else p,
+                        "kit": kit, "git": os.path.isdir(os.path.join(p, ".git")), "slug": slugify(slug or os.path.basename(p))})
+        self._elsewhere, self._elsewhere_at = out, now
+        return out
+
+    def registry(self):
+        """slug -> folder of projects this helper set up (so add-agent / delete find them wherever they are)."""
+        try:
+            return json.load(open(os.path.expanduser(f"~/.tropa/projects-{self.port}.json")))
+        except (OSError, ValueError):
+            return {}
+
+    def remember(self, slug, root):
+        reg = self.registry(); reg[slug] = root
+        try:
+            os.makedirs(os.path.expanduser("~/.tropa"), exist_ok=True)
+            json.dump(reg, open(os.path.expanduser(f"~/.tropa/projects-{self.port}.json"), "w"), indent=1)
+        except OSError as e:
+            log(f"could not save the project list: {e}")
+
     def __init__(self, server, projects_dir):
         self.server = server.rstrip("/")
         self.projects_dir = os.path.realpath(os.path.expanduser(projects_dir))
         self.port = urllib.parse.urlparse(self.server).port or 80
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import shares
+        self.ngrok_info = shares.ngrok_info
+        self.shares = shares.Shares(self.port, self.report_share, log)
+        self.usage_on = os.environ.get("TROPA_USAGE", "1") != "0"
+        self.usage_at, self.usage_sent, self.usage_busy = 0, None, False
+
+    def usage_tick(self, every=int(os.environ.get("TROPA_USAGE_INTERVAL", "60"))):
+        """Every minute, read new lines from the CLIs' logs in the background and send changed totals."""
+        if not self.usage_on or self.usage_busy or time.time() - self.usage_at < every:
+            return
+        self.usage_busy, self.usage_at = True, time.time()
+        def work():
+            try:
+                import usage
+                c = usage.Collector(os.path.expanduser(f"~/.tropa/usage-{self.port}.json"))
+                c.scan()
+                rows = c.rows()
+                sig = json.dumps(rows, sort_keys=True)
+                if sig != self.usage_sent:
+                    as_of = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prices.json"))).get("_as_of", "")
+                    self.http("/host/usage", {"rows": rows, "prices_as_of": as_of}, timeout=60)
+                    self.usage_sent = sig
+            except Exception as e:
+                log(f"usage: {e}")
+            finally:
+                self.usage_busy = False
+        threading.Thread(target=work, daemon=True).start()
+
+    def report_share(self, sid, status, **extra):
+        try:
+            self.http(f"/host/shares/{sid}", {"status": status, **{k: v for k, v in extra.items() if v}})
+        except Exception as e:
+            log(f"could not report share #{sid}: {e}")
 
     def http(self, path, body=None, timeout=15, method=None):
         req = urllib.request.Request(self.server + "/api" + path,
@@ -204,19 +659,33 @@ class Host:
     # ---------- create_project ----------
     def create_project(self, job):
         folder = job["folder"]
-        if not re.fullmatch(r"[A-Za-z0-9._-]{1,60}", folder) or set(folder) == {"."}:
-            raise RuntimeError("invalid folder name")
-        root = os.path.join(self.projects_dir, folder)
         existing = bool(job.get("existing"))
+        if job.get("path"):            # an existing project anywhere in your home folder
+            root, existing = self.check_path(job["path"]), True
+        else:
+            if not re.fullmatch(r"[A-Za-z0-9._-]{1,60}", folder) or set(folder) == {"."}:
+                raise RuntimeError("invalid folder name")
+            root = os.path.join(self.projects_dir, folder)
         if existing:
             if not os.path.isdir(root):
                 raise RuntimeError(f"{root} doesn't exist")
         elif os.path.exists(root) and os.listdir(root) and not os.path.exists(os.path.join(root, ".agent_sync")):
             raise RuntimeError(f"{root} already exists and isn't empty — pick another folder name, or choose it as an existing folder")
         os.makedirs(self.projects_dir, exist_ok=True)
-        self._folders_at = 0
+        self._folders_at = 0; self._elsewhere_at = 0
+        self.remember(job["slug"], root)
         self.report(job, f"📁 {'Adding the team kit to' if existing else 'Setting up'} `{root}` …", status="running", folder=root)
 
+        # new projects start as a git repo on `main`, so developers can work on branches/worktrees
+        if job.get("git", True) and not existing and not os.path.isdir(os.path.join(root, ".git")):
+            if git_version():
+                os.makedirs(root, exist_ok=True)
+                if self.run(["git", "init", "-q", "-b", "main", root], check=False).returncode != 0:
+                    self.run(["git", "init", "-q", root], check=False)
+                    self.run(["git", "-C", root, "symbolic-ref", "HEAD", "refs/heads/main"], check=False)
+            else:
+                self.report(job, f"⚠️ git isn't installed on this machine, so the project isn't a git repo and the team can't use branches/worktrees. "
+                                 f"Install it ({git_hint()}), then run `git -C {root} init -b main`, commit, and `tropa update {root}`.")
         r = self.run([TROPA, "init", "-p", str(self.port), "-n", job["slug"], root])
         room = self.cfg(root, "room")
         if room != job["room_id"]:
@@ -254,6 +723,7 @@ class Host:
 
         agents = job.get("agents") or []
         if not agents:
+            self.initial_commit(job, root, existing)
             self.report(job, f"✅ Project ready at `{root}`. No agents yet — add them with `tropa panel {root}`.", status="done")
             return
 
@@ -265,6 +735,17 @@ class Host:
             helptext = self.run(["claude", "--help"], check=False).stdout
             self.setc(root, "tool_flags.claude", "--permission-mode auto" if '"auto"' in helptext else "--permission-mode acceptEdits")
 
+        if job.get("auto_approve"):
+            self.setc(root, "auto_approve", True)
+            self.report(job, "⚡ Auto-approve is on: agents run without permission prompts.")
+        if job.get("design_system"):
+            import design_systems
+            self.report(job, "🎨 Design system: " + design_systems.use(job["design_system"], root) + ".")
+        if job.get("tools"):
+            self.setc(root, "tools", job["tools"])
+            names = {t["id"]: t["name"] for t in tools_catalog()}
+            self.report(job, "🧰 Tools: " + ", ".join(f"{names.get(t['id'], t['id'])} → {'everyone' if t['agents'] == '*' else ', '.join('@' + n for n in t['agents'])}"
+                                                     for t in job["tools"]) + ". Each needs a one-time sign-in in the agent's terminal unless its token is set — see the agent's instructions.")
         setup = os.path.join(root, ".agent_sync", "setup_agent.py")
         for a in agents:
             role = a.get("role") or f"{a['name']} on {job['name']}"
@@ -279,14 +760,25 @@ class Host:
             self.run(args)
         if job.get("lead"):
             self.setc(root, "lead", job["lead"])
+        for prov, key in (job.get("keys") or {}).items():   # this project's own API keys (saved outside the folder)
+            try:
+                k = _keys()
+                k.check(prov, key)
+                k.set_key(prov, key, job["slug"])
+                self.report(job, f"🔑 Saved this project's own {k.PROVIDERS[prov]['name']} key ({k.masked(key)}) in `~/.config/tropa/keys/{job['slug']}/`, outside the project folder.")
+            except Exception as e:
+                self.report(job, f"⚠️ Didn't save the {prov} key: {e}. Agents use your global key or sign-in instead; set it later in 🔑 Keys.")
         self.run([sys.executable, setup, "refresh"])
         lead = f" — lead: @{job['lead']}" if job.get("lead") else ""
         self.report(job, "🤖 Created agents: " + ", ".join(f"@{a['name']} ({a['tool']}{' · ' + a['model'] if a.get('model') else ''})" for a in agents) + lead + ".")
 
+        self.initial_commit(job, root, existing)
         if job.get("trust") and "claude" in tools:
             self.trust_claude(root, [a["name"] for a in agents if a["tool"] == "claude"])
         if job.get("trust") and "codex" in tools:
             self.trust_codex(root)
+        if job.get("trust") and "gemini" in tools:
+            self.trust_gemini(root)
 
         if not job.get("start"):
             self.report(job, f"✅ Project ready at `{root}`. Start the team with `tropa panel {root}` (option 3).", status="done")
@@ -294,10 +786,7 @@ class Host:
 
         session = self.cfg(root, "tmux_session")
         self.run([os.path.join(root, ".agent_sync", "start_agent.sh"), "--all"])
-        have = self.run(["tmux", "list-windows", "-t", session, "-F", "#{window_name}"], check=False).stdout.split()
-        if "watcher" not in have:
-            self.run(["tmux", "new-window", "-d", "-t", session, "-n", "watcher", "-c", root,
-                      f"python3 {os.path.join(root, '.agent_sync', 'room_watcher.py')}; read -p 'watcher stopped — Enter to close'"])
+        self.ensure_watcher(root, session)
         self.report(job, f"🚀 Team started in tmux session `{session}` — open **▦ Team** to watch them.")
 
         # wait for the watcher, give the CLIs time to boot and register, then kick off
@@ -314,6 +803,16 @@ class Host:
             time.sleep(25)
             self.http(f"/rooms/{q}/messages", {"sender": job.get("human") or "human", "sender_kind": "human", "content": kickoff})
         self.report(job, f"✅ Project ready at `{root}`." + (" Kickoff sent." if kickoff else " Say hi to the team when you're ready."), status="done")
+
+    def initial_commit(self, job, root, existing):
+        if existing or not os.path.isdir(os.path.join(root, ".git")):
+            return
+        human = job.get("human") or "human"
+        self.run(["git", "-C", root, "add", "-A"], check=False)
+        c = self.run(["git", "-C", root, "-c", f"user.name={human}", "-c", f"user.email={human.lower()}@tropa.local",
+                      "commit", "-q", "-m", f"Start {job['name']}: brief, attachments and team kit"], check=False)
+        if c.returncode == 0:
+            self.report(job, "🌿 Git repo on `main` with a first commit — developers work on branches (worktrees when several work at once); the lead reviews, QA tests, the lead merges.")
 
     def trust_claude(self, root, names):
         p = os.path.expanduser("~/.claude.json")
@@ -348,6 +847,187 @@ class Host:
         except Exception as e:
             log(f"could not pre-trust the Codex project: {e}")
 
+    # ---------- add_agent: a new teammate for a running project ----------
+    def project_root(self, slug):
+        """The folder of the project whose room is project:<slug> (projects this helper set up, then the projects folder)."""
+        r = self.registry().get(slug)
+        if r and os.path.isfile(os.path.join(r, ".agent_sync", "settings.json")):
+            return r
+        for d in sorted(glob.glob(os.path.join(self.projects_dir, "*", ".agent_sync", "settings.json"))):
+            root = os.path.dirname(os.path.dirname(d))
+            try:
+                st = json.load(open(d))
+            except (OSError, ValueError):
+                continue
+            if slugify(st.get("project") or os.path.basename(root)) == slug:
+                return root
+        return None
+
+    def add_agent(self, job):
+        slug, a = job["slug"], job["agent"]
+        root = self.project_root(slug)
+        if not root:
+            raise RuntimeError(f"no project folder for `{slug}` in {self.projects_dir} (projects started elsewhere: use `tropa panel` there)")
+        if os.path.exists(os.path.join(root, "agents", a["name"], "agent.json")):
+            raise RuntimeError(f"`{a['name']}` already exists in this project")
+        src = a.get("clone_of") or ""
+        if src:   # a copy of a teammate: anything not given comes from its agent.json
+            if not re.fullmatch(r"[A-Za-z0-9._-]{1,40}", src) or src.startswith("."):
+                raise RuntimeError(f"invalid agent name `{src}`")
+            try:
+                with open(os.path.join(root, "agents", src, "agent.json")) as f:
+                    orig = json.load(f)
+            except (OSError, ValueError):
+                raise RuntimeError(f"can't read agents/{src}/agent.json to copy @{src}")
+            a = {**a, "tool": a.get("tool") or orig.get("tool", "claude"), "model": a.get("model") or orig.get("model", ""),
+                 "role": a.get("role") or orig.get("role", ""), "instruction": a.get("instruction") or orig.get("instruction", "")}
+        lead = self.cfg(root, "lead")
+        role = a.get("role") or f"{a['name']} on {slug}"
+        instr = a.get("instruction") or (f"You joined the team after it started. Read .agent_sync/TEAM.md, docs/ and the recent room history, "
+                                         f"then ask {'@' + lead if lead else 'the human'} for your first task (one message) and wait for it.")
+        setup = os.path.join(root, ".agent_sync", "setup_agent.py")
+        self.run([sys.executable, setup, "create", a["name"], a["tool"], role, instr, a.get("model") or ""])
+        self.run([sys.executable, setup, "refresh"])            # TEAM.md and everyone's roster now list the newcomer
+        if a["tool"] == "claude" and job.get("trust"):
+            self.trust_claude(root, [a["name"]])
+        if a["tool"] == "codex" and job.get("trust"):
+            self.trust_codex(root)
+        if a["tool"] == "gemini" and job.get("trust"):
+            self.trust_gemini(root)
+        desc = f"@{a['name']} ({a['tool']}{' · ' + a['model'] if a.get('model') else ''}), {role}" + (f" (a copy of @{src})" if src else "")
+        if not job.get("start", True):
+            self.report(job, f"➕ Added {desc}. Start it with `tropa panel {root}` (option 4).", status="done")
+            return
+        if not shutil.which(a["tool"]):
+            self.report(job, f"⚠️ `{a['tool']}` isn't installed on this machine, so @{a['name']} can't start yet.")
+        session = self.cfg(root, "tmux_session")
+        self.run([os.path.join(root, ".agent_sync", "start_agent.sh"), a["name"]])
+        self.ensure_watcher(root, session)
+        self.report(job, f"➕ Added {desc} and started it in `{session}`." + (f" @{lead} has been told." if lead else ""), status="done")
+        if lead:
+            time.sleep(3)   # let the watcher see the new window first
+            try:
+                self.http(f"/rooms/{urllib.parse.quote(job['room_id'], safe='')}/wake",
+                          {"agents": [lead], "reason": f"New teammate @{a['name']} ({role}) joined the team; .agent_sync/TEAM.md is updated. Give them work with an @mention when there is some."})
+            except Exception as e:
+                log(f"could not wake @{lead}: {e}")
+
+    # ---------- project_chat: the "New project" setup chat, answered by Claude Code (no tools, no saved session) ----------
+    def project_chat(self, job):
+        def answer(**res):
+            try:
+                self.http(f"/host/chat/{job['id']}", res, timeout=30)
+            except Exception as e:
+                log(f"could not answer the setup chat: {e}")
+        exe = shutil.which("claude")
+        if not exe:
+            return answer(ok=False, error="Claude Code is not installed on this computer")
+        ctx = job.get("context") or {}
+        system = CHAT_SYSTEM.format(human=ctx.get("human") or "the human", projects_dir=ctx.get("projects_dir") or "~/projects",
+                                    context=json.dumps({k: v for k, v in ctx.items() if k not in ("human",)}, indent=1)[:30000])
+        convo = "\n\n".join(f"{'HUMAN' if m.get('role') != 'assistant' else 'YOU (earlier answer)'}: {m.get('content', '')}"
+                             for m in (job.get("messages") or [])[-40:])
+        prompt = f"The conversation so far:\n\n{convo}\n\nAnswer the human's last message with the JSON object."
+        env = dict(os.environ)
+        tok = os.path.expanduser("~/.config/tropa/claude.token")   # the long-lived login from `tropa claude-token set`
+        if not env.get("CLAUDE_CODE_OAUTH_TOKEN") and os.path.isfile(tok):
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = open(tok).read().strip()
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="tropa-chat-") as cwd:   # an empty folder: nothing of yours to read
+            base = [exe, "-p", prompt, "--output-format", "json", "--system-prompt", system]
+            for extra in (["--tools", "", "--no-session-persistence"], ["--disallowedTools", "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Task"]):
+                try:
+                    r = subprocess.run(base + extra, cwd=cwd, env=env, capture_output=True, text=True, timeout=200, stdin=subprocess.DEVNULL)
+                except subprocess.TimeoutExpired:
+                    return answer(ok=False, error="Claude didn't answer within 200 seconds")
+                out = (r.stdout or "").strip()
+                if r.returncode != 0 and re.search(r"unknown option|unrecognized", (r.stderr or "") + out, re.I):
+                    continue   # an older Claude Code without --tools: try the other way
+                break
+        try:
+            d = json.loads(out)
+        except ValueError:
+            d = {"result": out, "is_error": r.returncode != 0}
+        text = str(d.get("result") or "")
+        if d.get("is_error") or r.returncode != 0:
+            err = (text or r.stderr or "Claude Code failed").strip()[-500:]
+            auth = bool(re.search(r"login|log in|authenticat|api key|oauth|credit balance", err, re.I))
+            return answer(ok=False, error=err, auth=auth)
+        answer(ok=True, text=text)
+
+    # ---------- remove_agent: the human removed an agent in the chat, so end it here too ----------
+    def remove_agent(self, job):
+        slug, a = job["slug"], str(job.get("agent") or "")
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,40}", a) or a.startswith("."):
+            raise RuntimeError(f"invalid agent name `{a}`")
+        root = self.project_root(slug)
+        if not root:
+            raise RuntimeError(f"I can't find the folder for `{slug}`, so @{a}'s tmux window and files are untouched")
+        session = job.get("tmux_session") or self.cfg(root, "tmux_session") or f"ai-{slug}"
+        done = []
+        have = self.run(["tmux", "list-windows", "-t", f"={session}", "-F", "#{window_name}"], check=False).stdout.split()
+        if a in have:
+            self.run(["tmux", "kill-window", "-t", f"={session}:={a}"], check=False)
+            done.append(f"stopped its window in `{session}`")
+        src = os.path.join(root, "agents", a)
+        if os.path.isdir(src):
+            dst = os.path.join(root, "agents", ".removed", f"{a}-{time.strftime('%Y%m%d-%H%M%S')}")
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.move(src, dst)
+            done.append(f"moved its folder to `agents/.removed/{os.path.basename(dst)}/` (delete it whenever you like)")
+        sync = os.path.join(root, ".agent_sync")
+        if str(self.cfg(root, "lead") or "").lower() == a.lower():
+            self.setc(root, "lead", "")
+            done.append("cleared it as lead")
+        self.run([sys.executable, os.path.join(sync, "setup_agent.py"), "refresh"], check=False)   # TEAM.md + rosters without it
+        self.report(job, f"🗑 Removed @{a}: " + ("; ".join(done) if done else "it wasn't running and had no folder here") + ". TEAM.md is updated.", status="done")
+
+    def ensure_watcher(self, root, session):
+        """Start the room watcher in the team's tmux session, or restart it if its window is there but it stopped."""
+        cmd = f"python3 {os.path.join(root, '.agent_sync', 'room_watcher.py')}; read -p 'watcher stopped — Enter to close'"
+        if self.run(["tmux", "has-session", "-t", f"={session}"], check=False).returncode != 0:
+            self.run(["tmux", "new-session", "-d", "-s", session, "-n", "ControlCenter", "-c", root])
+        have = self.run(["tmux", "list-windows", "-t", session, "-F", "#{window_name}"], check=False).stdout.split()
+        if "watcher" not in have:
+            self.run(["tmux", "new-window", "-d", "-t", session, "-n", "watcher", "-c", root, cmd])
+            return "started"
+        pid = (self.run(["tmux", "list-panes", "-t", f"{session}:watcher", "-F", "#{pane_pid}"], check=False).stdout.split() or [""])[0]
+        alive = bool(pid) and ("room_watcher" in self.run(["ps", "-o", "command=", "-p", pid], check=False).stdout
+                               or self.run(["pgrep", "-P", pid, "-f", "room_watcher"], check=False).returncode == 0)
+        if not alive:
+            self.run(["tmux", "respawn-window", "-k", "-t", f"{session}:watcher", "-c", root, cmd])
+            return "restarted"
+        return "running"
+
+    # ---------- start_team: the chat's "Start the team" button ----------
+    def start_team(self, job):
+        slug = job["slug"]
+        root = self.project_root(slug)
+        if not root:
+            raise RuntimeError(f"I can't find the folder for `{slug}`. Run `tropa update` in that folder once (it registers it), then try again.")
+        session = self.cfg(root, "tmux_session")
+        self.report(job, f"▶ Starting the team in `{root}`…")
+        self.run([os.path.join(root, ".agent_sync", "start_agent.sh"), "--all"])
+        w = self.ensure_watcher(root, session)
+        self.report(job, f"🚀 Team {'started' if w != 'running' else 'is running'} in tmux session `{session}`{' (the room watcher had stopped; restarted it)' if w == 'restarted' else ''}. The screens appear in **▦ Team** in a few seconds.", status="done")
+
+    # ---------- stop_project: the chat deleted a project, so end its team (files are never touched) ----------
+    def stop_project(self, job):
+        slug = slugify(job.get("slug") or "")
+        names = {s for s in [job.get("tmux_session"), f"ai-{slug}"] if s and re.match(r"^[A-Za-z0-9._-]{1,80}$", s)}
+        extra = self.registry().get(slug)
+        for d in glob.glob(os.path.join(self.projects_dir, "*", ".agent_sync", "settings.json")) + ([os.path.join(extra, ".agent_sync", "settings.json")] if extra else []):
+            try:
+                st = json.load(open(d))
+            except (OSError, ValueError):
+                continue
+            if slugify(st.get("project") or os.path.basename(os.path.dirname(os.path.dirname(d)))) == slug and st.get("tmux_session"):
+                names.add(st["tmux_session"])
+        for n in sorted(names):
+            if subprocess.run(["tmux", "has-session", "-t", f"={n}"], capture_output=True).returncode == 0:
+                subprocess.run(["tmux", "kill-session", "-t", f"={n}"], capture_output=True)
+                log(f"[{slug}] project deleted in the chat: stopped tmux session {n}")
+
     # ---------- loop ----------
     def loop(self):
         log(f"tropa host helper {VERSION} → {self.server}; projects in {self.projects_dir}")
@@ -355,17 +1035,56 @@ class Host:
         while True:
             try:
                 r = self.http("/host/poll", {"projects_dir": self.projects_dir, "home": os.path.expanduser("~"),
-                                              "version": VERSION, "clis": [c for c in CLIS if shutil.which(c)],
-                                              "models": self.models(), "folders": self.folders(),
+                                              "version": VERSION, "clis": [c for c in CLIS if (opencode_bin() if c == "opencode" else shutil.which(c))],
+                                              "openrouter": openrouter_ready(), "openrouter_info": openrouter_status(), "keys": keys_status(), "claude": claude_status(),
+                                              "models": self.models(), "folders": self.folders(), "elsewhere": self.elsewhere(),
+                                              "git": git_version(), "git_hint": git_hint(), "tools": tools_catalog(),
+                                              "design_systems": design_catalog(),
+                                              "ngrok": self.ngrok_info(), "shares": self.shares.ids(), "usage": self.usage_on,
                                               "timeout": 20}, timeout=35)
                 if ok is not True:
                     log("connected"); ok = True
+                    self.usage_sent, self.usage_at = None, 0     # (re)send usage to a server that may have restarted
             except Exception as e:
                 if ok is not False:
                     log(f"server not reachable ({e}); retrying"); ok = False
                 time.sleep(5)
                 continue
+            for sid in r.get("stop_shares") or []:
+                self.shares.stop(sid, "the chat server doesn't know this link")
+            self.shares.tick()
+            self.usage_tick()
             for job in r.get("jobs") or []:
+                if job.get("type") == "openrouter_key":
+                    self.openrouter_job(job); continue
+                if job.get("type") == "api_key":
+                    self.key_job(job); continue
+                if job.get("type") == "project_chat":   # can take a while: don't hold up other jobs
+                    threading.Thread(target=self.project_chat, args=(job,), daemon=True).start(); continue
+                if job.get("type") == "share":
+                    self.shares.start(job); continue
+                if job.get("type") == "unshare":
+                    self.shares.stop(job["share_id"]); continue
+                if job.get("type") == "stop_project":
+                    self.stop_project(job); continue
+                if job.get("type") == "remove_agent":
+                    try:
+                        self.remove_agent(job)
+                    except Exception as e:
+                        self.report(job, f"⚠️ @{job.get('agent', '?')} is removed from the chat, but: {e}", status="failed")
+                    continue
+                if job.get("type") == "start_team":
+                    try:
+                        self.start_team(job)
+                    except Exception as e:
+                        self.report(job, f"❌ Couldn't start the team: {e}", status="failed")
+                    continue
+                if job.get("type") == "add_agent":
+                    try:
+                        self.add_agent(job)
+                    except Exception as e:
+                        self.report(job, f"❌ Couldn't add @{job.get('agent', {}).get('name', '?')}: {e}", status="failed")
+                    continue
                 if job.get("type") != "create_project":
                     continue
                 try:
@@ -386,7 +1105,12 @@ if __name__ == "__main__":
                 for m in ms:
                     print(f"{tool}|{m['id']}|{m['label']}")
         sys.exit(0)
+    h = Host(a.server, a.projects_dir)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    signal.signal(signal.SIGHUP, lambda *_: sys.exit(0))
     try:
-        Host(a.server, a.projects_dir).loop()
-    except KeyboardInterrupt:
+        h.loop()
+    except (KeyboardInterrupt, SystemExit):
         pass
+    finally:
+        h.shares.stop_all()

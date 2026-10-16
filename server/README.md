@@ -42,7 +42,7 @@ claude mcp add --transport http tropa "http://localhost:8888/mcp?agent=frontend&
 codex -c 'mcp_servers.tropa.url="http://localhost:8888/mcp?agent=frontend&project=my-app"'
 ```
 
-Tools: `register`, `check_inbox`, `read_messages`, `send_message`, `share_file`, `wait_for_messages`, `list_rooms`, `list_agents`, `join_room`, `set_status`, `rename`. See [AGENT_GUIDE.md](AGENT_GUIDE.md), which is also served at `/agent-guide.md`.
+Tools: `register`, `check_inbox`, `read_messages`, `send_message`, `share_file`, `wait_for_messages`, `list_rooms`, `list_agents`, `join_room`, `set_status`, `rename`, `task_add`, `task_update`, `task_list`, `ask_human`, `request_share`. See [AGENT_GUIDE.md](AGENT_GUIDE.md), which is also served at `/agent-guide.md`.
 
 ## REST API (`/api`)
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# TropaAI team control panel: create agents (Claude Code / OpenCode / Qwen Code),
+# TropaAI team control panel: create agents (Claude Code / OpenCode / Qwen Code / Codex / Gemini CLI),
 # pick their model and lead, start them in tmux, and run the room watcher.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONDONTWRITEBYTECODE=1
@@ -15,6 +15,10 @@ SESSION_NAME="$(cfg tmux_session)"
 for bin in tmux python3 curl; do
     command -v "$bin" >/dev/null || { if [ "$(uname)" = Darwin ]; then h="brew install $bin"; else h="install $bin with your package manager (e.g. sudo apt-get install -y $bin)"; fi; echo "❌ '$bin' is not installed — $h"; exit 1; }
 done
+if [ "$(cfg git_workflow)" != off ] && ! (command -v git >/dev/null && git --version >/dev/null 2>&1); then
+    if [ "$(uname)" = Darwin ]; then h="xcode-select --install (or brew install git)"; else h="install git with your package manager (e.g. sudo apt-get install -y git)"; fi
+    echo "⚠️  git isn't installed — agents will share one folder instead of branches/worktrees. Install it: $h"
+fi
 if ! curl -fsS "$(cfg server)/health" >/dev/null 2>&1; then
     echo "⚠️  TropaAI is not answering at $(cfg server)."
     TH="$(cfg tropa_home)"
@@ -33,10 +37,10 @@ fi
 # --- pickers (bash 3.2 compatible) -------------------------------------------
 pick_tool() {
     echo "Agent type:"
-    echo "  1) Claude Code   2) OpenCode   3) Qwen Code   4) Codex"
+    echo "  1) Claude Code   2) OpenCode   3) Qwen Code   4) Codex   5) Gemini CLI"
     read -p "Choose [1]: " T
     case "${T:-1}" in
-        1) TOOL=claude ;; 2) TOOL=opencode ;; 3) TOOL=qwen ;; 4) TOOL=codex ;;
+        1) TOOL=claude ;; 2) TOOL=opencode ;; 3) TOOL=qwen ;; 4) TOOL=codex ;; 5) TOOL=gemini ;;
         *) echo "❌ Invalid choice"; return 1 ;;
     esac
     command -v "$TOOL" >/dev/null || echo "⚠️  '$TOOL' not found on PATH — install it before the agent can start."
@@ -81,12 +85,24 @@ pick_model() {
 }
 
 # --- actions -----------------------------------------------------------------
+# is room_watcher.py running in the watcher window? (the pane runs a shell, so look at it and its children)
+watcher_alive() {
+    local pid; pid=$(tmux list-panes -t "$SESSION_NAME:watcher" -F '#{pane_pid}' 2>/dev/null | head -1)
+    [ -n "$pid" ] || return 1
+    ps -o command= -p "$pid" 2>/dev/null | grep -q room_watcher && return 0
+    pgrep -P "$pid" -f room_watcher >/dev/null 2>&1
+}
 start_watcher() {
-    if tmux list-windows -t "$SESSION_NAME" -F '#{window_name}' | grep -qx watcher; then
-        echo "👀 Room watcher already running (window 'watcher')"
-    else
-        tmux new-window -d -t "$SESSION_NAME" -n watcher -c "$ROOT" "python3 \"$HERE/room_watcher.py\"; read -p 'watcher stopped — Enter to close'"
+    local cmd="python3 \"$HERE/room_watcher.py\"; read -p 'watcher stopped — Enter to close'"
+    tmux has-session -t "=$SESSION_NAME" 2>/dev/null || tmux new-session -d -s "$SESSION_NAME" -n ControlCenter -c "$ROOT"
+    if ! tmux list-windows -t "$SESSION_NAME" -F '#{window_name}' | grep -qx watcher; then
+        tmux new-window -d -t "$SESSION_NAME" -n watcher -c "$ROOT" "$cmd"
         echo "👀 Room watcher started (window 'watcher')"
+    elif watcher_alive; then
+        echo "👀 Room watcher already running (window 'watcher')"
+    else   # the window is there but the watcher in it stopped (crashed, or old scripts): start it again
+        tmux respawn-window -k -t "$SESSION_NAME:watcher" -c "$ROOT" "$cmd"
+        echo "↻ Room watcher had stopped; restarted it (window 'watcher')"
     fi
 }
 
@@ -176,13 +192,20 @@ settings_menu() {
         echo "  lead         : $(cfg lead)"
         echo "  auto-wake    : $(cfg wake)   rules: $(cfg wake_rules)   limit/hour: $(cfg max_wakes_per_agent_per_hour) (0 = none)"
         echo "  history      : last $(cfg history_limit) messages"
+        echo "  docs folder  : $(cfg docs_dir)/   (specs; browse it in the monitor's 📄 Docs view)"
         echo "  claude flags : $(cfg tool_flags.claude)"
         echo "  opencode     : $(cfg tool_flags.opencode)"
         echo "  qwen flags   : $(cfg tool_flags.qwen)"
         echo "  codex flags  : $(cfg tool_flags.codex)"
+        echo "  gemini flags : $(cfg tool_flags.gemini)"
+        echo "  git workflow : $(cfg git_workflow)   (worktrees = branch per task, worktree per developer, lead reviews + merges)"
+        case "$(cfg claude_feedback_survey)" in True|true|1) echo "  claude survey: shown" ;; *) echo "  claude survey: hidden (CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY=1)" ;; esac
+        echo "  pop-ups      : $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1] or "[]")))' "$(cfg dismiss_prompts)") cleared by the watcher (dismiss_prompts in settings.json)"
         echo "1) Pause / resume auto-wake   2) Set lead   3) History limit"
         echo "4) Wake limit per hour        5) Wake rules (smart/all)"
-        echo "6) Edit CLI flags             7) Back"
+        echo "6) Edit CLI flags             7) Git workflow on/off"
+        echo "8) Claude feedback survey on/off   9) Docs folder"
+        echo "0) Back"
         read -p "Choose: " S
         case $S in
             1) if [ "$(cfg wake)" = paused ]; then setc wake '"auto"'; echo "▶️  auto-wake on"; else setc wake '"paused"'; echo "⏸  auto-wake paused"; fi ;;
@@ -190,8 +213,8 @@ settings_menu() {
             3) read -p "Messages to read: " V; [[ "$V" =~ ^[0-9]+$ ]] && setc history_limit "$V" ;;
             4) read -p "Max wakes per agent per hour (0 = no limit): " V; [[ "$V" =~ ^[0-9]+$ ]] && setc max_wakes_per_agent_per_hour "$V" ;;
             5) read -p "smart or all: " V; case "$V" in smart|all) setc wake_rules "\"$V\"";; esac ;;
-            6) read -p "Tool (claude/opencode/qwen/codex): " T
-               case "$T" in claude|opencode|qwen|codex)
+            6) read -p "Tool (claude/opencode/qwen/codex/gemini): " T
+               case "$T" in claude|opencode|qwen|codex|gemini)
                    read -p "Flags for $T [$(cfg tool_flags.$T)]: " V
                    python3 - "$HERE/settings.json" "$T" "$V" <<'PY'
 import json, sys
@@ -201,7 +224,18 @@ with open(p, "w") as fh: json.dump(d, fh, indent=2); fh.write("\n")
 PY
                    echo "Saved. Applies the next time each $T agent starts." ;;
                esac ;;
-            7) return ;;
+            7) if [ "$(cfg git_workflow)" = off ]; then setc git_workflow '"worktrees"'; else setc git_workflow '"off"'; fi
+               refresh_all; echo "Git workflow: $(cfg git_workflow). Restart agents (option 4 / 3) so they get the new rules." ;;
+            8) case "$(cfg claude_feedback_survey)" in True|true|1) setc claude_feedback_survey false; echo "Claude feedback survey: hidden" ;;
+                   *) setc claude_feedback_survey true; echo "Claude feedback survey: shown" ;; esac
+               refresh_all; echo "Restart Claude agents (option 4 / 3) to apply." ;;
+            9) read -p "Docs folder, relative to the project [$(cfg docs_dir)]: " V
+               V="${V%/}"; V="${V#./}"
+               case "$V" in ""|.|/*|..|../*|*/..|*/../*|.*|*/.*) [ -n "$V" ] && echo "Use a folder inside the project (no .., no hidden folders)." ;;
+                   *) mkdir -p "$ROOT/$V" && setc docs_dir "\"$V\"" && refresh_all
+                      echo "Docs folder: $V/. Restart agents (option 4 / 3) so they look there." ;;
+               esac ;;
+            0) return ;;
         esac
     done
 }

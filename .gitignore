@@ -38,3 +38,10 @@ tmp/
 .idea/
 *.swp
 *~
+
+# macOS SMB leftovers (files deleted while another app had them open)
+.smbdelete*
+
+# Files the Claude desktop app saves from chats, and the index.html recovery copy
+Claude outputs/
+server/public/index.full.html

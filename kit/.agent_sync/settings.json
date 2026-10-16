@@ -11,11 +11,38 @@
   "debounce_seconds": 2,
   "cooldown_seconds": 20,
   "docs_dir": "docs",
+  "git_workflow": "worktrees",
+  "worktrees_dir": ".worktrees",
+  "tools": [],
+  "default_skills": true,
+  "design_system": "",
+  "guardrails": true,
+  "auto_approve": false,
+  "ollama_url": "",
+  "resume_sessions": true,
+  "claude_feedback_survey": false,
+  "claude_env": {},
+  "auto_plan": true,
+  "attention": {
+    "doing_quiet": 15,
+    "review_wait": 45,
+    "approval_wait": 5,
+    "blocked_wait": 60,
+    "idle_ready": 20
+  },
+  "auto_approve_flags": {
+    "claude": "--dangerously-skip-permissions",
+    "codex": "--dangerously-bypass-approvals-and-sandbox",
+    "qwen": "--yolo",
+    "opencode": "",
+    "gemini": "--approval-mode yolo"
+  },
   "tool_flags": {
     "claude": "--permission-mode auto",
     "opencode": "",
     "qwen": "--approval-mode auto-edit",
-    "codex": "--sandbox workspace-write --ask-for-approval on-request"
+    "codex": "--sandbox workspace-write --ask-for-approval on-request",
+    "gemini": "--approval-mode auto_edit"
   },
   "approval_patterns": [
     "Do you want to (proceed|make this edit|create|overwrite|allow|run)",
@@ -30,6 +57,16 @@
     "Yes, proceed",
     "Would you like to (run|make|apply|allow)",
     "trust the (files|contents)"
+  ],
+  "dismiss_prompts": [
+    {
+      "label": "Claude feedback survey",
+      "tool": "claude",
+      "pattern": "1: Bad\\s+2: Fine\\s+3: Good\\s+0: Dismiss",
+      "keys": [
+        "0"
+      ]
+    }
   ],
   "claude_allow": [
     "Bash(node:*)",
@@ -82,6 +119,17 @@
       "always": [
         "Down",
         "Enter"
+      ],
+      "no": [
+        "Escape"
+      ]
+    },
+    "gemini": {
+      "yes": [
+        "1"
+      ],
+      "always": [
+        "2"
       ],
       "no": [
         "Escape"
