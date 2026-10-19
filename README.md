@@ -194,7 +194,8 @@ Agents are woken by a short `[tropa] …` prompt typed into their terminal, tell
 In a project room, click **▦ Team** to see every agent's terminal live, labelled **working**, **idle** or **needs approval**.
 
 - **Layouts:** **Auto**, **1 / 2 / 3 per row**, or **◉ Graph**, a node view of the team. In the graph, green means working, gray idle and amber needs approval. Arrows show who mentioned whom, and the newest message animates along its arrow. Click a node to open its terminal.
-- **Wake** buttons for each agent, plus **Wake all**.
+- **Each card** has the agent's name, status and usage on top, and its buttons on a row of their own below: **Model**, **Wake**, **Restart**, **Clone**, **Remove**. **Wake all** is in the settings bar.
+- **🔍 Filter by name:** type part of a name to show only the agents that match (cards and graph). It works together with **◐ Hide inactive**.
 - **▶ Start the team:** when the team isn't running, the Team view offers this button. The host helper starts every agent that isn't running, plus the room watcher (restarting it if it had stopped), and the screens appear a few seconds later. `tropa panel` → 3 does the same from a terminal.
 - **Settings bar:** auto-wake on or paused, lead, rules (*smart* or *all*), cooldown and the hourly limit. These stay in sync with `.agent_sync/settings.json`, so you can edit either one.
 
@@ -276,6 +277,18 @@ Click **Clone** on an agent's card in the ▦ Team view: the Add agent dialog op
 
 - **In the chat:** `@tropa clone researcher` or `@tropa clone researcher as researcher-eu opencode-go/qwen3.7-plus` (new name and model optional).
 - **The lead:** `request_agent` with `clone_of: "researcher"`, under the same **New agents** setting and **Auto max** limit as any other new agent.
+
+### ✏️ Renaming an agent
+
+Click the agent's name in the sidebar and change **Name**. TropaAI renames it everywhere:
+
+- in the chat: its past messages, read position, tasks, questions and token usage move to the new name, and `@old` still reaches it;
+- on your computer: `agents/<old>/` becomes `agents/<new>/`, and its configs, `TEAM.md`, the lead setting and `@old` in teammates' instructions are updated;
+- its CLI restarts under the new name and picks up its conversation where it left off.
+
+When an agent renames itself (the `rename` tool), the restart waits until it's idle. From a terminal: `python3 .agent_sync/setup_agent.py rename <old> <new>`. Branches it already made keep their old names.
+
+**Names are unique across TropaAI.** If a new project's team uses a name another project already has (`lead`, `qa`, `backend`…), the new agent gets the project's name added (`lead-shop`) instead of taking over the other one. The form says so before you create the project.
 
 ### 🗑 Removing an agent
 

@@ -501,6 +501,11 @@
   .card .ch { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
   .card .ch .model { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .card .ch .sp { flex: 1; }
+  .card .ch b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .card .ca { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel2); }
+  .card .ca .tbtn.warn { margin-left: auto; }
+  .team-filter { display: inline-flex; align-items: center; gap: 6px; }
+  .team-filter input { width: 160px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); color: var(--text); font: inherit; font-size: 12.5px; }
   .card .st { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; border-radius: 10px; padding: 1px 7px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
   .card.s-working .st { color: var(--ok); border-color: var(--ok); }
   .card.s-approval .st { color: var(--on-warn); background: var(--fill-warn); border-color: var(--fill-warn); }
@@ -1022,6 +1027,7 @@
     <div class="np-team-head">TEAM <span>· ★ = lead (gets your un-addressed messages)</span>
       <span class="np-presets"><button type="button" data-preset="web">Web app · 5</button><button type="button" data-preset="small">Small · 3</button><button type="button" data-preset="solo">Solo</button></span></div>
     <div id="npTeam"></div>
+    <div id="npTaken" class="mut" style="font-size:12.5px;margin:-2px 0 8px" hidden></div>
     <button type="button" class="linkbtn" id="npAdd" style="margin:2px 0 12px">+ Add agent</button>
     <div id="npToolsBox"><div class="np-team-head">TOOLS <span>· optional · official MCP servers the agents can use (no deploy pipelines are set up)</span></div>
       <div id="npTools"></div></div>
@@ -1320,6 +1326,7 @@
   }
 
   async function selectRoom(id) {
+    if (state.current !== id) state.teamFilter = '';
     state.current = id; state.searching = null; state.replyTo = null; $('#search').value = '';
     if (state.pending.length) { state.pending = []; renderPending(); }
     localSet('airc.room', id);
@@ -1394,7 +1401,17 @@
       else if (e.type === 'agent_renamed') {
         state.agents = state.agents.filter((a) => a.name !== e.old_name && a.name !== e.agent.name); state.agents.unshift(e.agent);
         for (const arr of state.messages.values()) for (const m of arr) if (m.sender === e.old_name && m.sender_kind === 'agent') m.sender = e.agent.name;
+        const lo = e.old_name.toLowerCase(), to = e.agent.name;
+        for (const list of Object.values(state.tasks)) for (const t of list || []) if ((t.assignee || '').toLowerCase() === lo) t.assignee = to;
+        for (const t of Object.values(state.team)) {   // the Team view and graph show the new name at once
+          if (!t || !t.agents) continue;
+          t.agents = t.agents.map((n) => (n.toLowerCase() === lo ? to : n));
+          for (const k of Object.keys(t.panes || {})) if (k.toLowerCase() === lo) { t.panes[to] = t.panes[k]; delete t.panes[k]; }
+          if ((t.settings?.lead || '').toLowerCase() === lo) t.settings.lead = to;
+        }
         renderSidebar(); renderMessages({ stick: false });
+        if (state.view === 'team') renderTeam();
+        if (state.view === 'tasks' && typeof renderTasks === 'function') renderTasks();
       }
       else if (e.type === 'agent_deleted') { state.agents = state.agents.filter((a) => a.name !== e.name); renderSidebar(); }
       else if (e.type === 'docs') docsChanged(e.docs);
@@ -1867,11 +1884,14 @@
     return Date.now() - (p.changed_at || 0) > INACTIVE_MIN * 60e3;
   }
   const hiddenAgents = (t) => (state.hideInactive ? (t.agents || []).filter((n) => isInactive(t, n)) : []);
+  // the Team view's name filter (per browser tab; cleared when you switch rooms)
+  state.teamFilter = '';
+  const filterMiss = (n) => !!state.teamFilter && !n.toLowerCase().includes(state.teamFilter.toLowerCase());
+  const shownAgents = (t) => { const h = new Set(hiddenAgents(t)); return (t.agents || []).filter((n) => !h.has(n) && !filterMiss(n)); };
   function teamAgents(t) {
     const lead = (t.settings?.lead || '').toLowerCase();
     const waiting = (n) => (t.panes?.[n]?.state === 'approval' ? 1 : 0);   // approvals first, then the lead
-    const hidden = new Set(hiddenAgents(t));
-    return [...(t.agents || [])].filter((n) => !hidden.has(n)).sort((a, b) => waiting(b) - waiting(a) || (b.toLowerCase() === lead) - (a.toLowerCase() === lead) || a.localeCompare(b));
+    return shownAgents(t).sort((a, b) => waiting(b) - waiting(a) || (b.toLowerCase() === lead) - (a.toLowerCase() === lead) || a.localeCompare(b));
   }
   const agoText = (ms) => { if (!ms) return ''; const s = Math.round((Date.now() - ms) / 1000); return s < 8 ? 'active now' : s < 90 ? `quiet ${s}s` : s < 5400 ? `quiet ${Math.round(s / 60)}m` : `quiet ${Math.round(s / 3600)}h`; };
   function cardHtml(name, t) {
@@ -1881,12 +1901,13 @@
     return `<div class="card s-${esc(p.state)}" data-card="${esc(name)}">
       <div class="ch"><b>${esc(name)}</b>${lead ? '<span title="lead">★</span>' : ''}
         <span class="model">${esc([a?.provider, a?.model].filter(Boolean).join(' · '))}</span><span class="sp"></span>${usageToday(name, 'uc')}
-        <span class="ago" data-ago="${p.changed_at || 0}">${agoText(p.changed_at)}</span><span class="st">${esc(p.state)}</span>
+        <span class="ago" data-ago="${p.changed_at || 0}">${agoText(p.changed_at)}</span><span class="st">${esc(p.state)}</span></div>
+      <div class="ca">
         <button class="tbtn" data-model="${esc(name)}" title="Switch ${esc(name)}'s model (keeps its conversation)">Model</button>
         <button class="tbtn" data-wake="${esc(name)}" title="Tell ${esc(name)} to read the room now">Wake</button>
         <button class="tbtn" data-restart="${esc(name)}" title="Restart ${esc(name)}'s CLI (it resumes its conversation). Use it when it's stuck, crashed or logged out">Restart</button>
         <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)}: same CLI, model, role and instructions under a new name (change the model if this one is rate-limited)">Clone</button>
-        <button class="tbtn" data-remove="${esc(name)}" title="Remove ${esc(name)} from the team: stops its CLI and moves agents/${esc(name)}/ to agents/.removed/">Remove</button></div>
+        <button class="tbtn warn" data-remove="${esc(name)}" title="Remove ${esc(name)} from the team: stops its CLI and moves agents/${esc(name)}/ to agents/.removed/">Remove</button></div>
       ${p.state === 'approval' ? `<div class="appr"><span>Waiting for approval${p.prompt ? `: <b>${esc(p.prompt)}</b>` : ''}</span>
         <button class="tbtn" data-approve="${esc(name)}" data-act="yes">Approve</button>
         <button class="tbtn" data-approve="${esc(name)}" data-act="always" title="Yes, and don't ask again this session">Always</button>
@@ -1902,8 +1923,7 @@
   function graphModel(t) {
     const W = 800, H = 560, cx = 400, cy = 285, R = 195;
     const human = state.human || 'you';
-    const hiddenG = new Set(hiddenAgents(t));
-    const agents = (t.agents || []).filter((n) => !hiddenG.has(n));
+    const agents = shownAgents(t);
     const lead = agents.find((a) => a.toLowerCase() === String(t.settings?.lead || '').toLowerCase());
     const pos = { [human]: { x: cx, y: 58 } };
     if (lead) pos[lead] = { x: cx, y: cy };
@@ -1986,6 +2006,19 @@
   function renderTeamBar() {
     const bar = $('#teamBar'); const t = state.team[state.current];
     if (!bar || !t) return;
+    keepFilterFocus(() => fillTeamBar(bar, t));
+  }
+  // re-rendering replaces the filter box: keep the cursor in it while you type
+  let filterFocus = null;
+  function keepFilterFocus(fn) {
+    const el = document.activeElement?.id === 'teamFilter' ? document.activeElement : null;
+    const outer = !filterFocus;
+    if (el && outer) filterFocus = [el.selectionStart, el.selectionEnd];
+    try { fn(); } finally {
+      if (outer && filterFocus) { const i = $('#teamFilter'); if (i) { i.focus(); i.setSelectionRange(...filterFocus); } filterFocus = null; }
+    }
+  }
+  function fillTeamBar(bar, t) {
     const s = t.settings || {};
     const names = [...new Set([...(t.agents || []), ...state.agents.filter((a) => (a.project || '') === projectOf(state.current)).map((a) => a.name)])];
     const paused = s.wake === 'paused';
@@ -2002,19 +2035,29 @@
       <label title="When the lead removes teammates that can't help any more (rate-limited, out of credit, done): do it at once, ask you first, or don't allow it. Removals you ask for in the chat are always confirmed first.">Lead removes <select data-set="team_shrink">${[['auto', 'automatic'], ['ask', 'ask me'], ['off', 'off']].map(([v, l]) => `<option value="${v}" ${(s.team_shrink || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       ${s.team_growth === 'auto' ? `<label title="In automatic mode, the lead adds at most this many agents per hour on its own; past that, its requests wait for your OK in the room (0 = always ask). Agents you add yourself don't count.">Auto max <input type="number" min="0" max="20" data-set="auto_agents_per_hour" value="${esc(s.auto_agents_per_hour ?? 2)}">/h</label>` : ''}
       <span class="sp"></span>
+      <label class="team-filter" title="Show only agents whose name contains this">🔍 <input id="teamFilter" type="search" placeholder="Filter by name" value="${esc(state.teamFilter)}" spellcheck="false" aria-label="Filter agents by name"></label>
       ${(() => { const h = hiddenAgents(t).length; return `<button class="tbtn ${state.hideInactive ? 'on' : ''}" data-hideinactive title="${state.hideInactive ? 'Showing active agents only (working, waiting for approval, the lead, or busy in the last ' + INACTIVE_MIN + ' min). Click to show everyone.' : 'Hide agents that have been idle for over ' + INACTIVE_MIN + ' min (or have no screen). The lead and agents waiting for approval always show.'}">${state.hideInactive ? `◐ Active only${h ? ` · ${h} hidden` : ''}` : '◐ Hide inactive'}</button>`; })()}
       <button class="tbtn" data-projkeys title="This project's own API keys (Gemini, OpenRouter)">🔑 Keys</button>
       <button class="tbtn" data-addagent title="Add a new agent to this running team">＋ Add agent</button>
       <span>${t.watching ? `tmux <code>${esc(t.tmux_session || '')}</code>` : 'watcher offline'}</span>
       <button class="tbtn" data-wake="*" ${t.watching ? '' : 'disabled'}>Wake all</button>`;
   }
-  function renderTeam() {
+  document.addEventListener('input', (e) => {
+    if (e.target.id !== 'teamFilter') return;
+    state.teamFilter = e.target.value.trim();
+    renderTeam();
+  });
+  function renderTeam() { keepFilterFocus(renderTeamNow); }
+  function renderTeamNow() {
     const el = $('#team'); const t = state.team[state.current];
     if (!t) { el.innerHTML = '<div class="empty">Loading…</div>'; return; }
     const names = teamAgents(t);
     const L = state.teamLayout;
     const allIdle = t.watching && !names.length && (t.agents || []).length;
-    el.innerHTML = `<div class="team-bar" id="teamBar"></div><div id="attnPanel"></div>` + (allIdle
+    const noMatch = allIdle && state.teamFilter && (t.agents || []).some((n) => !filterMiss(n)) === false;
+    el.innerHTML = `<div class="team-bar" id="teamBar"></div><div id="attnPanel"></div>` + (noMatch
+      ? `<div class="empty">No agent's name contains “${esc(state.teamFilter)}”. <button type="button" class="tbtn" data-clearfilter>Clear the filter</button></div>`
+      : allIdle
       ? `<div class="empty">All ${t.agents.length} agents have been idle for over ${INACTIVE_MIN} minutes. <button type="button" class="tbtn" data-hideinactive>Show all</button></div>`
       : t.watching && names.length
       ? (L === 'graph'
@@ -2645,6 +2688,7 @@
     if (e.target.closest('#shareBtn')) { openShare(); return; }
     if (e.target.closest('[data-addagent]')) { openAddAgent(null); return; }
     if (e.target.closest('[data-projkeys]')) { openProjectKeys(); return; }
+    if (e.target.closest('[data-clearfilter]')) { state.teamFilter = ''; renderTeam(); return; }
     if (e.target.closest('[data-hideinactive]')) { state.hideInactive = !state.hideInactive; localSet('airc.hideInactive', state.hideInactive ? 'on' : 'off'); renderTeam(); return; }
     const mdb = e.target.closest('[data-model]');
     if (mdb) { openModelSwitch(mdb.dataset.model); return; }
@@ -2983,7 +3027,17 @@
       <label class="lead ${np.lead && np.lead === a.name ? 'on' : ''}" title="Make lead"><input type="radio" name="npLead" ${np.lead === a.name ? 'checked' : ''}>★</label>
       <button type="button" class="rm" title="Remove">×</button></div>`).join('') || '<div style="color:var(--muted);font-size:13px;margin-bottom:6px">No agents — the folder and room are created; add agents later with <code>tropa panel</code>.</div>';
     $('#npTrustRow').hidden = !np.team.some((a) => ['claude', 'codex', 'gemini'].includes(a.tool));
-    renderTools(); renderNpKeys();
+    renderTools(); renderNpKeys(); npTakenNote();
+  }
+  // agent names are unique across TropaAI: say which ones another project already has (the server adds this project's name)
+  function npTakenNote() {
+    const el = $('#npTaken'); if (!el) return;
+    const taken = new Set(state.agents.map((a) => a.name.toLowerCase()));
+    for (const t of Object.values(state.team)) for (const n of t?.agents || []) taken.add(n.toLowerCase());
+    const hit = np.team.filter((a) => a.name && taken.has(a.name.toLowerCase())).map((a) => a.name);
+    const slug = slugOf($('#npName')?.value.trim() || $('#npFolder')?.value.trim() || '') || 'project';
+    el.hidden = !hit.length;
+    el.innerHTML = hit.length ? `${hit.map((n) => `<b>@${esc(n)}</b>`).join(', ')} ${hit.length > 1 ? 'are' : 'is'} already used in another project, so this team gets ${hit.map((n) => `<b>@${esc(n)}-${esc(slug)}</b>`).join(', ')} instead (or rename ${hit.length > 1 ? 'them' : 'it'} here).` : '';
   }
   // ---- API keys for the new project (only when an agent needs one: Gemini CLI, or an OpenRouter model) ----
   np.keys = {};   // prov -> { own: bool, key }
@@ -3103,7 +3157,7 @@
   $('#npTeam').addEventListener('input', (e) => {
     const row = e.target.closest('.np-row'); if (!row) return;
     const a = np.team[Number(row.dataset.i)]; const was = a.name;
-    if (e.target.classList.contains('n')) { a.name = e.target.value.replace(/[^A-Za-z0-9._-]/g, ''); if (np.lead === was) { np.lead = a.name; defaultKickoff(); } }
+    if (e.target.classList.contains('n')) { a.name = e.target.value.replace(/[^A-Za-z0-9._-]/g, ''); if (np.lead === was) { np.lead = a.name; defaultKickoff(); } npTakenNote(); }
     if (e.target.classList.contains('m')) a.model = fullModel(a.tool, e.target.value);
     if (e.target.classList.contains('r')) a.role = e.target.value;
   });
@@ -3130,7 +3184,7 @@
   });
   $('#npAdd').addEventListener('click', () => { np.team.push({ name: `agent${np.team.length + 1}`, tool: 'claude', model: 'sonnet', role: '' }); renderTeamRows(); });
   document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => setPreset(b.dataset.preset)));
-  $('#npName').addEventListener('input', () => { if (!np.folderTouched) $('#npFolder').value = slugOf($('#npName').value); });
+  $('#npName').addEventListener('input', () => { if (!np.folderTouched) $('#npFolder').value = slugOf($('#npName').value); npTakenNote(); });
   $('#npFolder').addEventListener('input', () => { np.folderTouched = true; });
   $('#npKickoff').addEventListener('input', () => { np.kickoffTouched = true; });
   $('#npPick').addEventListener('click', () => $('#npFiles').click());
@@ -3708,11 +3762,12 @@
       const files = [];
       for (const f of np.files) { btn.textContent = `Uploading ${f.name}…`; files.push((await uploadFile(f, room.id)).id); }
       btn.textContent = 'Creating…';
-      await api('/projects', { method: 'POST', body: {
+      const made = await api('/projects', { method: 'POST', body: {
         name: name || slug, slug, existing: ex, path: path || undefined, folder: ex ? (v.startsWith('f:') ? v.slice(2) : slug) : ($('#npFolder').value.trim() || slugOf(name)), topic: name || slug, brief: $('#npBrief').value,
         files, agents: np.team.map((a) => ({ name: a.name, tool: a.tool, model: a.model, role: a.role })), lead: np.lead,
         kickoff: $('#npKickoff').value.trim(), tools: selectedTools(), design_system: np.design, git: $('#npGit').checked, auto_approve: $('#npAuto').checked, start: $('#npStart').checked, trust: $('#npTrust').checked, keys } });
       $('#projDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
+      if (Object.keys(made?.renamed || {}).length) infoInline(`Names already used elsewhere: ${Object.entries(made.renamed).map(([o, n]) => `${o} → @${n}`).join(', ')}.`);
     } catch (err) { $('#npErr').textContent = err.message; }
     finally { btn.disabled = !state.host?.connected; btn.textContent = npExisting() ? 'Add team' : 'Create project'; }
   });
@@ -3847,14 +3902,14 @@
       const slug = slugOf(p.path ? (baseName(p.path) || p.name) : (p.folder || name));   // the room is named after the folder
       const room = await api('/rooms', { method: 'POST', body: { project: slug, topic: name } });
       if (!state.rooms.find((r) => r.id === room.id)) state.rooms.push({ ...room, message_count: 0, unread_live: 0 });
-      await api('/projects', { method: 'POST', body: { name, slug: room.id.replace(/^project:/, ''), existing: !!p.path, path: p.path || undefined, folder: p.path ? slug : (p.folder || slug), topic: name,
+      const made = await api('/projects', { method: 'POST', body: { name, slug: room.id.replace(/^project:/, ''), existing: !!p.path, path: p.path || undefined, folder: p.path ? slug : (p.folder || slug), topic: name,
         brief: p.brief || '', files: [], agents: (p.agents || []).map((a) => ({ name: a.name, tool: a.tool, model: fullModel(a.tool, a.model), role: a.role })), lead: p.lead,
         kickoff: p.kickoff || '', tools: (p.tools || []).map((id) => ({ id, agents: '*', params: {} })), design_system: p.design_system || '', git: true,
         auto_approve: !!p.auto_approve, start: true, trust: true } });
       if (Object.keys(p.settings || {}).length) await api(`/rooms/${encodeURIComponent(room.id)}/wake`, { method: 'PATCH', body: p.settings }).catch(() => {});
       $('#chatDlg').close(); cp.messages = []; cp.err = '';
       state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
-      infoInline(`Creating ${name}: progress shows in the room.`);
+      infoInline(`Creating ${name}: progress shows in the room.` + (Object.keys(made?.renamed || {}).length ? ` Names already used elsewhere: ${Object.entries(made.renamed).map(([o, n]) => `${o} → @${n}`).join(', ')}.` : ''));
     } catch (err) { cp.err = err.message; btn.disabled = false; btn.textContent = 'Create project and start the team'; renderChat(); }
   }
   async function cpEditAsForm() {

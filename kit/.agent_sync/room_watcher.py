@@ -367,6 +367,7 @@ class Watcher:
         self.auth_alerted = {}  # agent -> auth-error line we already posted
         self.dismissed = {}     # agent -> (pop-up pattern, last press time, presses)
         self.model_switch = {}  # agent -> new model, applied once the agent is idle
+        self.renames = {}       # agent -> new name, applied once the agent is idle
         self.sent_panes = {}    # agent -> (text, state) last sent
         self.last_pane_post = 0
         self.last_capture = 0
@@ -390,7 +391,7 @@ class Watcher:
         r = http(self.cfg, "/watch/poll", {"room": self.cfg["room"], "agents": agents,
                                            "tmux_session": self.cfg["tmux_session"],
                                            "settings": local, "settings_changed": changed,
-                                           "timeout": timeout}, timeout=timeout + 10)
+                                           "timeout": timeout, "caps": ["rename_agent"]}, timeout=timeout + 10)
         server = routing(r.get("settings") or {})
         if changed:
             log(f"pushed settings to TropaAI: {local}")
@@ -425,6 +426,17 @@ class Watcher:
                 self.switch_model(a)
             else:
                 say(self.cfg, f"🔁 `{a}` will switch to `{self.model_switch[a] or 'its CLI default'}` as soon as it's idle (so its current step isn't cut off).")
+            return
+        if ev.get("type") == "rename_agent":
+            old, new = str(ev.get("agent", "")), str(ev.get("new_name", ""))
+            if not all(re.fullmatch(r"[A-Za-z0-9._-]{1,40}", x) and not x.startswith(".") for x in (old, new)):
+                return
+            st = (self.panes.get(a or old) or {}).get("state")
+            if ev.get("when") == "now" or not a or st in (None, "idle"):
+                self.rename(old, new)
+            else:
+                self.renames[a] = new
+                log(f"{a} will become {new} once it's idle")
             return
         if ev.get("type") == "remove_agent":
             name = str(ev.get("agent", ""))
@@ -642,6 +654,9 @@ class Watcher:
                     self.deliver(a, self.held.pop(a), "held wake")
             if state == "idle" and a in self.model_switch and not popup:
                 self.switch_model(a)
+            if state == "idle" and a in self.renames and not popup:
+                self.rename(a, self.renames.pop(a))
+                continue
             if state == "working":
                 self.worked[a] = now
             elif state == "idle" and a in self.worked and now - changed_at >= SILENT_AFTER and not popup:
@@ -676,6 +691,24 @@ class Watcher:
         how = "it picks up its conversation where it left off" if self.cfg.get("resume_sessions", True) not in (False, "false", 0) else "with a fresh session"
         log(f"restarted {a}")
         say(self.cfg, f"↻ Restarted `{a}`: {how}.")
+        self.last_capture = 0
+
+    def rename(self, old, new):
+        """Rename the agent's folder and configs and restart it under its new name (setup_agent.py rename)."""
+        r = subprocess.run([sys.executable, os.path.join(HERE, "setup_agent.py"), "rename", old, new], capture_output=True, text=True)
+        for d in (self.held, self.alerted, self.auto_pressed, self.model_switch, self.worked, self.nudges, self.panes,
+                  self.sent_panes, self.renames, getattr(self, "auth_alerted", {}), self.dismissed):
+            if old in d:
+                v = d.pop(old)
+                if d is self.model_switch:
+                    d[new] = v
+        self.cfg = config.load()
+        out = (r.stdout.strip() or r.stderr.strip()[-300:] or "done")
+        log(f"renamed {old} → {new}: {out}")
+        if r.returncode != 0:
+            say(self.cfg, f"@{self.cfg['human']} `{old}` is now `{new}` in the chat, but its folder couldn't be renamed: {out}")
+        else:
+            say(self.cfg, f"✏️ `{old}` → `{new}` on this machine: {out}.")
         self.last_capture = 0
 
     def switch_model(self, a):

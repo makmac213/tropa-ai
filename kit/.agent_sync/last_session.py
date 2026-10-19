@@ -13,7 +13,18 @@ def boot_match(text, agent, project):
     return re.search(rf"you are \\?'{a}\\?' on [^.]{{1,40}}\. Call the [\w-]+ register tool with agent \\?\"{a}\\?\", project \\?\"{p}\\?\"", text) is not None
 
 
+def names_of(agent):
+    """The agent's name plus the names it had before a rename (its old sessions carry those)."""
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(os.path.dirname(here), "agents", agent, "agent.json")) as f:
+            return [agent] + [n for n in (json.load(f).get("former_names") or []) if isinstance(n, str)][::-1]
+    except (OSError, ValueError):
+        return [agent]
+
+
 def codex(agent, project):
+    names = names_of(agent)
     base = os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")
     files = sorted(glob.glob(os.path.join(base, "sessions", "**", "rollout-*.jsonl"), recursive=True),
                    key=lambda f: os.path.getmtime(f), reverse=True)[:400]
@@ -23,7 +34,7 @@ def codex(agent, project):
                 head = fh.read(256 * 1024).decode("utf-8", "replace")
         except OSError:
             continue
-        if not boot_match(head, agent, project):
+        if not any(boot_match(head, n, project) for n in names):
             continue
         for line in head.splitlines()[:5]:
             try:

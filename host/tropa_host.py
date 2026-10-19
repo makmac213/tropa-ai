@@ -189,7 +189,8 @@ Team guidance:
   for another CLI or model. Use another CLI only if it is in "clis".
 - One lead (plans, assigns, reviews, merges or writes the final result) plus 1-4 others with clear, different jobs.
   Software: e.g. lead, backend, frontend, qa. Research: e.g. lead, researchers split by topic or region, a fact-checker.
-- Agent names: short, lowercase, letters/digits/hyphens, unique (e.g. "lead", "researcher-eu", "qa").
+- Agent names: short, lowercase, letters/digits/hyphens, unique (e.g. "lead", "researcher-eu", "qa"). Names are unique
+  across all of TropaAI: never use one listed in "taken_agent_names" (add the project's short name instead, e.g. "lead-shop").
 - Free models (ending in -free, big-pickle) are rate-limited: spread agents across different ones.
 - design_system only for apps with a UI, and only an id from the list (else ""). tools only ids from the list.
 - folder: a short lowercase slug for a new folder in {projects_dir}. For an existing folder set "path" (e.g.
@@ -982,6 +983,28 @@ class Host:
         self.run([sys.executable, os.path.join(sync, "setup_agent.py"), "refresh"], check=False)   # TEAM.md + rosters without it
         self.report(job, f"🗑 Removed @{a}: " + ("; ".join(done) if done else "it wasn't running and had no folder here") + ". TEAM.md is updated.", status="done")
 
+    def rename_agent(self, job):
+        """Rename an agent's folder, configs and tmux window (the project kit's `setup_agent.py rename`)."""
+        slug, old, new = job["slug"], str(job.get("agent") or ""), str(job.get("new_name") or "")
+        for x in (old, new):
+            if not re.fullmatch(r"[A-Za-z0-9._-]{1,40}", x) or x.startswith("."):
+                raise RuntimeError(f"invalid agent name `{x}`")
+        root = self.project_root(slug)
+        if not root:
+            raise RuntimeError(f"I can't find the folder for `{slug}`, so agents/{old}/ keeps its old name")
+        tool = os.path.join(root, ".agent_sync", "setup_agent.py")
+        try:
+            kit_ok = "rename_agent" in open(tool).read()
+        except OSError:
+            kit_ok = False
+        if not kit_ok:
+            raise RuntimeError(f"this project's kit is older than renaming; run `tropa update` in {root}, then rename @{new} again")
+        r = self.run([sys.executable, tool, "rename", old, new], check=False)
+        out = (r.stdout.strip() or r.stderr.strip()[-300:] or "done")
+        if r.returncode != 0:
+            raise RuntimeError(out)
+        self.report(job, f"✏️ `{old}` → `{new}` on this machine: {out}.", status="done")
+
     def ensure_watcher(self, root, session):
         """Start the room watcher in the team's tmux session, or restart it if its window is there but it stopped."""
         cmd = f"python3 {os.path.join(root, '.agent_sync', 'room_watcher.py')}; read -p 'watcher stopped — Enter to close'"
@@ -1072,6 +1095,12 @@ class Host:
                         self.remove_agent(job)
                     except Exception as e:
                         self.report(job, f"⚠️ @{job.get('agent', '?')} is removed from the chat, but: {e}", status="failed")
+                    continue
+                if job.get("type") == "rename_agent":
+                    try:
+                        self.rename_agent(job)
+                    except Exception as e:
+                        self.report(job, f"⚠️ @{job.get('new_name', '?')} is renamed in the chat, but: {e}", status="failed")
                     continue
                 if job.get("type") == "start_team":
                     try:

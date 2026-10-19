@@ -5,6 +5,8 @@
   setup_agent.py refresh [NAME]     rebuild config files from agent.json (all agents if no name)
   setup_agent.py team               regenerate .agent_sync/TEAM.md
   setup_agent.py remove NAME        stop NAME's tmux window, move agents/NAME/ to agents/.removed/, update TEAM.md
+  setup_agent.py rename OLD NEW     rename an agent: its folder, agent.json, lead setting, @mentions in the team's
+                                    instructions, TEAM.md and every config; restarts it (resuming its session) if it was running
 TOOL: claude | opencode | qwen | codex | gemini
 """
 import glob, json, os, re, subprocess, sys
@@ -475,6 +477,92 @@ def remove_agent(cfg, name):
     return "; ".join(done) if done else "it wasn't running and had no folder here"
 
 
+NAME_RE = r"[A-Za-z0-9._-]{1,40}"
+
+
+def esc_path(p):
+    """How Claude Code names a folder's session directory: every character that isn't a letter or digit becomes '-'."""
+    return re.sub(r"[^A-Za-z0-9]", "-", p)
+
+
+def carry_sessions(old_ws, new_ws):
+    """Let the CLIs find the agent's earlier conversation from its new folder: each keeps sessions per working folder,
+    so the new folder's session directory becomes a link to the old one (no copy, so usage isn't counted twice)."""
+    import hashlib
+    pairs = []
+    roots = [os.path.join(os.environ["CLAUDE_CONFIG_DIR"], "projects")] if os.environ.get("CLAUDE_CONFIG_DIR") else []
+    roots += [os.path.expanduser("~/.claude/projects"), os.path.expanduser("~/.config/claude/projects")]
+    for r in dict.fromkeys(roots):
+        pairs.append((os.path.join(r, esc_path(old_ws)), os.path.join(r, esc_path(new_ws))))
+    for base in (os.path.expanduser("~/.qwen"), os.path.expanduser("~/.gemini")):   # Qwen Code / Gemini CLI: tmp/<sha256 of the folder>
+        h = lambda p: hashlib.sha256(p.encode()).hexdigest()
+        pairs.append((os.path.join(base, "tmp", h(old_ws)), os.path.join(base, "tmp", h(new_ws))))
+        pairs.append((os.path.join(base, "projects", esc_path(old_ws)), os.path.join(base, "projects", esc_path(new_ws))))
+    n = 0
+    for src, dst in pairs:
+        if os.path.isdir(src) and not os.path.lexists(dst):
+            try:
+                os.symlink(src, dst); n += 1
+            except OSError:
+                pass
+    return n
+
+
+def rename_agent(cfg, old, new):
+    """Rename an agent everywhere in the project folder, then restart it under the new name if it was running."""
+    import time
+    src, dst = os.path.join(agents_dir(cfg), old), os.path.join(agents_dir(cfg), new)
+    if not os.path.isfile(os.path.join(src, "agent.json")):
+        if os.path.isfile(os.path.join(dst, "agent.json")):
+            return "already renamed"
+        raise SystemExit(f"there's no agents/{old}/ in this project")
+    if os.path.lexists(dst) and old.lower() != new.lower():
+        raise SystemExit(f"agents/{new}/ already exists")
+    done = []
+    session = cfg.get("tmux_session") or ""
+    running = False
+    if session:
+        have = subprocess.run(["tmux", "list-windows", "-t", f"={session}", "-F", "#{window_name}"],
+                              capture_output=True, text=True).stdout.split()
+        if old in have:
+            running = True
+            subprocess.run(["tmux", "kill-window", "-t", f"={session}:={old}"], capture_output=True)
+            time.sleep(0.5)
+    if old.lower() == new.lower():           # only the case changes (case-insensitive file systems): go through a temp name
+        tmp = src + ".renaming"
+        os.rename(src, tmp); os.rename(tmp, dst)
+    else:
+        os.rename(src, dst)
+    done.append(f"folder agents/{new}/")
+    a = json.load(open(os.path.join(dst, "agent.json")))
+    a["name"] = new
+    a["former_names"] = [x for x in dict.fromkeys((a.get("former_names") or []) + [old]) if x.lower() != new.lower()][-10:]
+    dump(os.path.join(dst, "agent.json"), a)
+    if str(cfg.get("lead") or "").lower() == old.lower():
+        config.save_key("lead", json.dumps(new))
+        cfg = config.load()
+        done.append("lead setting")
+    # @old in the team's own instructions and roles → @new
+    pat = re.compile(rf"@{re.escape(old)}(?![A-Za-z0-9_-]|\.[A-Za-z0-9])", re.I)   # "@old." at the end of a sentence counts
+    for x in all_agents(cfg):
+        changed = False
+        for k in ("instruction", "role"):
+            if isinstance(x.get(k), str) and pat.search(x[k]):
+                x[k] = pat.sub(f"@{new}", x[k]); changed = True
+        if changed:
+            dump(os.path.join(agents_dir(cfg), x["name"], "agent.json"), x)
+    if carry_sessions(os.path.join(agents_dir(cfg), old), dst):
+        done.append("its CLI session history")
+    write_team(cfg)
+    for x in all_agents(cfg):
+        write_agent(cfg, x)
+    done.append("TEAM.md and every agent's config")
+    if running:
+        r = subprocess.run([os.path.join(config.HERE, "start_agent.sh"), new], capture_output=True, text=True)
+        done.append("restarted it" if r.returncode == 0 else f"couldn't restart it: {(r.stdout + r.stderr).strip()[-200:]}")
+    return "updated " + ", ".join(done)
+
+
 def main():
     cfg = config.load()
     args = sys.argv[1:]
@@ -507,6 +595,10 @@ def main():
         if len(args) != 1 or not re.fullmatch(r"[A-Za-z0-9._-]{1,40}", args[0]) or args[0].startswith("."):
             sys.exit(__doc__)
         print(remove_agent(cfg, args[0]))
+    elif cmd == "rename":
+        if len(args) != 2 or not all(re.fullmatch(NAME_RE, x) and not x.startswith(".") for x in args):
+            sys.exit(__doc__)
+        print(rename_agent(cfg, args[0], args[1]))
     else:
         sys.exit(__doc__)
 

@@ -73,6 +73,13 @@ def day_of(ts):
         return None
 
 
+def linked(path, up):
+    """True when the folder `up` levels above path is a symlink (a renamed agent's link to its old sessions)."""
+    for _ in range(up):
+        path = os.path.dirname(path)
+    return os.path.islink(path)
+
+
 def zero():
     return dict.fromkeys(FIELDS, 0)
 
@@ -324,6 +331,8 @@ class Collector:
         roots += [home(".claude", "projects"), home(".config", "claude", "projects")]
         for r in dict.fromkeys(roots):
             for p in glob.glob(os.path.join(r, "*", "*.jsonl")):
+                if os.path.islink(os.path.dirname(p)):   # a renamed agent's link to its old session folder: counted there
+                    continue
                 self.scan_jsonl(p, parse_claude)
             for p in glob.glob(os.path.join(r, "*", "*", "subagents", "*.jsonl")):   # subagents of a session
                 parent = self.st["files"].get(os.path.dirname(os.path.dirname(p)) + ".jsonl", {})
@@ -339,16 +348,20 @@ class Collector:
     def qwen(self):
         base = os.environ.get("QWEN_DATA_DIR") or home(".qwen")
         for p in glob.glob(os.path.join(base, "projects", "*", "chats", "*.jsonl")):
-            self.scan_jsonl(p, parse_qwen_jsonl)
+            if not linked(p, 2):
+                self.scan_jsonl(p, parse_qwen_jsonl)
         for p in glob.glob(os.path.join(base, "tmp", "*", "chats", "*.json")):
-            self.scan_whole(p, lambda p=p: parse_qwen_json(p), lambda p=p: head(p))
+            if not linked(p, 2):
+                self.scan_whole(p, lambda p=p: parse_qwen_json(p), lambda p=p: head(p))
 
     def gemini(self):
         base = os.environ.get("GEMINI_CLI_HOME") and os.path.join(os.environ["GEMINI_CLI_HOME"], ".gemini") or home(".gemini")
         for p in glob.glob(os.path.join(base, "tmp", "*", "chats", "*.jsonl")):
-            self.scan_jsonl(p, parse_gemini_jsonl)
+            if not linked(p, 2):
+                self.scan_jsonl(p, parse_gemini_jsonl)
         for p in glob.glob(os.path.join(base, "tmp", "*", "chats", "*.json")):
-            self.scan_whole(p, lambda p=p: parse_gemini_json(p), lambda p=p: head(p))
+            if not linked(p, 2):
+                self.scan_whole(p, lambda p=p: parse_gemini_json(p), lambda p=p: head(p))
 
     def opencode(self):
         base = os.environ.get("OPENCODE_DATA_DIR") or os.path.join(os.environ.get("XDG_DATA_HOME") or home(".local", "share"), "opencode")

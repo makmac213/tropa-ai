@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1 (October 2026)
+
+### Fixes
+- **Renaming an agent renames it everywhere:** its `agents/<name>/` folder, configs, `TEAM.md`, the lead setting, `@mentions` in teammates' instructions, its tasks, questions and token usage. Its CLI restarts under the new name and resumes its conversation (an agent renaming itself waits until it's idle).
+- **The Team view and graph show the new name** right away.
+- **Team cards:** the buttons (Model, Wake, Restart, Clone, Remove) are on their own row, so they're never cut off on narrow cards.
+- **Team view filter:** 🔍 type part of a name to show only matching agents, in the cards and the graph.
+- **A new project no longer takes over agents of another project with the same name** (`lead`, `qa`…): the new agents get the project's name added (`lead-shop`), the form warns first, and the setup chat avoids names in use.
+
 ## 0.5.0 (October 2026)
 
 ### Easier to install and run

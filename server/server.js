@@ -361,7 +361,7 @@ function resolveAgent(name, { autoRegister = true, project } = {}) {
   return a;
 }
 /** Rename an agent: keeps its read cursors and re-attributes its past messages. */
-function renameAgent(oldName, newName) {
+function renameAgent(oldName, newName, { when = 'now' } = {}) {
   let a = q.getAgent.get(cleanName(oldName));
   if (!a) { const al = q.getAlias.get(cleanName(oldName)); if (al) a = q.getAgent.get(al.target); }
   if (!a) throw new UserError(`unknown agent "${oldName}"`);
@@ -380,6 +380,7 @@ function renameAgent(oldName, newName) {
     q.retargetAliases.run(n, a.name);
     if (n.toLowerCase() !== a.name.toLowerCase()) q.putAlias.run(a.name, n);
     q.touchAgent.run(Date.now(), n);
+    renameRefs(a.name, n);
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
   const renamed = q.getAgent.get(n);
@@ -387,7 +388,58 @@ function renameAgent(oldName, newName) {
   for (const roomId of agentRoomIds(renamed)) {
     try { const m = systemMessage(roomId, `${a.name} is now known as ${n}`); markRead(n, roomId, m.id); } catch {}
   }
+  try { renameOnMachine(a, n, when); } catch (e) { console.error('rename on machine', e); }
   return renamed;
+}
+/** The other places that name an agent: its tasks, questions and token usage (kept under the new name). */
+function renameRefs(oldName, n) {
+  db.prepare('UPDATE tasks SET assignee = ? WHERE lower(assignee) = lower(?)').run(n, oldName);
+  db.prepare('UPDATE tasks SET created_by = ? WHERE lower(created_by) = lower(?)').run(n, oldName);
+  db.prepare('UPDATE tasks SET updated_by = ? WHERE lower(updated_by) = lower(?)').run(n, oldName);
+  db.prepare('UPDATE questions SET agent = ? WHERE lower(agent) = lower(?)').run(n, oldName);
+  // usage: fold the old name's rows into the new name's (the host keeps reporting old sessions under the old name; see /host/usage)
+  db.prepare(`INSERT INTO usage (project, agent, cli, model, day, input, cache_read, cache_write, output, turns, cost, updated_at)
+    SELECT project, ?, cli, model, day, input, cache_read, cache_write, output, turns, cost, updated_at FROM usage WHERE agent = ?
+    ON CONFLICT(project, agent, cli, model, day) DO UPDATE SET input = usage.input + excluded.input, cache_read = usage.cache_read + excluded.cache_read,
+      cache_write = usage.cache_write + excluded.cache_write, output = usage.output + excluded.output, turns = usage.turns + excluded.turns,
+      cost = CASE WHEN usage.cost IS NULL AND excluded.cost IS NULL THEN NULL ELSE COALESCE(usage.cost, 0) + COALESCE(excluded.cost, 0) END`).run(n, oldName);
+  db.prepare('DELETE FROM usage WHERE agent = ?').run(oldName);
+}
+/** Rename it on the machine too: its agents/<name>/ folder, configs and tmux window (the project's watcher or the host helper
+ *  runs setup_agent.py rename). `when`: 'now' (the human renamed it) or 'idle' (an agent renamed itself mid-turn). */
+function renameOnMachine(a, n, when) {
+  const low = a.name.toLowerCase();
+  let roomId = a.project ? `project:${a.project}` : '';
+  for (const [rid, w] of watchers) if (w.agents.some((x) => x.toLowerCase() === low)) { roomId = rid; break; }
+  if (!roomId.startsWith('project:')) return;
+  const slug = roomId.slice('project:'.length);
+  const s = wakeSettings(roomId);
+  if (String(s.lead || '').toLowerCase() === low) setWakeSettings(roomId, { lead: n });
+  const w = watchers.get(roomId);
+  if (w) {   // show the new name in the Team view and graph right away
+    const on = w.agents.some((x) => x.toLowerCase() === low);
+    w.agents = w.agents.map((x) => (x.toLowerCase() === low ? n : x));
+    for (const k of Object.keys(w.panes)) if (k.toLowerCase() === low) { w.panes[n] = w.panes[k]; delete w.panes[k]; }
+    if (w.approvalSince) for (const k of Object.keys(w.approvalSince)) if (k.toLowerCase() === low) { w.approvalSince[n] = w.approvalSince[k]; delete w.approvalSince[k]; }
+    if (on) { w.renames ||= {}; w.renames[low] = { old: a.name, new: n, at: Date.now(), when }; }
+    broadcastTeam(roomId);
+  }
+  if (watcherFor(roomId) && (w.caps || []).includes('rename_agent')) {
+    pushEvent(roomId, { type: 'rename_agent', agent: a.name, new_name: n, when });
+  } else if (hostOnline()) {
+    const job = { id: require('node:crypto').randomUUID(), type: 'rename_agent', room_id: roomId, slug, agent: a.name, new_name: n, status: 'queued', log: [] };
+    jobs.set(job.id, job);
+    host.queue.push({ ...job, log: undefined });
+    for (const f of [...host.waiters]) f();
+  } else if (w) {
+    if (w.renames) delete w.renames[low];
+    watcherSay(roomId, `✏️ @${n} is renamed in the chat, but neither the host helper nor an up-to-date watcher is running, so its folder is still agents/${a.name}/. Start the host helper (tropa host start), then rename it again.`);
+  }
+}
+/** A watcher's window name → the name it shows under while a rename is on its way to the machine. */
+function shownName(w, raw) {
+  const r = w.renames?.[raw.toLowerCase()];
+  return r && r.old === raw ? r.new : raw;
 }
 
 function agentRoomIds(agent) {
@@ -772,7 +824,7 @@ async function callTool(name, args, ctx) {
       return `Joined ${roomId}.`;
     }
     case 'rename': {
-      const a = renameAgent(agentName, args.new_name);
+      const a = renameAgent(agentName, args.new_name, { when: 'idle' });
       return `You are now "${a.name}". Pass agent:"${a.name}" in every call from now on.`;
     }
     case 'share_file': {
@@ -1469,7 +1521,15 @@ api.post('/watch/poll', wrap(async (req, res) => {
   const w = watcherRecord(roomId);
   const wasOn = !!watcherFor(roomId);
   w.seen = Date.now();
-  const agents = (Array.isArray(req.body.agents) ? req.body.agents : []).map(cleanName).filter((n) => n && !removedAgent(n));
+  w.caps = Array.isArray(req.body.caps) ? req.body.caps.map(String).slice(0, 20) : [];
+  const raw = (Array.isArray(req.body.agents) ? req.body.agents : []).map(cleanName).filter((n) => n && !removedAgent(n));
+  for (const [k, r] of Object.entries(w.renames || {})) {   // a rename on its way: done once the old window is gone
+    if (!raw.includes(r.old) || Date.now() - r.at > 6 * 3600e3) delete w.renames[k];
+    else if (Date.now() - (r.sent || r.at) > 10 * 60e3 && w.caps.includes('rename_agent')) {   // a restarted watcher forgets it: remind it
+      r.sent = Date.now(); pushEvent(roomId, { type: 'rename_agent', agent: r.old, new_name: r.new, when: 'idle' });
+    }
+  }
+  const agents = raw.map((x) => shownName(w, x));
   const changed = agents.join() !== w.agents.join() || String(req.body.tmux_session || '') !== w.tmux;
   w.agents = agents; w.tmux = String(req.body.tmux_session || '').slice(0, 60);
   for (const k of Object.keys(w.panes)) if (!agents.includes(k)) delete w.panes[k];
@@ -1487,7 +1547,10 @@ api.post('/watch/poll', wrap(async (req, res) => {
     });
   }
   w.seen = Date.now();
-  return { events: w.queue.splice(0), settings: wakeSettings(roomId), human: HUMAN_NAME,
+  // events name agents by their (new) name; until a rename reaches the machine its window still has the old one
+  const back = new Map(Object.values(w.renames || {}).map((r) => [r.new.toLowerCase(), r.old]));
+  const events = w.queue.splice(0).map((ev) => (ev.type !== 'rename_agent' && ev.agent && back.has(String(ev.agent).toLowerCase()) ? { ...ev, agent: back.get(String(ev.agent).toLowerCase()) } : ev));
+  return { events, settings: wakeSettings(roomId), human: HUMAN_NAME,
     files: qa.pendingSync.all(roomId).map(attView), uploads: qa.pendingUpload.all(roomId).map(attView) };
 }));
 api.post('/watch/panes', wrap((req) => {
@@ -1496,7 +1559,7 @@ api.post('/watch/panes', wrap((req) => {
   w.seen = Date.now();
   const panes = req.body.panes && typeof req.body.panes === 'object' ? req.body.panes : {};
   for (const [name, p] of Object.entries(panes)) {
-    const n = cleanName(name);
+    const n = cleanName(name) && shownName(w, cleanName(name));
     if (!n || !p) continue;
     w.approvalSince ||= {};
     if (p.state === 'approval') w.approvalSince[n] ||= Date.now(); else delete w.approvalSince[n];
@@ -1790,6 +1853,8 @@ function chatContext() {
     design_systems: (i.design_systems || []).map((d) => `${d.id}: ${d.name} (${d.best_for || d.summary || ''})`.slice(0, 200)),
     tools: (i.tools || []).map((t) => `${t.id}: ${t.name} (${t.summary})`.slice(0, 200)),
     folders: (i.folders || []).slice(0, 60).map((f) => f.name),
+    // agent names are unique across TropaAI: these are taken (a new team picks others, or gets "-<project>" added)
+    taken_agent_names: q.listAgents.all().map((a) => a.name).slice(0, 200),
   };
 }
 /** The plan Claude proposed, cleaned to what POST /projects accepts (it validates again on create). */
@@ -1960,21 +2025,59 @@ api.post('/projects', wrap((req) => {
     return { id: c.id, agents: who, params };
   });
   if (lead && !seen.has(lead.toLowerCase())) throw new UserError('the lead must be one of the agents');
+  // Agent names are unique across TropaAI. A name another project already uses (lead, qa, backend… from the presets)
+  // gets this project's name added instead of taking over that agent: lead → lead-<slug>.
+  const renamed = uniqueTeamNames(slug, agents);
+  if (renamed.size) {
+    const to = (n) => renamed.get(String(n).toLowerCase()) || n;
+    const fix = (text) => String(text || '').replace(/@([A-Za-z0-9._-]+)/g, (m, n) => {
+      const bare = n.replace(/\.+$/, ''), dots = n.slice(bare.length);   // "@lead." at the end of a sentence
+      return renamed.has(bare.toLowerCase()) ? `@${renamed.get(bare.toLowerCase())}${dots}` : m;
+    });
+    for (const a of agents) { a.name = to(a.name); a.role = fix(a.role); a.instruction = fix(a.instruction); }
+    for (const t of tools) if (t.agents !== '*') t.agents = t.agents.map(to);
+    b.kickoff = fix(b.kickoff); b.brief = fix(b.brief);
+  }
+  const lead_ = lead ? (renamed.get(lead.toLowerCase()) || lead) : '';
   const files = (Array.isArray(b.files) ? b.files : []).map(Number).filter(Boolean);
   const room = ensureRoom(roomId, String(b.topic || name || '').slice(0, 300), { revive: true });
   if (b.topic || name) { q.setTopic.run(String(b.topic || name).slice(0, 300), roomId); broadcast({ type: 'room', room: q.getRoom.get(roomId) }); }
-  setWakeSettings(roomId, { lead, auto_approve: b.auto_approve === true });
-  const intro = [existing ? `🧩 **Team added to existing project: ${name || slug}** (\`${path || folder}\`)` : `🆕 **New project: ${name || slug}**`, brief ? `\n${brief}` : '',
-    files.length ? `\nFiles are saved in \`${ATT_DIR}/\`.` : ''].join('\n').trim();
+  setWakeSettings(roomId, { lead: lead_, auto_approve: b.auto_approve === true });
+  const brief_ = renamed.size ? String(b.brief || '').slice(0, MAX_CONTENT - 500) : brief;
+  const intro = [existing ? `🧩 **Team added to existing project: ${name || slug}** (\`${path || folder}\`)` : `🆕 **New project: ${name || slug}**`, brief_ ? `\n${brief_}` : '',
+    renamed.size ? `\nThese names were already used in other projects, so this team has: ${[...renamed].map(([o, n]) => `${o} → @${n}`).join(', ')}.` : '',
+    files.length ? `\nFiles are saved in \`${ATT_DIR}/\`.` : ''].filter(Boolean).join('\n').trim();
   const msg = postMessage({ room: roomId, sender: HUMAN_NAME, kind: 'human', content: intro, attachments: files });
   const job = { id: require('node:crypto').randomUUID(), type: 'create_project', room_id: roomId, slug, name: name || slug, folder,
-    brief, agents, lead, existing, path, tools, design_system: design, auto_approve: b.auto_approve === true, git: b.git !== false, start: b.start !== false, trust: b.trust !== false, kickoff: String(b.kickoff || '').slice(0, 4000),
+    brief: brief_, agents, lead: lead_, existing, path, tools, design_system: design, auto_approve: b.auto_approve === true, git: b.git !== false, start: b.start !== false, trust: b.trust !== false, kickoff: String(b.kickoff || '').slice(0, 4000),
     human: HUMAN_NAME, status: 'queued', log: [], message_id: msg.id };
   jobs.set(job.id, job);
   host.queue.push({ ...job, log: undefined, keys: projectKeys });   // the keys only travel in the queue, never kept in `jobs`
   for (const f of [...host.waiters]) f();
-  return { job: jobView(job), room: q.getRoom.get(roomId) || room };
+  return { job: jobView(job), room: q.getRoom.get(roomId) || room, renamed: Object.fromEntries(renamed) };
 }));
+/** Names this team can't have because another agent already has them: name(lower) → a free one ("lead-<slug>", then "-2"…). */
+function nameTaken(n, slug) {
+  const low = n.toLowerCase();
+  if (RESERVED.has(low) || low === HUMAN_NAME.toLowerCase()) return true;
+  if (q.getAgent.get(n) && !removedAgent(n)) return true;
+  if ([...q.listAgents.all()].some((a) => a.name.toLowerCase() === low)) return true;
+  for (const [rid, w] of watchers) if (rid !== `project:${slug}` && watcherFor(rid) && w.agents.some((x) => x.toLowerCase() === low)) return true;
+  return [...agentReqs.values()].some((r) => r.status === 'requested' && r.agent.name.toLowerCase() === low);
+}
+function uniqueTeamNames(slug, agents) {
+  const out = new Map(), mine = new Set(agents.map((a) => a.name.toLowerCase()));
+  const free = (n) => !nameTaken(n, slug) && !mine.has(n.toLowerCase());
+  for (const a of agents) {
+    if (!nameTaken(a.name, slug)) continue;
+    const short = slug.slice(0, Math.max(3, 39 - a.name.length));
+    let n = `${a.name}-${short}`.slice(0, 40).replace(/[-.]+$/, '');
+    for (let i = 2; !free(n) && i < 100; i++) n = `${a.name}-${short}`.slice(0, 37).replace(/[-.]+$/, '') + `-${i}`;
+    if (!free(n)) throw new UserError(`the name @${a.name} is already used; pick another`);
+    out.set(a.name.toLowerCase(), n); mine.add(n.toLowerCase());
+  }
+  return out;
+}
 
 // ---------- public links (ngrok, optional): the host helper runs `ngrok http PORT` on the machine ----------
 // A share starts from the human (room button, `@tropa share 3000`, `tropa share 3000`) or from an
@@ -2128,14 +2231,25 @@ api.post('/host/usage', wrap((req) => {
   const n = (x) => Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.round(Number(x) || 0)));
   db.exec('BEGIN');
   try {
+    const sum = new Map();
     for (const r of rows) {
-      const project = slugify(r.project || ''), agent = cleanName(r.agent || ''), day = String(r.day || '');
+      const project = slugify(r.project || ''), day = String(r.day || '');
+      let agent = cleanName(r.agent || '');
+      const al = agent && q.getAlias.get(agent);   // sessions from before a rename carry the old name
+      if (al) agent = al.target;
       const cli = CLI_TOOLS.includes(r.cli) ? r.cli : 'other';
       const model = String(r.model || '?').slice(0, 100);
       if (!project || !agent || !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
       const cost = r.cost === null || r.cost === undefined || !Number.isFinite(Number(r.cost)) ? null : Math.max(0, Number(r.cost));
-      uq.upsert.run(project, agent, cli, model, day, n(r.input), n(r.cache_read), n(r.cache_write), n(r.output), n(r.turns), cost, now);
-      touched.add(project);
+      const k = [project, agent, cli, model, day].join('\0');
+      const c = sum.get(k) || { project, agent, cli, model, day, input: 0, cache_read: 0, cache_write: 0, output: 0, turns: 0, cost: null };
+      for (const f of ['input', 'cache_read', 'cache_write', 'output', 'turns']) c[f] += n(r[f]);
+      if (cost !== null) c.cost = (c.cost || 0) + cost;
+      sum.set(k, c);
+    }
+    for (const c of sum.values()) {
+      uq.upsert.run(c.project, c.agent, c.cli, c.model, c.day, c.input, c.cache_read, c.cache_write, c.output, c.turns, c.cost, now);
+      touched.add(c.project);
     }
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
