@@ -26,6 +26,7 @@ DEFAULTS = {
                    "codex": "--sandbox workspace-write --ask-for-approval on-request", "gemini": "--approval-mode auto_edit"},
     "approval_patterns": [],
     # CLI pop-ups the watcher clears by itself: {label, tool (omit = any CLI), pattern (regex on the bottom of the screen), keys}
+    "trust_agent_folders": True,   # pre-answer each CLI's "trust this folder?" for the agent folders (setup_agent.trust_folders)
     "dismiss_prompts": [{"label": "Claude feedback survey", "tool": "claude", "pattern": "1: Bad\\s+2: Fine\\s+3: Good\\s+0: Dismiss", "keys": ["0"]}],
     "claude_allow": [],
     "approval_keys": {"claude": {"yes": ["1"], "always": ["2"], "no": ["Escape"]},

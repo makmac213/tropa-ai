@@ -73,6 +73,10 @@ tropa stop               # stop it
 tropa autostart on       # start it whenever you log in (macOS and Linux); off to undo
 ```
 
+**Which port:** without `-p`, these use the port you last started with (`tropa start -p 8181` once, and plain `tropa start` keeps using 8181), else the port TropaAI already runs on, else 8888. `TROPA_PORT=…` overrides it.
+
+**Updating:** `tropa self-update` (the latest release, or `main` while there are none), then `tropa stop && tropa start` and `tropa update <project>` for each project.
+
 `tropa start` runs the chat server with Node. If you prefer Docker, use `tropa start --docker`; a port that already keeps its chats in Docker stays in Docker. Use `-p PORT` to run on another port (several can run side by side, each with its own chats).
 
 ### What it needs

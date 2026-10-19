@@ -5,6 +5,9 @@
 #   start_agent.sh --exec NAME   (internal) run the CLI in the current terminal
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONDONTWRITEBYTECODE=1
+# your terminal's PATH (saved by `tropa`), so agents run the same CLIs you installed and signed in with
+TROPA_PATH_FILE="${TROPA_STATE:-$HOME/.tropa}/path"
+if [ -s "$TROPA_PATH_FILE" ]; then PATH="$(head -1 "$TROPA_PATH_FILE"):$PATH"; export PATH; fi
 ROOT="$(dirname "$HERE")"
 cfg() { python3 "$HERE/config.py" get "$1"; }
 SESSION_NAME="$(cfg tmux_session)"
@@ -86,6 +89,8 @@ run_cli() {
     local r="$1" p="$boot" res=()
     [ "$r" = 1 ] && p="$rboot"
     touch "$ws/.tropa-session"
+    local bin; bin=$(command -v "$tool" 2>/dev/null)
+    [ -n "$bin" ] && echo "▶ $tool: $bin"
     case "$tool" in
         claude)   [ "$r" = 1 ] && res=(--continue) && echo "↻ resuming the previous Claude Code session"
                   if [ -n "$local_model" ]; then   # Ollama ≥ 0.14 speaks the Anthropic Messages API

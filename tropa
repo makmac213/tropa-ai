@@ -33,6 +33,10 @@ SERVER_DIR="$TROPA_HOME/server"
 STATE_DIR="${TROPA_STATE:-$HOME/.tropa}"
 [ -x "$STATE_DIR/node/bin/node" ] && PATH="$STATE_DIR/node/bin:$PATH"   # the Node the installer put there (if any)
 export PATH
+# Agents run in tmux, which keeps the PATH it had when its server first started (often before you installed or
+# updated a CLI). Remember the PATH of your own terminal; start_agent.sh puts it first, so agents run the same
+# `claude`, `codex`… you run (and are signed in with). Only from an interactive terminal, not from autostart.
+if [ -t 0 ] && [ -t 1 ]; then mkdir -p "$STATE_DIR" 2>/dev/null && printf '%s\n' "$PATH" >"$STATE_DIR/path" 2>/dev/null; fi
 VERSION="$(cat "$TROPA_HOME/VERSION" 2>/dev/null || echo dev)"
 TROPA_REPO="${TROPA_REPO:-makmac213/tropa-ai}"
 
@@ -152,6 +156,26 @@ install_hint() {     # package-manager hint for $1
     else echo "install $1 with your package manager"; fi
 }
 valid_port() { case "$1" in ''|*[!0-9]*) return 1;; esac; [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; }
+# The port when you don't pass -p: $TROPA_PORT, else the one you last started with, else the one TropaAI
+# already runs on (or has its data on) on this computer, else 8888.
+default_port() {
+    if valid_port "${TROPA_PORT:-}"; then echo "$TROPA_PORT"; return; fi
+    local p f known=""
+    p=$(cat "$STATE_DIR/port" 2>/dev/null)
+    if valid_port "$p"; then echo "$p"; return; fi
+    for f in "$STATE_DIR"/projects-*.json "$STATE_DIR"/server-*.mode "$STATE_DIR"/host-*.log; do
+        [ -e "$f" ] || continue
+        p=${f##*/}; p=${p#*-}; p=${p%%.*}
+        valid_port "$p" || continue
+        case " $known " in *" $p "*) ;; *) known="$known $p" ;; esac
+    done
+    for p in $known; do   # one that's running now
+        if curl -fsS -m 1 "http://localhost:$p/api/host" >/dev/null 2>&1; then echo "$p"; return; fi
+    done
+    set -- $known
+    if [ $# -ge 1 ]; then echo "$1"; else echo 8888; fi
+}
+remember_port() { mkdir -p "$STATE_DIR" && echo "$1" >"$STATE_DIR/port"; }
 
 server_human() {   # prints HUMAN_NAME of the server on port $1
     curl -fsS --max-time 3 "http://localhost:$1/api/state" 2>/dev/null |
@@ -241,7 +265,7 @@ cmd_host() {
         esac; shift
     done
     [ -z "$port" ] && [ -f ./.agent_sync/settings.json ] && port=$(port_of "$PWD")
-    port="${port:-8888}"
+    port="${port:-$(default_port)}"
     case "$sub" in
         start) host_start "$port" "$dir" ;;
         stop) if host_running "$port"; then tmux kill-session -t "$(host_session "$port")" && info "🛑 Host helper stopped"; else info "Host helper not running for port $port"; fi ;;
@@ -356,7 +380,7 @@ cmd_server() {
         esac; shift
     done
     [ -z "$port" ] && [ -f ./.agent_sync/settings.json ] && port=$(port_of "$PWD")
-    port="${port:-8888}"
+    port="${port:-$(default_port)}"
     if [ -z "$human" ]; then
         human=$( [ -f ./.agent_sync/config.py ] && python3 ./.agent_sync/config.py get human 2>/dev/null )
         human="${human:-$(default_human)}"
@@ -389,11 +413,12 @@ cmd_start() {   # the everyday command: server (Node unless this port already ke
             *) die "unknown option '$1' (usage: tropa start [-p PORT] [--docker] [--no-open])" ;;
         esac; shift
     done
-    port="${port:-8888}"; human="${human:-$(default_human)}"
+    port="${port:-$(default_port)}"; human="${human:-$(default_human)}"
     if [ -z "$mode" ] && [ "$(cat "$STATE_DIR/server-$port.mode" 2>/dev/null)" != docker ] && ! docker volume inspect "$(compose_name "$port")_ai-irc-data" >/dev/null 2>&1; then
         node_ok && mode=node   # lighter than Docker; Docker stays the fallback
     fi
     [ "$mode" = docker ] && mode=""   # server_up uses Docker unless told node
+    remember_port "$port"   # plain `tropa start` / `tropa stop` use this port from now on
     TROPA_NO_HOST=0 server_up "$port" "$human" 0 "$mode"
     local url="http://localhost:$port/?setup=1"
     info ""
@@ -404,10 +429,10 @@ cmd_start() {   # the everyday command: server (Node unless this port already ke
 cmd_stop() {
     local port=""
     while [ $# -gt 0 ]; do case "$1" in -p|--port) port="$2"; shift ;; *) die "unknown option '$1'" ;; esac; shift; done
-    server_down "${port:-8888}"
+    server_down "${port:-$(default_port)}"
 }
 cmd_autostart() {   # start TropaAI at login: launchd (macOS) or a systemd user service (Linux)
-    local sub="${1:-status}" port=8888; shift || true
+    local sub="${1:-status}" port; port=$(default_port); shift || true
     while [ $# -gt 0 ]; do case "$1" in -p|--port) port="$2"; shift ;; *) die "unknown option '$1'" ;; esac; shift; done
     valid_port "$port" || die "invalid port '$port'"
     local bin="$TROPA_HOME/tropa" label="ai.tropa.server-$port"
@@ -551,7 +576,7 @@ cmd_init() {
     [ -n "$human" ] && C set human "\"$human\""
     [ "${NEW_SETTINGS:-0}" = 1 ] && C set tmux_session "\"ai-$(C get project)\""
     if [ -n "$port" ]; then C set server "\"http://localhost:$port\""
-    else port=$(port_of "$dir"); port="${port:-8888}"; fi
+    else port=$(port_of "$dir"); port="${port:-$(default_port)}"; fi
     mkdir -p "$dir/$(C get docs_dir)"
 
     check_git "$dir"

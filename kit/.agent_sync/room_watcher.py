@@ -189,6 +189,52 @@ def auth_error(rows):
     return ""
 
 
+# The agent lost its connection to the tropa tool (the chat server restarted or was down for a moment, or the CLI was
+# updated underneath it). Claude Code doesn't reconnect by itself; a restart that resumes the conversation does.
+MCP_LOST = re.compile(r"\bMCP servers? failed\b|\btropa\b[^\n]{0,80}\b(dropped|disconnected|not connected|failed to connect|unavailable|isn't connected|is down)\b"
+                      r"|\b(reconnect|run /mcp)\b[^\n]{0,60}\btropa\b", re.I)
+
+
+# Claude Code's first-run questions for a folder. Unanswered, they block the agent; Enter alone picks "No", and then it
+# runs without the tropa tool. tropa wrote these folders itself, so it answers "Yes" (the 2nd option) unless
+# settings.trust_agent_folders is off.
+FOLDER_DLG = re.compile(r"Yes, I trust this folder|Yes, allow external imports", re.I)
+
+
+def folder_dialog(rows):
+    tail = [r for r in rows if r.strip()][-14:]
+    return any(FOLDER_DLG.search(r) for r in tail) and any(re.search(r"Enter to confirm", r) for r in tail)
+
+
+# Any other question a CLI waits on in its terminal (a new first-run screen after an update, a menu we don't know):
+# never type a wake into it (Enter would pick an answer), and tell the human once.
+MENU = re.compile(r"Enter to (confirm|select|continue)|Press Enter to continue|\((y/n|Y/n|y/N)\)\s*\??\s*$|\[(y/N|Y/n)\]", re.I)
+
+
+# A CLI on its first-run screens (theme, login): it isn't signed in on this computer, or it's a different install
+# of the CLI than the one you signed in with.
+FIRST_RUN = re.compile(r"Select login method|Choose the text style that looks best|Welcome to Claude Code.*\n.*Let's get started|"
+                       r"Sign in with ChatGPT|How would you like to authenticate|Get started with Gemini", re.I)
+
+
+def first_run(rows):
+    return bool(FIRST_RUN.search("\n".join(r.strip() for r in rows[-40:])))
+
+
+def stuck_menu(rows):
+    """The question at the bottom of the screen, if the CLI is waiting on one, else ''."""
+    tail = [r for r in rows if r.strip()][-10:]
+    if not any(MENU.search(r) for r in tail[-4:]):
+        return ""
+    return "\n".join(BOX.sub(" ", r).strip() for r in tail)[-700:]
+
+
+def mcp_lost(rows):
+    """True when the bottom of the screen says the tropa connection is gone."""
+    text = " ".join(BOX.sub(" ", r).strip() for r in [r for r in rows if r.strip()][-25:])
+    return bool(MCP_LOST.search(text))
+
+
 def auth_alert(cfg, a, line):
     return (f"@{cfg['human']} 🔑 `{a}` can't reach Claude: its login expired or was rejected.\n```\n{line}\n```\n"
             f"Fix now: run `claude` in a normal terminal and type `/login` (one login covers every agent), then wake `{a}`.\n"
@@ -365,6 +411,7 @@ class Watcher:
         self.nudges = {}        # agent -> (assignment message id, nudges sent)
         self.auto_pressed = {}  # agent -> prompt signature we already auto-approved once
         self.auth_alerted = {}  # agent -> auth-error line we already posted
+        self.reconnected = {}   # agent -> time we last restarted it because its tropa connection was lost
         self.dismissed = {}     # agent -> (pop-up pattern, last press time, presses)
         self.model_switch = {}  # agent -> new model, applied once the agent is idle
         self.renames = {}       # agent -> new name, applied once the agent is idle
@@ -488,6 +535,14 @@ class Watcher:
             if self.dismissed.get(a, ("", 0, 0))[2] < 4:   # quiet once the human has been told
                 log(f"{a} has a pop-up that didn't clear yet; wake held")
             return
+        if folder_dialog(pane_rows(self.cfg, a)):   # Claude's "trust this folder?": typing + Enter would answer No
+            self.held[a] = text
+            log(f"{a} is on Claude's folder question; wake held")
+            return
+        if first_run(pane_rows(self.cfg, a)) or (not approval_prompt(self.cfg, a) and stuck_menu(pane_rows(self.cfg, a))):   # some other question: don't answer it by accident
+            self.held[a] = text
+            log(f"{a} is waiting on a question in its terminal; wake held")
+            return
         prompt = approval_prompt(self.cfg, a)
         if prompt:
             self.held[a] = text
@@ -608,6 +663,17 @@ class Watcher:
         now = time.time()
         for a in agents:
             rows = pane_rows(self.cfg, a)
+            if folder_dialog(rows) and agent_tool(self.cfg, a) == "claude":
+                if self.cfg.get("trust_agent_folders", True) not in (False, "false", 0, "0"):
+                    press(self.cfg, a, ["Down"]); time.sleep(0.3); press(self.cfg, a, ["Enter"])
+                    log(f"{a}: answered Claude's folder question with Yes")
+                    self.last_capture = 0
+                    continue
+                if self.alerted.get(a) != "folder":
+                    self.alerted[a] = "folder"
+                    say(self.cfg, f"@{self.cfg['human']} `{a}` is waiting on Claude's \"trust this folder\" question in its terminal "
+                                  f"(`tmux attach -t {self.cfg['tmux_session']}`). Choose Yes, or it runs without the tropa tool.")
+                continue
             if self.dismiss(a, rows):
                 self.last_capture = 0   # look again right after it redraws
                 continue
@@ -644,14 +710,38 @@ class Watcher:
             elif not bad:
                 self.auth_alerted.pop(a, None)
             # approvals: alert once per prompt, deliver held wakes once it clears
+            if first_run(rows):
+                if self.alerted.get(a) != "first_run":
+                    self.alerted[a] = "first_run"
+                    tool = agent_tool(self.cfg, a)
+                    binl = next((r.strip() for r in rows if r.strip().startswith(f"▶ {tool}:")), "")
+                    log(f"{a}: {tool} is on its first-run/login screen; posted to room")
+                    say(self.cfg, f"@{self.cfg['human']} 🔑 `{a}`'s {tool} isn't signed in on this computer: it's showing its first-run setup "
+                                  f"(theme / login){f' — `{binl[2:]}`' if binl else ''}. Run `{tool}` once in a terminal and sign in, then press "
+                                  f"Restart on its card. Already signed in? Then the agent runs a different install: check `which -a {tool}` "
+                                  f"and remove the old one, then run `tropa start` once from your terminal (agents use its PATH).")
+                continue
+            menu = "" if prompt or popup else stuck_menu(rows)
+            if menu and state == "idle" and self.alerted.get(a) != "menu:" + menu[-120:]:
+                self.alerted[a] = "menu:" + menu[-120:]
+                log(f"{a} is waiting on a question in its terminal; posted to room")
+                say(self.cfg, f"@{self.cfg['human']} `{a}` is waiting on a question in its terminal (often a new screen after a CLI update), "
+                              f"so it can't work or read the room:\n```\n{menu}\n```\nAnswer it with `tmux attach -t {self.cfg['tmux_session']}` "
+                              f"(window `{a}`), or press Restart on its card.")
             if prompt and self.alerted.get(a) != prompt[0]:
                 say(self.cfg, approval_alert(self.cfg, a, prompt[1]))
                 self.alerted[a] = prompt[0]
                 log(f"{a} is on an approval prompt; posted to room")
-            elif not prompt:
+            elif not prompt and not menu:
                 self.alerted.pop(a, None)
                 if a in self.held:
                     self.deliver(a, self.held.pop(a), "held wake")
+            if state == "idle" and not prompt and not popup and not menu and mcp_lost(rows) and time.time() - self.reconnected.get(a, 0) > 600:
+                self.reconnected[a] = time.time()
+                log(f"{a} lost its tropa connection; restarting it (it resumes its conversation)")
+                say(self.cfg, f"🔌 `{a}` lost its connection to the chat; restarting it.")
+                self.restart(a)
+                continue
             if state == "idle" and a in self.model_switch and not popup:
                 self.switch_model(a)
             if state == "idle" and a in self.renames and not popup:

@@ -748,6 +748,7 @@ class Host:
             self.report(job, "🧰 Tools: " + ", ".join(f"{names.get(t['id'], t['id'])} → {'everyone' if t['agents'] == '*' else ', '.join('@' + n for n in t['agents'])}"
                                                      for t in job["tools"]) + ". Each needs a one-time sign-in in the agent's terminal unless its token is set — see the agent's instructions.")
         setup = os.path.join(root, ".agent_sync", "setup_agent.py")
+        self.setc(root, "trust_agent_folders", job.get("trust") is not False)   # the kit keeps the CLIs' folder trust on every start
         for a in agents:
             role = a.get("role") or f"{a['name']} on {job['name']}"
             instr = a.get("instruction") or ((f"Read {brief_file or 'docs/SPEC.md'} and the files in docs/attachments/. "

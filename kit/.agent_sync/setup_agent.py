@@ -440,6 +440,7 @@ It was typed by the room watcher, not by {cfg['human']}. Read the room. If a mes
                              **{c["id"]: {"httpUrl": url, **({"headers": {"Authorization": f"Bearer ${env}"}} if env else {})}
                                 for c, url, env in tools_for(cfg, a)}}})
     link_skills(cfg, a, ws)
+    trust_folders(cfg, a, ws)
     if tool == "codex":
         args = []
         for c, url, env in tools_for(cfg, a):
@@ -508,6 +509,110 @@ def carry_sessions(old_ws, new_ws):
     return n
 
 
+CLAUDE_TRUST = {"hasTrustDialogAccepted": True,                  # "Is this a project you trust?" (else it ignores
+                "hasClaudeMdExternalIncludesApproved": True,     #  .claude/settings.json and .mcp.json: no tropa tool)
+                "hasClaudeMdExternalIncludesWarningShown": True}  # CLAUDE.md imports ../AGENTS.md and TEAM.md
+
+
+def trust_claude_folder(ws):
+    """Answer Claude Code's first-run questions for an agent folder tropa wrote itself, in ~/.claude.json, so the agent
+    doesn't stop on a dialog nobody sees in tmux (and pressing Enter there picks "No": then it runs without the
+    tropa tool). Settings: trust_agent_folders (default on)."""
+    p = os.path.expanduser("~/.claude.json")
+    key = os.path.realpath(ws)
+    try:
+        with open(p) as f:
+            d = json.load(f)
+    except FileNotFoundError:
+        d = {}
+    except (OSError, ValueError):
+        return False                              # unreadable: leave it alone
+    cur = (d.get("projects") or {}).get(key) or {}
+    if all(cur.get(k) == v for k, v in CLAUDE_TRUST.items()):
+        return False
+    d.setdefault("projects", {}).setdefault(key, {}).update(CLAUDE_TRUST)
+    try:
+        import shutil
+        if os.path.exists(p):
+            shutil.copy(p, p + ".bak-tropa")
+        tmp = p + ".tmp-tropa"
+        with open(tmp, "w") as f:
+            json.dump(d, f, indent=2)
+        os.replace(tmp, p)
+        return True
+    except OSError:
+        return False
+
+
+def _write_json(p, d):
+    import shutil
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    if os.path.exists(p):
+        shutil.copy(p, p + ".bak-tropa")
+    tmp = p + ".tmp-tropa"
+    with open(tmp, "w") as f:
+        json.dump(d, f, indent=2)
+    os.replace(tmp, p)
+
+
+def trust_folders(cfg, a, ws):
+    """Every CLI asks once per folder whether to trust it, and an untrusted folder runs without its config (no tropa
+    tool). A CLI update can ask again. tropa wrote these folders, so it records the answer before each start, in the
+    CLI's own file. Off with settings.trust_agent_folders = false (the New project form's "trust" box)."""
+    if cfg.get("trust_agent_folders", True) in (False, "false", 0, "0"):
+        return
+    tool, root = a.get("tool"), os.path.realpath(cfg["root"])
+    try:
+        if tool == "claude":
+            trust_claude_folder(ws)
+        elif tool in ("gemini", "qwen"):            # ~/.gemini|.qwen/trustedFolders.json: {"/path": "TRUST_FOLDER"}
+            p = os.path.expanduser(f"~/.{tool}/trustedFolders.json")
+            d = json.load(open(p)) if os.path.exists(p) else {}
+            if d.get(root) != "TRUST_FOLDER":
+                d[root] = "TRUST_FOLDER"; _write_json(p, d)
+        elif tool == "codex":                       # ~/.codex/config.toml: [projects."/path"] trust_level = "trusted"
+            p = os.path.expanduser("~/.codex/config.toml")
+            key = f'[projects."{root}"]'
+            cur = open(p).read() if os.path.exists(p) else ""
+            if key not in cur:
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "a") as f:
+                    f.write(f'\n{key}\ntrust_level = "trusted"\n')
+    except (OSError, ValueError):
+        pass
+
+
+def carry_trust(old_ws, new_ws):
+    """Claude Code ignores a folder's settings (permissions, the tropa MCP server) until the folder is trusted in
+    ~/.claude.json. A renamed folder is a new path: give it the old folder's trust."""
+    p = os.path.expanduser("~/.claude.json")
+    real = lambda w: os.path.join(os.path.realpath(os.path.dirname(w)), os.path.basename(w))
+    try:
+        with open(p) as f:
+            d = json.load(f)
+        projects = d.get("projects") or {}
+        old = projects.get(real(old_ws)) or projects.get(old_ws) or {}
+        if not old.get("hasTrustDialogAccepted"):
+            return False
+        cur = projects.setdefault(real(new_ws), {})
+        if cur.get("hasTrustDialogAccepted"):
+            return False
+        cur["hasTrustDialogAccepted"] = True
+        for k in ("enabledMcpjsonServers", "hasCompletedProjectOnboarding"):
+            if k in old and k not in cur:
+                cur[k] = old[k]
+        d["projects"] = projects
+        import shutil
+        shutil.copy(p, p + ".bak-tropa")
+        tmp = p + ".tmp-tropa"
+        with open(tmp, "w") as f:
+            json.dump(d, f, indent=2)
+        os.replace(tmp, p)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def rename_agent(cfg, old, new):
     """Rename an agent everywhere in the project folder, then restart it under the new name if it was running."""
     import time
@@ -553,6 +658,8 @@ def rename_agent(cfg, old, new):
             dump(os.path.join(agents_dir(cfg), x["name"], "agent.json"), x)
     if carry_sessions(os.path.join(agents_dir(cfg), old), dst):
         done.append("its CLI session history")
+    if a.get("tool") == "claude" and carry_trust(os.path.join(agents_dir(cfg), old), dst):
+        done.append("Claude's folder trust")
     write_team(cfg)
     for x in all_agents(cfg):
         write_agent(cfg, x)

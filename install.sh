@@ -6,7 +6,7 @@
 #   TROPA_DIR=~/.tropa    where it is installed       BIN_DIR=...  where `tropa` is linked
 #   TROPA_REPO=owner/repo GitHub repo to install from
 #   TROPA_YES=1           install missing tools without asking      TROPA_NO_DEPS=1  don't install any
-#   TROPA_NO_START=1      don't start TropaAI at the end             TROPA_PORT=8888  port to start it on
+#   TROPA_NO_START=1      don't start TropaAI at the end             TROPA_PORT=8888  port to start it on (default: the one already in use, else 8888)
 set -e
 REPO="${TROPA_REPO:-makmac213/tropa-ai}"
 DIR="${TROPA_DIR:-$HOME/.tropa}"
@@ -143,7 +143,7 @@ elif ! node_ok && ! { have docker && docker info >/dev/null 2>&1; }; then
     say "⚠️  Can't start yet: needs Node.js ≥ $NODE_MIN or Docker. Then run: tropa start"
 else
     say ""
-    "$BIN_DIR/tropa" start -p "${TROPA_PORT:-8888}" || say "⚠️  Start it later with: tropa start"
+    "$BIN_DIR/tropa" start ${TROPA_PORT:+-p "$TROPA_PORT"} || say "⚠️  Start it later with: tropa start"
 fi
 say ""
 say "Next time: tropa start  ·  stop: tropa stop  ·  start when you log in: tropa autostart on"
