@@ -859,7 +859,7 @@ async function callTool(name, args, ctx) {
         { by: a.name, reason: args.reason });
       if (res.status === 'added') return `Adding @${res.job.agent.name} now; it starts in a few seconds and reads TEAM.md and the room. Give it its first assignment with an @mention.`;
       return res.existing ? `@${res.request.agent.name} is already waiting for @${HUMAN_NAME}'s approval (request #${res.request.id}).`
-        : `${res.request.over_limit ? 'You reached this hour\'s limit for adding agents automatically, so this one needs approval. ' : ''}Asked @${HUMAN_NAME} to approve @${res.request.agent.name} (request #${res.request.id}). You'll be told the answer; carry on meanwhile.`;
+        : `${res.request.over_limit ? 'You reached this hour\'s limit for adding agents automatically, so this one needs approval. ' : ''}Asked @${HUMAN_NAME} to approve @${res.request.agent.name} (request #${res.request.id}). You'll be told the answer; carry on meanwhile. Don't welcome or assign @${res.request.agent.name} until tropa posts "✅ … approved" (the agent doesn't exist before that).`;
     }
     case 'remove_agents': {
       const a = agent();
@@ -1446,6 +1446,7 @@ bus.on('message', (m) => {
   if (m.sender_kind === 'system') return;
   if (m.sender_kind === 'human' && /@tropa\b/i.test(m.content) && (shareCommand(m) || agentCommand(m))) return;
   if (m.sender_kind === 'human' && removalCommand(m)) return;   // "remove x and y from the room" → a confirmation card   // not a message for the agents
+  if (m.sender_kind === 'human') { try { agentReqReply(m); } catch (e) { console.error(e); } }   // "approve backend2" (still passed on to the agents)
   const w = watcherFor(m.room_id);
   if (!w) return;
   if (m.sender_kind === 'human') {
@@ -2805,7 +2806,37 @@ function approveAgentReq(r, edits = {}) {
   queueAddAgent(r.room_id, r.slug, a);
   r.agent = a; settleAgentReq(r, 'approved');
   shareNote(r.room_id, `✅ ${HUMAN_NAME} approved ${agentDesc(a)}. Starting it…`);
+  wakeAgentReq(r, `${HUMAN_NAME} approved @${a.name} (request #${r.id}); it's starting now and joins the room in a few seconds. Give it its first assignment with an @mention.`);
   return r;
+}
+// Approving or denying in plain words: "approve backend2", "yes add it" in reply to the request (or to the lead's
+// message that names it). The buttons and "@tropa approve agent N" still work; this catches everything else.
+const REQ_YES = /\b(approved?|approves|yes|ok(?:ay)?|go ahead|accept(?:ed)?|add (?:it|them|him|her))\b/i;
+const REQ_NO = /\b(deny|denied|reject(?:ed)?|decline[d]?|don'?t add|do not add)\b/i;
+function agentReqReply(m) {
+  if (!m.room_id.startsWith('project:')) return false;
+  const pending = [...agentReqs.values()].filter((r) => r.room_id === m.room_id && r.status === 'requested');
+  if (!pending.length) return false;
+  const text = String(m.content);
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const named = pending.filter((r) => new RegExp(`(?<![A-Za-z0-9._-])@?${esc(r.agent.name)}(?![A-Za-z0-9_-])`, 'i').test(text)
+    || new RegExp(`\\b(?:agent\\s+)?request\\s*#?${r.id}\\b`, 'i').test(text));
+  let hits = named;
+  if (!hits.length && m.reply_to) {   // a reply to the request card, or to a message that names exactly one pending request
+    const parent = q.getMsg.get(Number(m.reply_to));
+    hits = pending.filter((r) => r.message_id === Number(m.reply_to));
+    if (!hits.length && parent) {
+      const inParent = pending.filter((r) => new RegExp(`(?<![A-Za-z0-9._-])@?${esc(r.agent.name)}(?![A-Za-z0-9_-])`, 'i').test(parent.content));
+      if (inParent.length === 1) hits = inParent;
+    }
+  }
+  if (!hits.length) return false;
+  const yes = REQ_YES.test(text), no = REQ_NO.test(text);
+  if (yes === no) return false;   // neither, or both: not a clear answer
+  for (const r of hits) {
+    try { if (yes) approveAgentReq(r); else denyAgentReq(r); } catch (e) { shareNote(m.room_id, `⚠️ ${e.message}`); }
+  }
+  return true;
 }
 function denyAgentReq(r, why) {
   if (r.status !== 'requested') throw new UserError(`request #${r.id} is ${r.status}, not waiting for approval`);
