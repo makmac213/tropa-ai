@@ -17,6 +17,7 @@
     --fill-accent: #4566f7; --on-accent: #ffffff;   /* buttons, badges, selected segments */
     --fill-ok: #1a8359; --on-ok: #ffffff;           /* "auto-wake on", working */
     --fill-warn: #f0b35a; --on-warn: #1d1300;       /* approval pills, lead star, paused */
+    --run: #3cc4d9; --fill-run: #0f7f91; --on-run: #ffffff;   /* idle at the prompt with a background shell running */
     --shadow: rgba(0,0,0,.35);
     --hm0: #1f242e; --hm1: #0e4429; --hm2: #006d32; --hm3: #26a641; --hm4: #39d353;
   }
@@ -28,6 +29,7 @@
     --fill-accent: #3651d1; --on-accent: #ffffff;
     --fill-ok: #0d7a4f; --on-ok: #ffffff;
     --fill-warn: #a96500; --on-warn: #ffffff;
+    --run: #0b7285; --fill-run: #0b7285; --on-run: #ffffff;
     --shadow: rgba(16,24,40,.14);
     --hm0: #ebedf0; --hm1: #9be9a8; --hm2: #40c463; --hm3: #30a14e; --hm4: #216e39;
   }
@@ -40,6 +42,7 @@
     --fill-accent: #3651d1; --on-accent: #ffffff;
     --fill-ok: #0d7a4f; --on-ok: #ffffff;
     --fill-warn: #a96500; --on-warn: #ffffff;
+    --run: #0b7285; --fill-run: #0b7285; --on-run: #ffffff;
     --shadow: rgba(16,24,40,.14);
     --hm0: #ebedf0; --hm1: #9be9a8; --hm2: #40c463; --hm3: #30a14e; --hm4: #216e39;
     }
@@ -267,7 +270,7 @@
   .room .del { opacity: 0; color: var(--muted); padding: 0 2px; border-radius: 4px; }
   .room:hover .del { opacity: 1; }
   .room .del:hover { color: var(--danger); }
-  .dot.busy { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); } .dot.wait { background: var(--human); } .dot.idle { background: var(--idle); }
+  .dot.busy { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); } .dot.wait { background: var(--human); } .dot.idle { background: var(--idle); } .dot.bg { background: var(--run); }
   /* Team view: every agent's screen, live */
   .team { flex: 1; overflow-y: auto; padding: 12px 20px 16px; min-height: 0; }
   .tbtn.warnon { background: var(--fill-warn); border-color: var(--fill-warn); color: var(--on-warn); }
@@ -701,18 +704,20 @@
   .node.s-idle .core { fill: var(--idle); stroke: var(--idle); }
   .node.s-working .core { fill: var(--fill-ok); stroke: var(--fill-ok); }
   .node.s-approval .core { fill: var(--fill-warn); stroke: var(--fill-warn); }
+  .node.s-background .core { fill: var(--fill-run); stroke: var(--fill-run); }
   .node.s-offline .core { fill: var(--panel2); stroke: var(--muted); stroke-dasharray: 4 3; }
   .node.s-human .core { fill: var(--fill-accent); stroke: var(--fill-accent); }
   .node.sel .core { stroke: var(--text); stroke-width: 3.5; }
   .node .ini { fill: var(--on-accent); font-weight: 700; font-size: 15px; text-anchor: middle; pointer-events: none; }
   .node.s-offline .ini { fill: var(--muted); }
-  .node.s-working .ini { fill: var(--on-ok); } .node.s-approval .ini { fill: var(--on-warn); }
+  .node.s-working .ini { fill: var(--on-ok); } .node.s-approval .ini { fill: var(--on-warn); } .node.s-background .ini { fill: var(--on-run); }
   .node .lbl { fill: var(--text); font-size: 13.5px; font-weight: 600; text-anchor: middle; }
   .node .sub { fill: var(--muted); font-size: 11.5px; text-anchor: middle; }
-  .node.s-working .sub { fill: var(--ok); } .node.s-approval .sub { fill: var(--human); }
+  .node.s-working .sub { fill: var(--ok); } .node.s-approval .sub { fill: var(--human); } .node.s-background .sub { fill: var(--run); }
   .node .pulse { fill: none; stroke: var(--ok); stroke-width: 3; opacity: 0; transform-box: fill-box; transform-origin: center; }
   .node.s-working .pulse { animation: pulse 1.6s ease-out infinite; }
   .node.s-approval .pulse { stroke: var(--human); animation: pulse 1.2s ease-out infinite; }
+  .node.s-background .pulse { stroke: var(--run); animation: pulse 2.8s ease-out infinite; }
   @keyframes pulse { from { transform: scale(1); opacity: .7; } to { transform: scale(1.6); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .edge.recent, .node .pulse { animation: none; } }
   @media (max-width: 1100px) { .graphwrap { grid-template-columns: minmax(0, 1fr); } .grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -1174,7 +1179,7 @@
     $('#agentScope').hidden = !proj;
     $('#agentScope').textContent = scoped ? 'show all' : `only ${proj}`;
     $('#agentScope').title = scoped ? 'Show agents from every project' : `Show only agents in ${proj}`;
-    const dotCls = (a) => { const st = panes[a.name]?.state; return st === 'working' ? 'busy' : st === 'approval' ? 'wait' : st === 'idle' ? 'idle' : a.online ? 'on' : ''; };
+    const dotCls = (a) => { const st = panes[a.name]?.state; return st === 'working' ? 'busy' : st === 'approval' ? 'wait' : st === 'idle' ? (bgTasks(panes[a.name]) ? 'bg' : 'idle') : a.online ? 'on' : ''; };
     $('#agents').innerHTML = list.length ? list.map((a) => `
       <div class="agent" title="${esc(a.description || '')}">
         <span class="dot ${dotCls(a)}"></span>
@@ -1880,7 +1885,7 @@
     if (n.toLowerCase() === String(t.settings?.lead || '').toLowerCase()) return false;
     const p = t.panes?.[n];
     if (!p) return true;
-    if (p.state === 'approval' || p.state === 'working') return false;
+    if (p.state === 'approval' || p.state === 'working' || bgTasks(p)) return false;
     return Date.now() - (p.changed_at || 0) > INACTIVE_MIN * 60e3;
   }
   const hiddenAgents = (t) => (state.hideInactive ? (t.agents || []).filter((n) => isInactive(t, n)) : []);
@@ -1892,6 +1897,13 @@
     const lead = (t.settings?.lead || '').toLowerCase();
     const waiting = (n) => (t.panes?.[n]?.state === 'approval' ? 1 : 0);   // approvals first, then the lead
     return shownAgents(t).sort((a, b) => waiting(b) - waiting(a) || (b.toLowerCase() === lead) - (a.toLowerCase() === lead) || a.localeCompare(b));
+  }
+  // background shells the CLI reports in its footer (Claude Code "· 1 shell" / "2 background tasks", Codex "1 background terminal running"):
+  // the agent sits idle at its prompt but a dev server, build or test run is still going
+  function bgTasks(p) {
+    const tail = String(p?.text || '').split('\n').filter((l) => l.trim()).slice(-4).join('\n');
+    const m = tail.match(/\b(\d+)\s+(background\s+(?:tasks?|terminals?|shells?|jobs?)|shells?|bash(?:es)?)\b/i);
+    return m && +m[1] > 0 ? `${m[1]} ${m[2].toLowerCase().replace(/\s+/g, ' ')}` : '';
   }
   const agoText = (ms) => { if (!ms) return ''; const s = Math.round((Date.now() - ms) / 1000); return s < 8 ? 'active now' : s < 90 ? `quiet ${s}s` : s < 5400 ? `quiet ${Math.round(s / 60)}m` : `quiet ${Math.round(s / 3600)}h`; };
   function cardHtml(name, t) {
@@ -1955,8 +1967,9 @@
   function nodeState(t, name, human) {
     if (name === human) return 'human';
     const p = t.panes?.[name];
-    return p ? p.state : 'offline';
+    return !p ? 'offline' : p.state === 'idle' && bgTasks(p) ? 'background' : p.state;
   }
+  const nodeSub = (t, name, st) => st === 'human' ? 'you' : st === 'approval' ? 'needs approval' : st === 'background' ? `running ${bgTasks(t.panes?.[name])}` : st;
   function graphSvg(t) {
     const g = graphModel(t); const r = 30; const sel = graphSelected(t);
     const edgeSvg = g.edges.map((e) => {
@@ -1971,7 +1984,7 @@
     const nodeSvg = Object.entries(g.pos).map(([name, p]) => {
       const st = nodeState(t, name, g.human);
       const ini = name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?';
-      const sub = st === 'human' ? 'you' : st === 'approval' ? 'needs approval' : st;
+      const sub = nodeSub(t, name, st);
       return `<g class="node s-${st} ${name === sel ? 'sel' : ''}" ${st === 'human' ? '' : `data-node="${esc(name)}"`} transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">
         <circle class="pulse" r="${r}"/><circle class="core" r="${r}"/><text class="ini" dy="5">${esc(ini)}</text>
         <text class="lbl" y="${r + 19}">${esc(name)}${name === g.lead ? ' ★' : ''}</text><text class="sub" y="${r + 34}">${esc(sub)}</text>
@@ -1982,7 +1995,7 @@
         <marker id="arrM" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
         <marker id="arrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
       </defs>${edgeSvg}${nodeSvg}</svg>
-      <div class="legend"><span><i style="background:var(--fill-ok)"></i>working</span><span><i style="background:var(--idle)"></i>idle</span><span><i style="background:var(--fill-warn)"></i>needs approval</span><span><i style="background:var(--fill-accent)"></i>you</span><span>arrows: who mentioned whom (last 60 messages) · click a node to see its terminal</span></div>`;
+      <div class="legend"><span><i style="background:var(--fill-ok)"></i>working</span><span><i style="background:var(--fill-run)"></i>background shell</span><span><i style="background:var(--idle)"></i>idle</span><span><i style="background:var(--fill-warn)"></i>needs approval</span><span><i style="background:var(--fill-accent)"></i>you</span><span>arrows: who mentioned whom (last 60 messages) · click a node to see its terminal</span></div>`;
   }
   function updateGraph() {
     const t = state.team[state.current]; const graph = $('#graph'); const side = $('#graphSide');
@@ -1991,10 +2004,9 @@
     if (nodes !== [...(t.agents || [])].sort().join()) { renderTeam(); return; }
     for (const g of graph.querySelectorAll('[data-node]')) {
       const st = nodeState(t, g.dataset.node, state.human);
-      if (!g.classList.contains('s-' + st)) {
-        g.classList.remove('s-idle', 's-working', 's-approval', 's-offline'); g.classList.add('s-' + st);
-        g.querySelector('.sub').textContent = st === 'approval' ? 'needs approval' : st;
-      }
+      if (!g.classList.contains('s-' + st)) { g.classList.remove('s-idle', 's-working', 's-approval', 's-background', 's-offline'); g.classList.add('s-' + st); }
+      const sub = nodeSub(t, g.dataset.node, st), el = g.querySelector('.sub');
+      if (el.textContent !== sub) el.textContent = sub;
     }
     const name = graphSelected(t), p = t.panes?.[name], card = side.querySelector('[data-card]');
     if (!card || card.dataset.card !== name || !p || !card.classList.contains('s-' + p.state)) { side.innerHTML = cardHtml(name, t); const pre = side.querySelector('pre.screen'); if (pre) pre.scrollTop = pre.scrollHeight; return; }
