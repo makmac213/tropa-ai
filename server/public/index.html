@@ -1184,7 +1184,7 @@
       <div class="agent" title="${esc(a.description || '')}">
         <span class="dot ${dotCls(a)}"></span>
         <div class="meta" data-edit-agent="${esc(a.name)}"><div class="n">${esc(a.name)}</div>
-          <div class="s">${esc([scoped ? panes[a.name]?.state : a.project, a.status].filter(Boolean).join(' · ') || (a.last_seen ? 'seen ' + fmtTime(a.last_seen) : ''))}</div>
+          <div class="s">${esc([scoped ? (panes[a.name]?.state === 'idle' && bgTasks(panes[a.name]) ? `running ${bgTasks(panes[a.name])}` : panes[a.name]?.state) : a.project, a.status].filter(Boolean).join(' · ') || (a.last_seen ? 'seen ' + fmtTime(a.last_seen) : ''))}</div>
           ${a.provider || a.model ? `<div class="s s2">${esc([a.provider, a.model].filter(Boolean).join(' · '))}</div>` : ''}${usageToday(a.name, 's s3')}</div>
         <button class="x" data-edit-agent="${esc(a.name)}" title="Edit agent">✎</button>
         <button class="x" style="margin-left:0" data-del-agent="${esc(a.name)}" title="Remove agent (click twice): stops it and moves its folder to agents/.removed/">×</button>
