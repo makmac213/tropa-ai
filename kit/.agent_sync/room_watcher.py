@@ -26,6 +26,7 @@ Manual trigger: touch .agent_sync/chatroom/broadcast.txt, or run wake_all.sh.
 import hashlib, json, os, re, stat, subprocess, sys, time, urllib.parse, urllib.request
 sys.dont_write_bytecode = True
 import config
+import reap
 
 HERE = config.HERE
 CHATROOM = os.path.join(HERE, "chatroom")
@@ -462,6 +463,7 @@ class Watcher:
         a = by_lower.get(str(ev.get("agent", "")).lower())
         if ev.get("type") == "stop":
             log(f"stopping the team: {ev.get('reason', 'asked by TropaAI')} (tmux session {self.cfg['tmux_session']})")
+            reap.reap(self.cfg)   # the agents' dev servers and shells, which outlive their tmux windows
             subprocess.run(["tmux", "kill-session", "-t", self.cfg["tmux_session"]], check=False)   # ends this watcher too
             sys.exit(0)
         if ev.get("type") == "set_model":
@@ -822,6 +824,7 @@ class Watcher:
             how = "live, same conversation"
         else:
             session = self.cfg["tmux_session"]
+            reap.reap(self.cfg, a)
             subprocess.run(["tmux", "kill-window", "-t", f"{session}:{a}"], capture_output=True)
             time.sleep(1)
             subprocess.run([os.path.join(HERE, "start_agent.sh"), a], capture_output=True)
@@ -871,8 +874,8 @@ class Watcher:
             f"[tropa] You stopped without reporting in {self.cfg['room']}: message #{mid} from {src.get('sender', '?')} "
             f"assigned you work and you haven't handed off yet. Do it now with tropa send_message: done (result, "
             f"and @mention who's next), blocked (what you need, and from whom), or still running (what you're "
-            f"waiting for and when you'll report). If you started a server, leave it running in the background "
-            f"and carry on with the task."))
+            f"waiting for and when you'll report). If you started a server you still need, leave it running "
+            f"and carry on with the task; stop the ones you're done with."))
         self.nudges[a] = (mid, n + 1)
         log(f"nudged {a}: stopped without reporting on #{mid} ({n + 1}/{MAX_NUDGES})")
 

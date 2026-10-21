@@ -25,6 +25,7 @@ launch_window() {
     ensure_session
     if tmux list-windows -t "$SESSION_NAME" -F '#{window_name}' | grep -qx "$name"; then
         echo "↺ '$name' already has a window; restarting it"
+        python3 "$HERE/reap.py" agent "$name"   # its dev servers and shells too, not just the CLI
         tmux kill-window -t "$SESSION_NAME:$name"
     fi
     tmux new-window -d -t "$SESSION_NAME" -n "$name" -c "$ws" "\"$HERE/start_agent.sh\" --exec \"$name\""
@@ -36,6 +37,8 @@ launch_window() {
 exec_agent() {
     local name="$1" ws="$ROOT/agents/$1"
     cd "$ws" || exit 1
+    # every process the agent starts inherits this, so reap.py can stop what it leaves running
+    export TROPA_AGENT="$SESSION_NAME/$name"
     # Rebuild config from agent.json + settings so roster, lead and paths are always current.
     python3 "$HERE/setup_agent.py" refresh "$name"
     local tool model role provider project room history human docs flags

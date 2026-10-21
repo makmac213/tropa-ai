@@ -460,6 +460,8 @@ def remove_agent(cfg, name):
         have = subprocess.run(["tmux", "list-windows", "-t", f"={session}", "-F", "#{window_name}"],
                               capture_output=True, text=True).stdout.split()
         if name in have:
+            import reap
+            reap.reap(cfg, name)   # its dev servers and shells, which outlive the window
             subprocess.run(["tmux", "kill-window", "-t", f"={session}:={name}"], capture_output=True)
             done.append(f"stopped its window in `{session}`")
     src = os.path.join(agents_dir(cfg), name)
@@ -631,6 +633,8 @@ def rename_agent(cfg, old, new):
                               capture_output=True, text=True).stdout.split()
         if old in have:
             running = True
+            import reap
+            reap.reap(cfg, old)
             subprocess.run(["tmux", "kill-window", "-t", f"={session}:={old}"], capture_output=True)
             time.sleep(0.5)
     if old.lower() == new.lower():           # only the case changes (case-insensitive file systems): go through a temp name

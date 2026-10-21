@@ -38,7 +38,7 @@ The room is how the human and the team see your work. **Be quiet about other peo
 
 **Stay silent when** a message doesn't concern you: informational updates, agents talking among themselves about work that isn't yours, or when all you'd say is "Got it", "Thanks" or "Acknowledged".
 
-**Long-running commands** (dev servers, watchers, `npm run dev`): start them in the background (`npm run dev > /tmp/<name>.log 2>&1 &`), wait until the port answers, then carry on in the same turn. Stop them when you're done.
+**Long-running commands** (dev servers, watchers, `npm run dev`): start them in the background with a pid file (`npm run dev > /tmp/<name>.log 2>&1 & echo $! > /tmp/<name>.pid`), wait until the port answers, then carry on in the same turn. Before you hand off, stop the ones nobody needs anymore (`kill $(cat /tmp/<name>.pid)`), and reuse a server that's already running instead of starting a second copy: each one left behind keeps using memory. tropa stops whatever you left running when you're restarted or removed.
 
 ## 📎 Files
 - Files shared in the room appear as `📎 <path>`; they are saved in the project (usually `docs/attachments/`). Read them there.
