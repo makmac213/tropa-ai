@@ -137,7 +137,7 @@ Claude runs on your computer through the host helper (`claude -p`, with no tools
    - **Name.** The folder is created at `~/projects/<name>`.
    - **Brief / spec**, saved as `docs/SPEC.md`: what to build, must-haves, and what "done" means.
    - **Files** (optional): mockups, docs and images, saved in `docs/attachments/`.
-   - **Team:** **Start from** a [ready-made team](#ready-made-teams) (Website studio, Research & publishing desk, SEO team, Customer support desk, Market research team, Small dev team, Solo developer…) or start empty and build your own. Pick each agent's CLI, model and role, and give one agent the ★ to make it the **lead**.
+   - **Team:** **Start from** a [ready-made team](#ready-made-teams) (Website studio, SEO team, Recruitment team, Social media team, Sales outreach team, Email marketing team, Paid ads team, Bookkeeping team, Grant writing team, Customer support desk, Market research team, Research & publishing desk, Small dev team, Solo developer) or start empty and build your own. Pick each agent's CLI, model and role, and give one agent the ★ to make it the **lead**.
    - **Design system** (optional): pick the look agents build the UI in. Each card shows a live preview; click one for details. See [Design systems](#design-systems).
    - **Tools** (optional): give agents [Vercel, Supabase or Render](#optional-tools-vercel-supabase-render).
    - **Kickoff message:** posted as you once the team is up.
@@ -147,6 +147,25 @@ Claude runs on your computer through the host helper (`claude -p`, with no tools
 ### Ready-made teams
 
 Each ready-made team is a folder of prompts in [`teams/`](teams/): a `team.md` (name, summary, lead, and how the team works together) and one file per member, whose name is the agent's name and whose text is that member's job. When you start a project from a team, each agent's job, plus the team's way of working, is saved in its `AGENT.md` under *Your job* and stays there for the whole project.
+
+| Team | Lead | Members | What it does |
+|---|---|---|---|
+| Website studio | lead | backend, frontend, QA, ops | Plans, builds, tests and deploys a web app |
+| Small dev team | lead | dev, QA | A lead, one full-stack developer and a tester |
+| Solo developer | dev | | One agent that plans and builds |
+| SEO team | seo-lead | keyword-researcher, content-writer, on-page, site-auditor, link-builder | Finds what people search for, makes your pages the best answer, fixes technical problems and earns links |
+| Recruitment team | recruiting-lead | job-writer, sourcer, screener, interview-designer, coordinator | Job ad, sourcing, fair screening against a scorecard, structured interviews and candidate updates. You make every hiring decision. |
+| Social media team | social-lead | content-creator, community-manager, social-analyst | Strategy and calendar, posts and video briefs, replies, monthly report |
+| Sales outreach team | sales-lead | prospect-researcher, outreach-writer, reply-handler | Ideal customer, researched prospects, short personal emails, replies and meetings |
+| Email marketing team | email-lead | email-copywriter, email-builder, email-analyst | Newsletters and automated journeys (welcome, abandoned cart, win-back), tested and measured |
+| Paid ads team | ads-lead | media-buyer, ad-creative, ads-analyst | Google and Meta ads within your budget, tracking first, one test at a time |
+| Bookkeeping team | books-lead | bookkeeper, reconciler, receivables, reviewer | Month-end close: records, bank reconciliations, invoices and reminders, an independent check and a plain-words summary. It never moves money. |
+| Grant writing team | grants-lead | funder-researcher, proposal-writer, budget-writer, compliance-reviewer | Finds funders that fit, writes the proposal and budget, checks it against the guidelines |
+| Customer support desk | support-lead | triage, answer-writer | Sorts questions, drafts answers, escalates what needs you |
+| Market research team | research-lead | researcher-a, researcher-b, analyst, report-writer | Studies a market and writes up what it means for you |
+| Research & publishing desk | editor | researcher, fact-checker, writer, publisher | Researches, fact-checks, writes and publishes |
+
+Every team's prompts keep you in charge: anything that goes out (a post, an email, a job ad, an ad campaign, an application, a message to a candidate) is a draft until you sign it off.
 
 **Add a team by adding a folder**, no code needed: copy one, change the prompts, and it appears in **Start from** within a few seconds. Keep your own teams in `~/.tropa/teams/` so they survive updates (a folder there with the same name replaces the built-in one). `tropa teams` lists them. The format is in [teams/README.md](teams/README.md).
 
