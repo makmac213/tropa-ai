@@ -143,6 +143,52 @@
   header .search { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; width: 200px; }
   .menu-btn { display: none; background: none; border: 0; font-size: 20px; cursor: pointer; }
   .msgs { flex: 1; overflow-y: auto; padding: 12px 0 8px; }
+  /* Simple / Advanced: Simple hides the technical parts (terminals, models, usage, public links) */
+  .mode-sw { display: flex; margin: 10px 16px 2px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
+  .mode-sw button { flex: 1; border: 0; background: none; color: var(--muted); padding: 5px 0; border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 600; }
+  .mode-sw button[aria-checked="true"] { background: var(--fill-accent); color: var(--on-accent); }
+  body.simple #teamBtn, body.simple #usageBtn, body.simple #shareBtn, body.simple .msg .ptag, body.simple .agent .s2, body.simple .agent .s3 { display: none !important; }
+  /* Build your team (Simple mode's New project) */
+  .build { position: absolute; inset: 0; z-index: 7; overflow-y: auto; background: var(--bg); }
+  .build[hidden] { display: none; }
+  .bd-wrap { max-width: 1080px; margin: 0 auto; padding: 28px 28px 0; display: flex; flex-direction: column; gap: 26px; }
+  .bd-top { display: flex; align-items: center; gap: 12px; } .bd-top h1 { margin: 0; font-size: 28px; letter-spacing: -0.01em; }
+  .bd-x { margin-left: auto; background: none; border: 0; color: var(--muted); font-size: 26px; cursor: pointer; padding: 0 6px; line-height: 1; }
+  .bd-lead { margin: -18px 0 0; color: var(--muted); }
+  .bd-wrap section h2 { font-size: 17px; margin: 0 0 12px; }
+  .bd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .bd-tpl { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 5px; cursor: pointer; color: var(--text); font: inherit; }
+  .bd-tpl span, .bd-tpl small { font-size: 12.5px; color: var(--muted); } .bd-tpl:hover { border-color: var(--accent); }
+  .bd-tpl.on { border: 2px solid var(--accent); padding: 13px; background: var(--accent-weak); }
+  .bd-mem { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .bd-mem.lead { border: 2px solid var(--text); padding: 13px; }
+  .bd-mh { display: flex; gap: 10px; align-items: center; }
+  .bd-av { width: 40px; height: 40px; border-radius: 20px; color: #fff; font-weight: 700; display: grid; place-items: center; flex: none; }
+  .bd-mn { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .bd-name { background: none; border: 1px solid transparent; border-radius: 6px; font-weight: 700; font-size: 15px; color: var(--text); padding: 2px 4px; margin-left: -5px; min-width: 0; }
+  .bd-name:hover, .bd-name:focus { border-color: var(--line); background: var(--panel2); }
+  .bd-tag { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .03em; } .bd-tag .linkbtn { margin: 0; font-size: 12px; }
+  .bd-rm { background: none; border: 0; color: var(--muted); font-size: 20px; cursor: pointer; align-self: flex-start; } .bd-rm:hover { color: var(--danger); }
+  .bd-role, .bd-in, .bd-job { width: 100%; box-sizing: border-box; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--text); font: inherit; font-size: 13.5px; }
+  .bd-job { resize: vertical; margin-top: 6px; font-size: 13px; line-height: 1.45; }
+  .bd-mem details summary { cursor: pointer; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .bd-hire { border: 2px dashed var(--line); background: none; border-radius: 12px; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; min-height: 130px; }
+  .bd-hire:hover { color: var(--text); border-color: var(--accent); }
+  .bd-hp { margin-top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .bd-lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; max-height: 300px; overflow: auto; }
+  .bd-role-btn { text-align: left; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; color: var(--text); font: inherit; }
+  .bd-role-btn span, .bd-role-btn small { font-size: 12px; color: var(--muted); } .bd-role-btn:hover { border-color: var(--accent); }
+  .bd-new { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 8px; } .bd-new textarea { grid-column: 1 / -1; } .bd-new button { justify-self: start; }
+  .bd-l { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; } .bd-in + .bd-l { margin-top: 12px; }
+  .bd-r { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 14px; }
+  .bd-pick { display: flex; gap: 8px; margin-top: 4px; } .bd-pick .tbtn { white-space: nowrap; }
+  .bd-warn { background: var(--mention); border-left: 3px solid var(--human); padding: 10px 12px; border-radius: 6px; font-size: 13.5px; }
+  .bd-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: flex-end; position: sticky; bottom: 0; background: var(--bg); padding: 14px 0 18px; border-top: 1px solid var(--line); }
+  .bd-foot .err { color: var(--danger); margin-right: auto; font-size: 13.5px; }
+  @media (max-width: 760px) { .bd-wrap { padding: 18px 16px 0; } .bd-new { grid-template-columns: minmax(0, 1fr); } }
+  /* Your team (side panel, Simple mode) */
+  .rs-ask { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .rs-ask .s { white-space: normal; }
   /* chat side panel: background tasks, files shared, docs mentioned (4/5 chat, 1/5 panel) */
   .chatrow { flex: 1; min-height: 0; display: flex; }
   .chatrow:has(> .msgs[hidden]) { display: none; }
@@ -788,6 +834,10 @@
 <div class="app" id="app">
   <aside>
     <div class="brand"><img class="logo-img" src="logo-mark.png" alt="" width="30" height="30"><b>TropaAI</b><span class="conn" id="conn" title="disconnected"></span></div>
+    <div class="mode-sw" id="modeSw" role="radiogroup" aria-label="Mode">
+      <button type="button" role="radio" data-mode="simple" aria-checked="false" title="Build and run your team without the technical details">Simple</button>
+      <button type="button" role="radio" data-mode="advanced" aria-checked="false" title="Everything: terminals, models, CLIs, usage">Advanced</button>
+    </div>
     <div class="side-scroll">
       <div class="sec">Feeds</div>
       <div id="feeds"></div>
@@ -828,6 +878,7 @@
     <div class="usage" id="usage" hidden></div>
     <div class="tasks" id="tasks" hidden></div>
     <div class="docs" id="docs" hidden></div>
+    <div class="build" id="build" hidden aria-label="Build your team"></div>
     <section class="qpanel" id="qPanel" hidden aria-label="Questions waiting on you"></section>
     <div class="hm-tip" id="hmTip" hidden></div>
     <div class="composer" id="composer">
@@ -1219,7 +1270,7 @@
       return `<button class="room ${id === state.current ? 'active' : ''} ${u ? 'unread' : ''}" data-room="${esc(id)}">
         <span class="hash">${id === ALL ? '≡' : id === USAGE ? '▦' : '#'}</span><span class="name">${esc(label)}</span>${u ? `<span class="badge">${u > 99 ? '99+' : u}</span>` : ''}${extra}</button>`;
     };
-    $('#feeds').innerHTML = btn(ALL, 'All activity') + btn(USAGE, 'Usage') + btn('general', 'general');
+    $('#feeds').innerHTML = btn(ALL, 'All activity') + (simple() ? '' : btn(USAGE, 'Usage')) + btn('general', 'general');
     const projects = state.rooms.filter((r) => r.kind === 'project');
     const pbadges = (id) => { const nq = openQs(id).length, na = (state.attention[id]?.items || []).length;
       return `${nq ? `<span class="pb q" title="${nq} question${nq === 1 ? '' : 's'} waiting on you">${nq}?</span>` : ''}${na ? `<span class="pb a" title="${na} item${na === 1 ? '' : 's'} need attention">${na}!</span>` : ''}`; };
@@ -1423,6 +1474,7 @@
     api('/host').then((h) => { state.host = h; if (state.view === 'team' && !$('#team').hidden && !state.team[state.current]?.watching) renderTeam(); }).catch(() => {});
     const s = await api('/state');
     state.human = s.human;
+    if (!state.mode) setMode(s.rooms.some((r) => String(r.id).startsWith('project:')) ? 'advanced' : 'simple', true, false);
     if (!$('#myName').value) $('#myName').value = localGet('airc.name') || s.human;
     const prevUnread = Object.fromEntries(state.rooms.map((r) => [r.id, r.unread_live]));
     state.rooms = s.rooms.map((r) => {
@@ -2446,7 +2498,21 @@
     if (proj && state.docs[room] === undefined && !state.docsAsked[room]) { state.docsAsked[room] = true; loadDocs(room).then(() => { if (room === state.current) renderRside(); }); }
     const sec = (key, title, n, body) => `<details data-rs="${key}" ${rsOpen(key) ? 'open' : ''}><summary>${title}${n ? `<span class="n">${n}</span>` : ''}</summary>${body}</details>`;
     let html = `<div class="rs-top"><span>Room</span><button type="button" data-rs-toggle title="${off ? 'Show' : 'Hide'} this panel">${off ? '⟨' : '⟩'}</button></div>`;
-    if (proj) {
+    if (proj && simple()) {
+      const t = state.team[room], lead = String(t?.settings?.lead || '').toLowerCase();
+      const body = !t?.watching ? `<div class="rs-empty">The team isn't running. Start it from the chat's <b>Start the team</b>, or with <code>tropa start</code>.</div>`
+        : (t.agents || []).map((n) => {
+          const p = t.panes?.[n] || {}, a = state.agents.find((x) => x.name.toLowerCase() === n.toLowerCase());
+          const st = p.state === 'approval' ? ['wait', 'Needs your OK'] : p.state === 'working' ? ['busy', 'Working'] : bgTasks(p) ? ['bg', 'Running a long task'] : p.state ? ['idle', 'Waiting for work'] : ['', 'Not started'];
+          return `<div class="rs-item" style="cursor:default"><span class="dot ${st[0]}"></span><div class="bd">
+            <div class="t"><b>${esc(n)}</b>${n.toLowerCase() === lead ? '<span class="lab" style="color:var(--muted)">lead</span>' : ''}</div>
+            <div class="s">${esc(st[1])}${a?.status && p.state === 'working' ? ` · ${esc(a.status)}` : a?.description ? ` · ${esc(a.description)}` : ''}</div>
+            ${p.state === 'approval' ? `<div class="s" style="white-space:normal">${esc(p.prompt || 'wants to do something that needs your permission')}</div>
+              <div class="rs-ask"><button type="button" class="tbtn pri" data-approve="${esc(n)}" data-act="yes">Allow</button><button type="button" class="tbtn" data-approve="${esc(n)}" data-act="no">Don't allow</button></div>` : ''}</div></div>`;
+        }).join('');
+      html += sec('who', 'Your team', t?.watching ? (t.agents || []).length : '', body);
+    }
+    if (proj && !simple()) {
       const t = state.team[room];
       const rows = (t?.agents || []).map((n) => ({ n, p: t.panes?.[n], bg: bgTasks(t.panes?.[n]) })).filter((x) => x.bg);
       const body = !t?.watching ? `<div class="rs-empty">The team isn't running.</div>`
@@ -4020,6 +4086,170 @@
     } catch (err) { $('#npErr').textContent = err.message; }
     finally { btn.disabled = !state.host?.connected; btn.textContent = npExisting() ? 'Add team' : 'Create project'; }
   });
+  // ---------- Simple mode: build and run your team without the technical details (Advanced = everything) ----------
+  function simple() { return state.mode === 'simple'; }
+  state.mode = localGet('airc.mode') || '';   // '' until the rooms are known: new users (no projects) start Simple
+  function setMode(m, save = true, rerender = true) {
+    state.mode = m === 'simple' ? 'simple' : 'advanced';
+    if (save) localSet('airc.mode', state.mode);
+    document.body.classList.toggle('simple', simple());
+    document.querySelectorAll('#modeSw [data-mode]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === state.mode)));
+    if (!rerender) return;
+    if (!simple()) closeBuild();
+    if (simple() && state.current === USAGE) { selectRoom('general'); return; }
+    if (simple() && ['team', 'usage'].includes(state.view)) { state.view = 'chat'; localSet('airc.view', 'chat'); }
+    rsLast = ''; renderSidebar(); renderHeader(); applyView(); renderMessages({ stick: false });
+  }
+  if (state.mode) setMode(state.mode, false, false);
+  $('#modeSw').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
+
+  // Build your team: pick a ready-made team (teams/), adjust who's on it and their jobs, say what they work on
+  const bt = { teamId: null, how: '', git: true, members: [], lead: '', hiring: false, name: '', brief: '', where: 'new', path: '' };
+  const initialsOf = (n) => { const x = String(n).replace(/[^A-Za-z0-9]/g, ''); return (x.slice(0, 1).toUpperCase() + x.slice(1, 2).toLowerCase()) || '?'; };
+  function btPick(id) {
+    const t = teamTemplates().find((x) => x.id === id);
+    bt.teamId = t ? t.id : ''; bt.how = t?.how || ''; bt.git = t ? t.git !== false : true;
+    bt.members = t ? t.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: forHuman(m.role), prompt: forHuman(m.prompt), open: false })) : [];
+    bt.lead = t ? t.lead : ''; bt.hiring = false;
+    renderBuild();
+  }
+  function roleLibrary() {   // every member of every ready-made team, once, minus those already on this team
+    const have = new Set(bt.members.map((m) => m.name.toLowerCase())), seen = new Set(), out = [];
+    for (const t of teamTemplates()) for (const m of t.members) {
+      const k = m.name.toLowerCase();
+      if (have.has(k) || seen.has(k)) continue;
+      seen.add(k); out.push({ ...m, team: t.name });
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  function openBuild() {
+    if (bt.teamId === null) { const ts = teamTemplates(); bt.teamId = ''; btPick(ts.find((t) => t.id === 'website-studio')?.id || ts[0]?.id || ''); }
+    $('#build').hidden = false; renderBuild(); $('#build').scrollTop = 0; $('#app').classList.remove('nav');
+    api('/host').then((h) => { state.host = h; if (!$('#build').hidden && !$('#build').contains(document.activeElement)) renderBuild(); }).catch(() => {});
+  }
+  function closeBuild() { $('#build').hidden = true; }
+  function hirePanel() {
+    const lib = roleLibrary();
+    return `<div class="bd-hp"><b>Hire from the role library</b>
+      <div class="bd-lib">${lib.map((m, i) => `<button type="button" class="bd-role-btn" data-bd-hire="${i}"><b>${esc(m.name)}</b><span>${esc(forHuman(m.role))}</span><small>from ${esc(m.team)}</small></button>`).join('') || '<span class="mut">Everyone in the library is already on your team.</span>'}</div>
+      <b>Or describe a new role</b>
+      <div class="bd-new"><input id="bdNewName" class="bd-in" placeholder="Name, e.g. translator" spellcheck="false" aria-label="Name">
+        <input id="bdNewRole" class="bd-in" placeholder="Their role in a few words" aria-label="Role">
+        <textarea id="bdNewJob" class="bd-in" rows="3" placeholder="Their job: what they do, who gives them work, who they hand it to, what they never do" aria-label="Job"></textarea>
+        <button type="button" class="tbtn pri" data-bd="addnew">Add to the team</button></div></div>`;
+  }
+  function renderBuild() {
+    const h = state.host || {}, ts = teamTemplates();
+    const base = (h.projects_dir || '~/projects').replace(h.home || '\u0000', '~');
+    $('#build').innerHTML = `<div class="bd-wrap">
+      <div class="bd-top"><h1>Build your team</h1><button type="button" class="bd-x" data-bd="close" aria-label="Close">×</button></div>
+      <p class="bd-lead">Hire the roles you need, the way you'd staff a small office. Each one gets a job you can read and change.</p>
+      ${h.connected ? '' : `<div class="bd-warn">TropaAI's helper isn't running on this computer, so the team can't be created yet. Start it with <code>tropa start</code>.</div>`}
+      ${h.connected && !(h.clis || []).includes('claude') ? `<div class="bd-warn">Claude Code isn't installed on this computer, and your team runs on it. Open <b>⚙ Settings → Setup</b> to install it.</div>` : ''}
+      <section><h2>1. Start from a ready-made team</h2>
+        <div class="bd-grid">${ts.map((t) => `<button type="button" class="bd-tpl ${t.id === bt.teamId ? 'on' : ''}" data-bd-team="${esc(t.id)}" aria-pressed="${t.id === bt.teamId}"><b>${esc(t.name)}</b>${t.summary ? `<span>${esc(forHuman(t.summary))}</span>` : ''}<small>${t.members.map((m) => esc(m.name)).join(' · ')}</small></button>`).join('')}
+          <button type="button" class="bd-tpl ${bt.teamId === '' ? 'on' : ''}" data-bd-team="" aria-pressed="${bt.teamId === ''}"><b>Start empty</b><span>Hire everyone yourself.</span></button></div></section>
+      <section><h2>2. Your team <span class="mut">· ${bt.members.length} ${bt.members.length === 1 ? 'member' : 'members'}</span></h2>
+        <div class="bd-grid">${bt.members.map((m, i) => `<div class="bd-mem ${m.name === bt.lead ? 'lead' : ''}" data-i="${i}">
+            <div class="bd-mh"><span class="bd-av" style="background:${colorFor(m.name)}">${esc(initialsOf(m.name))}</span>
+              <div class="bd-mn"><input class="bd-name" value="${esc(m.name)}" aria-label="Name" spellcheck="false">
+                <span class="bd-tag">${m.name === bt.lead ? 'TEAM LEAD' : '<button type="button" class="linkbtn" data-bd="lead">Make lead</button>'}</span></div>
+              <button type="button" class="bd-rm" data-bd="rm" aria-label="Remove ${esc(m.name)}" title="Remove">×</button></div>
+            <input class="bd-role" value="${esc(m.role)}" placeholder="Their role in a few words" aria-label="Role">
+            <details ${m.open ? 'open' : ''}><summary>Their job</summary><textarea class="bd-job" rows="7" placeholder="What they do, how they do it, who they hand off to, what they never do" aria-label="Job">${esc(m.prompt)}</textarea></details>
+          </div>`).join('')}
+          <button type="button" class="bd-hire" data-bd="hire" aria-expanded="${bt.hiring}">＋ Hire someone</button></div>
+        ${bt.hiring ? hirePanel() : ''}</section>
+      <section><h2>3. What should they work on?</h2>
+        <label class="bd-l" for="bdName">Name</label><input id="bdName" class="bd-in" value="${esc(bt.name)}" placeholder="e.g. Company briefings">
+        <label class="bd-l" for="bdBrief">The work, in your own words</label>
+        <textarea id="bdBrief" class="bd-in" rows="4" placeholder="What should the team do, for whom, and what does done look like? They'll ask you if anything is unclear.">${esc(bt.brief)}</textarea></section>
+      <section><h2>4. Where it's saved</h2>
+        <label class="bd-r"><input type="radio" name="bdWhere" value="new" ${bt.where !== 'existing' ? 'checked' : ''}> A new folder: <code id="bdSlug">${esc(base)}/${esc(slugOf(bt.name) || '…')}</code></label>
+        <label class="bd-r"><input type="radio" name="bdWhere" value="existing" ${bt.where === 'existing' ? 'checked' : ''}> A folder I already have</label>
+        ${bt.where === 'existing' ? `<div class="bd-pick"><input id="bdPath" class="bd-in" value="${esc(bt.path)}" placeholder="~/work/my-project" spellcheck="false" aria-label="Folder">${h.picker ? '<button type="button" class="tbtn" data-bd="browse">📂 Browse…</button>' : ''}</div>` : ''}</section>
+      <div class="bd-foot"><span class="err" id="bdErr" role="alert"></span><span class="mut">Runs on Claude Code. Other models and CLIs: switch to Advanced.</span>
+        <button type="button" class="send" data-bd="create" ${h.connected ? '' : 'disabled'}>Create team and start</button></div>
+    </div>`;
+  }
+  $('#build').addEventListener('input', (e) => {
+    const t = e.target, card = t.closest('.bd-mem'), m = card && bt.members[Number(card.dataset.i)];
+    if (m && t.classList.contains('bd-name')) { if (bt.lead === m.name) bt.lead = t.value; m.name = t.value; }
+    else if (m && t.classList.contains('bd-role')) m.role = t.value;
+    else if (m && t.classList.contains('bd-job')) m.prompt = t.value;
+    else if (t.id === 'bdName') { bt.name = t.value; const sl = $('#bdSlug'); if (sl) sl.textContent = sl.textContent.replace(/[^/]*$/, slugOf(t.value) || '…'); }
+    else if (t.id === 'bdBrief') bt.brief = t.value;
+    else if (t.id === 'bdPath') bt.path = t.value;
+  });
+  $('#build').addEventListener('toggle', (e) => { const card = e.target.closest?.('.bd-mem'); if (card && e.target.tagName === 'DETAILS') bt.members[Number(card.dataset.i)].open = e.target.open; }, true);
+  $('#build').addEventListener('change', (e) => { if (e.target.name === 'bdWhere') { bt.where = e.target.value; renderBuild(); } });
+  $('#build').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBuild(); });
+  $('#build').addEventListener('click', async (e) => {
+    const tpl = e.target.closest('[data-bd-team]');
+    if (tpl) { btPick(tpl.dataset.bdTeam); return; }
+    const hire = e.target.closest('[data-bd-hire]');
+    if (hire) {
+      const m = roleLibrary()[Number(hire.dataset.bdHire)];
+      if (m) bt.members.push({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: forHuman(m.role), prompt: forHuman(m.prompt), open: false });
+      if (!bt.lead && bt.members.length) bt.lead = bt.members[0].name;
+      bt.hiring = false; renderBuild(); return;
+    }
+    const b = e.target.closest('[data-bd]'); if (!b) return;
+    const card = b.closest('.bd-mem'), i = card ? Number(card.dataset.i) : -1;
+    switch (b.dataset.bd) {
+      case 'close': closeBuild(); return;
+      case 'lead': bt.lead = bt.members[i].name; break;
+      case 'rm': { const [gone] = bt.members.splice(i, 1); if (gone?.name === bt.lead) bt.lead = bt.members[0]?.name || ''; break; }
+      case 'hire': bt.hiring = !bt.hiring; break;
+      case 'addnew': {
+        const name = $('#bdNewName').value.trim().replace(/\s+/g, '-');
+        if (!/^[A-Za-z0-9._-]{1,40}$/.test(name)) { $('#bdNewName').focus(); $('#bdErr').textContent = 'Give them a name: letters, digits, - _ or . (no spaces).'; return; }
+        if (bt.members.some((m) => m.name.toLowerCase() === name.toLowerCase())) { $('#bdErr').textContent = `There's already a ${name} on the team.`; return; }
+        bt.members.push({ name, tool: 'claude', model: '', role: $('#bdNewRole').value.trim(), prompt: $('#bdNewJob').value.trim(), open: false });
+        if (!bt.lead) bt.lead = name;
+        bt.hiring = false; break;
+      }
+      case 'browse': {
+        b.disabled = true; b.textContent = 'Choose in the window that opened…';
+        try {
+          const r = await api('/host/pick-folder', { method: 'POST', body: {} });
+          if (r.ok && r.path) { const home = state.host?.home; bt.path = home && r.path.startsWith(home + '/') ? '~' + r.path.slice(home.length) : r.path; if (!bt.name) bt.name = baseName(r.path); }
+          else if (!r.cancelled) { renderBuild(); $('#bdErr').textContent = r.error || "Couldn't open the folder window."; return; }
+        } catch (err) { renderBuild(); $('#bdErr').textContent = err.message; return; }
+        break;
+      }
+      case 'create': await btCreate(b); return;
+      default: return;
+    }
+    renderBuild();
+  });
+  async function btCreate(btn) {
+    const fail = (t) => { $('#bdErr').textContent = t; };
+    fail('');
+    const name = bt.name.trim(), existing = bt.where === 'existing', path = existing ? bt.path.trim() : '';
+    if (!bt.members.length) return fail('Hire at least one person.');
+    if (bt.members.some((m) => !/^[A-Za-z0-9._-]{1,40}$/.test(m.name))) return fail('Names can use letters, digits, - _ and . (no spaces).');
+    const low = bt.members.map((m) => m.name.toLowerCase());
+    if (new Set(low).size !== low.length) return fail('Each member needs a different name.');
+    if (!name) { $('#bdName').focus(); return fail('Give the work a name.'); }
+    if (!bt.brief.trim()) { $('#bdBrief').focus(); return fail('Say what the team should work on.'); }
+    if (existing && !/^(~|\/)/.test(path)) return fail('Choose the folder with Browse…, or type its full path, e.g. ~/work/my-app');
+    const lead = bt.members.some((m) => m.name === bt.lead) ? bt.lead : bt.members[0].name;
+    const how = bt.how ? `## How this team works\n${forHuman(bt.how)}` : '';
+    btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      const slug = slugOf(name), room = await ensureRoomFor(name);
+      const made = await api('/projects', { method: 'POST', body: {
+        name, slug, existing, path: path || undefined, folder: slug, topic: name, brief: bt.brief.trim(), files: [],
+        agents: bt.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: m.role, prompt: [m.prompt, how].filter(Boolean).join('\n\n') })),
+        lead, kickoff: `@${lead} The work is described in the brief in docs/. Plan it with the team, tell me the plan in a few lines, and ask me anything that's unclear.`,
+        tools: [], design_system: '', git: bt.git && !!state.host?.git, auto_approve: false, start: true, trust: true, keys: {} } });
+      Object.assign(bt, { teamId: null, members: [], lead: '', name: '', brief: '', path: '', where: 'new', hiring: false });
+      closeBuild(); state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
+      if (Object.keys(made?.renamed || {}).length) infoInline(`Names already used in another project: ${Object.entries(made.renamed).map(([o, n]) => `${o} → @${n}`).join(', ')}.`);
+    } catch (err) { fail(err.message); }
+    finally { btn.disabled = false; btn.textContent = 'Create team and start'; }
+  }
   // ---------- Setup check: what this computer has (first run, and ⚙ Settings → Setup) ----------
   const CLI_INSTALL = {
     claude: ['Claude Code', 'curl -fsSL https://claude.ai/install.sh | bash'],
@@ -4190,7 +4420,7 @@
   $('#cpClose').addEventListener('click', () => $('#chatDlg').close());
   $('#npToChat').addEventListener('click', () => { $('#projDlg').close(); openChat(); });
   // "New project": the chat with Claude when Claude Code is installed (unless you last chose the form), else the form
-  $('#newRoom').addEventListener('click', () => (claudeInfo().installed && localGet('airc.npMode') !== 'form' ? openChat() : openNewProject()));
+  $('#newRoom').addEventListener('click', () => (simple() ? openBuild() : claudeInfo().installed && localGet('airc.npMode') !== 'form' ? openChat() : openNewProject()));
   $('#newRoom').title = 'New project';
   $('#roomDlg').addEventListener('close', async () => {
     if ($('#roomDlg').returnValue !== 'ok') return;
