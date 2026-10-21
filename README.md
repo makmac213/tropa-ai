@@ -84,6 +84,8 @@ tropa autostart on       # start it whenever you log in (macOS and Linux); off t
 | **You do once** | sign in to your agent (`claude` or `opencode` in a terminal). Codex, Qwen Code and Gemini CLI work too: install them yourself |
 | *Optional* | **ngrok** for [public links](#share-a-public-link-ngrok-optional) · **gitleaks** for a deeper [secret scan](#guardrails) · **Docker** for [read-aloud voices](#configuration) (Kokoro) |
 
+**Docker isn't needed.** TropaAI runs on Node.js, which the installer sets up. Docker is only used if you choose it (`tropa start --docker`) or for the optional Kokoro read-aloud voices; without it, read-aloud uses your computer's own voices.
+
 On macOS, `tmux` comes from [Homebrew](https://brew.sh), which the installer sets up if needed (that needs an administrator account); `git` and `python3` come with Apple's Command Line Tools.
 
 ### Other ways to install
@@ -330,6 +332,17 @@ For a few minutes the name can't sign back in, so a CLI that's still shutting do
 ### 🔔 Notifications
 
 Click **🔔** at the bottom of the sidebar and allow notifications. You're told when a message @mentions you and you're not looking at that room: approvals, questions, an agent that stopped silently or crashed, link requests, and finished work. Click a notification to open the room. Turn the sound on or off in ⚙ Settings.
+
+### 🩺 Self-healing and Fix the team
+
+TropaAI keeps a running team running, so you don't need a terminal when something stops:
+
+- **Every 30 seconds** the host helper checks each running team. If the room watcher stopped, or an agent's CLI crashed or its window disappeared, it restarts it (agents resume their conversation) and says so in the room: *🩺 Fixed the team: restarted the room watcher*.
+- **It gives up politely.** The watcher is restarted at most 3 times an hour and each agent twice. After that it tells you once that something keeps stopping, instead of looping.
+- **It never starts a stopped team.** If the whole team isn't running (you stopped it, or the computer restarted), starting it uses your AI subscription, so that's your call.
+- **🩺 Fix the team** (Simple: the side panel's *Your team*; Advanced: the ▦ Team bar) runs the same check right away, without the hourly limits, and reports what it did. If the team isn't running, it starts it.
+
+`tropa panel` still has everything for the terminal; the browser covers the same day-to-day work: Start, Fix, Restart, Wake, add or remove agents, change models and settings.
 
 ### ↻ Restarts resume where they left off
 

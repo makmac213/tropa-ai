@@ -1864,7 +1864,7 @@ api.post('/host/poll', wrap(async (req, res) => {
     });
   }
   host.seen = Date.now();
-  return { jobs: host.queue.splice(0), stop_shares: stopShares };
+  return { jobs: host.queue.splice(0), stop_shares: stopShares, human: HUMAN_NAME };
 }));
 // OpenRouter key from the monitor: passed to the host helper (which checks it with OpenRouter and saves it in
 // ~/.config/tropa/openrouter.key, mode 600). The server only relays it: never stored, logged or broadcast.
@@ -3022,6 +3022,19 @@ api.post('/rooms/:id/start', wrap((req) => {
   const slug = roomId.slice('project:'.length);
   if (!hostOnline()) throw new UserError('the tropa host helper is not running on your machine — start it with: tropa host start');
   const job = { id: require('node:crypto').randomUUID(), type: 'start_team', room_id: roomId, slug, status: 'queued', log: [] };
+  jobs.set(job.id, job);
+  host.queue.push({ ...job, log: undefined });
+  for (const f of [...host.waiters]) f();
+  return { job: jobView(job) };
+}));
+
+// "Fix the team": the host helper restarts whatever died in a running team (the watcher, crashed or missing agents),
+// right away and without the hourly limits of its automatic check; a team that isn't running is started
+api.post('/rooms/:id/fix', wrap((req) => {
+  const roomId = roomOf(req);
+  if (!roomId.startsWith('project:')) throw new UserError('only project rooms have a team');
+  if (!hostOnline()) throw new UserError('the tropa host helper is not running on your machine — start it with: tropa start');
+  const job = { id: require('node:crypto').randomUUID(), type: 'fix_team', room_id: roomId, slug: roomId.slice('project:'.length), status: 'queued', log: [] };
   jobs.set(job.id, job);
   host.queue.push({ ...job, log: undefined });
   for (const f of [...host.waiters]) f();
