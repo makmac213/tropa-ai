@@ -23,10 +23,14 @@ Manual trigger: touch .agent_sync/chatroom/broadcast.txt, or run wake_all.sh.
   room_watcher.py               run the watcher
   room_watcher.py wake [NAME..] wake the named agents (or all) once and exit
 """
-import hashlib, json, os, re, stat, subprocess, sys, time, urllib.parse, urllib.request
+import hashlib, json, os, re, stat, subprocess, sys, threading, time, urllib.parse, urllib.request
 sys.dont_write_bytecode = True
 import config
 import reap
+try:
+    import slash
+except ImportError:   # mid `tropa update`: slash.py isn't copied yet; its arrival restarts the watcher
+    slash = None
 
 HERE = config.HERE
 CHATROOM = os.path.join(HERE, "chatroom")
@@ -358,6 +362,8 @@ def sync_files(cfg, resp):
 
 # ---------- docs viewer ----------
 DOCS_EVERY = 5.0          # seconds between scans of the docs folder
+SLASH_EVERY = 60.0        # seconds between scans for the agents' slash commands (skills, custom commands)
+SLASH_REPOST = 600.0
 DOCS_REPOST = 30.0        # re-send the list at least this often (e.g. after a server restart)
 DOC_LIMIT = 3000
 DOC_SKIP = {"node_modules", "__pycache__"}
@@ -472,6 +478,12 @@ class Watcher:
         self.last_docs = 0      # last scan
         self.last_docs_post = 0
         self.bmtime = self.mtime(BROADCAST)
+        self.slash_sig = None   # last slash-command lists sent to TropaAI
+        self.last_slash = 0
+        self.last_slash_post = 0
+        self.slash_agents = None
+        self.slash_busy = {}    # agent -> [lock, commands queued] while slash commands run in its terminal
+        self.slash_mu = threading.Lock()
 
     @staticmethod
     def mtime(p):
@@ -488,7 +500,7 @@ class Watcher:
         r = http(self.cfg, "/watch/poll", {"room": self.cfg["room"], "agents": agents,
                                            "tmux_session": self.cfg["tmux_session"],
                                            "settings": local, "settings_changed": changed,
-                                           "timeout": timeout, "caps": ["rename_agent", "keys"]}, timeout=timeout + 10)
+                                           "timeout": timeout, "caps": ["rename_agent", "keys"] + (["slash"] if slash else [])}, timeout=timeout + 10)
         server = routing(r.get("settings") or {})
         if changed:
             log(f"pushed settings to TropaAI: {local}")
@@ -573,6 +585,15 @@ class Watcher:
             self.alerted.pop(a, None)   # a question it was stuck on may be answered now
             self.last_capture = 0       # show the new screen right away
             return
+        if ev.get("type") == "slash":   # the human ran /cmd for this agent from the chat
+            if not slash:
+                return
+            text = re.sub(r"[\x00-\x1f\x7f]", " ", str(ev.get("text") or ""))[:4000].strip()
+            name = text[1:].split(" ")[0] if text.startswith("/") else ""
+            if not a or not slash.NAME.match(name) or name.lower() in slash.BLOCKED:
+                say(self.cfg, f"@{self.cfg['human']} couldn't send `{text[:80]}` to `{ev.get('agent')}`."); return
+            threading.Thread(target=self.run_slash, args=(a, text, ev.get("kind") or ""), daemon=True).start()
+            return
         if ev.get("type") == "wake":
             if not a:
                 return
@@ -595,6 +616,9 @@ class Watcher:
             self.last_capture = 0   # refresh screens soon
 
     def deliver(self, a, text, reason=""):
+        if a in self.slash_busy:   # a slash command from the chat is running: don't type into its answer
+            self.held[a] = text
+            return
         if self.dismiss(a):
             time.sleep(0.8)   # let the CLI redraw
         if dismiss_in(self.cfg, agent_tool(self.cfg, a), pane_rows(self.cfg, a)):
@@ -645,6 +669,83 @@ class Watcher:
         self.dismissed[a] = (d["pattern"], now, (n if same else 0) + 1)
         log(f"cleared {d.get('label') or d['pattern']} in {a}: sent {' '.join(keys)}")
         return True
+
+    # -- slash commands from the chat --
+    def post_slash(self, agents):
+        self.last_slash = now = time.time()
+        if not slash:
+            return
+        self.slash_agents = sorted(agents)
+        cmds = {a: slash.discover(self.cfg, a, agent_tool(self.cfg, a)) for a in agents}
+        sig = json.dumps(cmds, sort_keys=True)
+        if sig == self.slash_sig and now - self.last_slash_post < SLASH_REPOST:
+            return
+        http(self.cfg, "/watch/commands", {"room": self.cfg["room"], "commands": cmds})
+        self.slash_sig, self.last_slash_post = sig, now
+
+    def run_slash(self, a, text, kind):
+        """Type the command into the agent's terminal, wait for its answer and post that to the room.
+        One at a time per agent; wakes for it are held meanwhile (capture() delivers them after)."""
+        with self.slash_mu:
+            ent = self.slash_busy.setdefault(a, [threading.Lock(), 0])
+            ent[1] += 1
+        with ent[0]:
+            try:
+                self._run_slash(a, text, kind)
+            finally:
+                with self.slash_mu:
+                    ent[1] -= 1
+                    if not ent[1]:
+                        self.slash_busy.pop(a, None)
+
+    def _run_slash(self, a, text, kind):
+        try:
+            rows = pane_rows(self.cfg, a)
+            if approval_prompt(self.cfg, a) or folder_dialog(rows) or first_run(rows) or stuck_menu(rows):
+                say(self.cfg, f"@{self.cfg['human']} `{a}` is waiting on a question in its terminal, so `{text[:60]}` wasn't sent. "
+                              "Answer it first (▦ Team → its screen).")
+                return
+            if self.dismiss(a):
+                time.sleep(0.8)
+            type_into(self.cfg, a, text)
+            log(f"slash {a}: {text[:80]}")
+            self.last_capture = 0
+            out = self.slash_output(a, text, 90 if kind == "builtin" else 600)
+            say(self.cfg, f"⌨️ `{a}` · `{text[:60]}`" + (f"\n```\n{out}\n```" if out else " → nothing new on its screen yet (▦ Team shows it)."))
+        except Exception as e:
+            log(f"slash {a} failed: {e}")
+            say(self.cfg, f"@{self.cfg['human']} `{text[:60]}` for `{a}` failed: {e}")
+
+    def slash_output(self, a, text, wait):
+        """What the agent's screen shows after the command line, once it stops changing (or after `wait` s)."""
+        def screen():
+            out = subprocess.run(["tmux", "capture-pane", "-p", "-J", "-S", "-300", "-t", f"{self.cfg['tmux_session']}:{a}"],
+                                 capture_output=True, text=True).stdout
+            return [r.rstrip() for r in out.splitlines()]
+        start, last, since = time.time(), None, time.time()
+        while time.time() - start < wait:
+            time.sleep(1.5)
+            rows = screen()
+            if rows != last:
+                last, since = rows, time.time()
+            elif time.time() - since >= 5 and time.time() - start >= 4:
+                break
+            if approval_in(self.cfg, rows):
+                break
+        rows = list(last or [])
+        while rows and not rows[-1].strip():
+            rows.pop()
+        head = text[:40]
+        at = max((i for i, r in enumerate(rows) if r.lstrip(" >❯›│┃").startswith(head)), default=-1)   # the line it was typed on
+        rows = rows[at + 1:]
+        tail = [i for i, r in enumerate(rows) if INPUT_BOX.match(r) and i >= len(rows) - 8]
+        if tail:
+            rows = rows[:tail[0]]          # the CLI's own input box and footer
+        if stuck_menu(pane_rows(self.cfg, a)) and not approval_prompt(self.cfg, a):
+            press(self.cfg, a, ["Escape"])  # a command that opened a menu nobody can see: close it
+        lines = [BOX.sub(" ", r).rstrip() for r in rows]
+        lines = [r for r in lines if r.strip()][-60:]
+        return "\n".join(lines)[-3000:].replace("```", "ˋˋˋ")
 
     # -- docs viewer --
     def post_docs(self, force=False):
@@ -985,7 +1086,7 @@ class Watcher:
         self.nudges[a] = (mid, n + 1)
         log(f"nudged {a}: stopped without reporting on #{mid} ({n + 1}/{MAX_NUDGES})")
 
-    CODE = ("room_watcher.py", "config.py")
+    CODE = ("room_watcher.py", "config.py", "slash.py")
 
     @staticmethod
     def code_stamp():
@@ -1038,7 +1139,7 @@ class Watcher:
         log(f"watching {self.cfg['room']} on {self.cfg['server']}; tmux '{self.cfg['tmux_session']}'")
         ok = None
         while True:
-            if self.code_changed(stamp):   # updated on disk (tropa update): restart on the new code
+            if self.code_changed(stamp) and not self.slash_busy:   # updated on disk (tropa update): restart on the new code
                 log("watcher scripts changed; restarting")
                 os.execv(sys.executable, [sys.executable] + sys.argv)
             self.cfg = config.load()
@@ -1048,6 +1149,7 @@ class Watcher:
                 if ok is not True:
                     log(f"connected; agents: {', '.join(agents) or 'none yet'}"); ok = True
                     self.docs_sig = None   # (re)connected: send the docs list again
+                    self.slash_sig, self.last_slash = None, 0
                 for ev in events:
                     self.handle(ev, agents)
                 sync_files(self.cfg, getattr(self, "last_resp", {}) or {})
@@ -1069,6 +1171,11 @@ class Watcher:
             if time.time() - self.last_capture >= PANE_EVERY:
                 self.last_capture = time.time()
                 self.capture(agents)
+            if time.time() - self.last_slash >= SLASH_EVERY or sorted(agents) != self.slash_agents:
+                try:
+                    self.post_slash(agents)
+                except Exception as e:
+                    log(f"could not send the slash commands: {e}")
             if time.time() - self.last_docs >= DOCS_EVERY:
                 try:
                     self.post_docs()
