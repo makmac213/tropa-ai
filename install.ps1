@@ -4,9 +4,9 @@
 # What it does:
 #   1. Checks for WSL 2 and a Linux distribution (offers to install Ubuntu if there is none).
 #   2. Installs tmux, python3, curl and git inside it (asks for your Linux password once).
-#   3. Checks for Docker (Docker Desktop with WSL integration) or Node.js 22.13+, and offers Node.
-#   4. Runs tropa's Linux installer inside WSL.
-#   5. Adds a `tropa` command to Windows that forwards to tropa in WSL.
+#   3. Runs tropa's Linux installer inside WSL: it checks for Node.js 22.13+ (or Docker) and an AI agent
+#      (Claude Code or OpenCode), installs what's missing, and only then installs tropa.
+#   4. Adds a `tropa` command to Windows that forwards to tropa in WSL.
 #
 # Options (environment variables): TROPA_DISTRO (default: Ubuntu, else your default distro),
 #   TROPA_VERSION, TROPA_REPO, TROPA_NO_SHIM=1 (skip the Windows command), TROPA_YES=1 (answer yes).
@@ -19,6 +19,7 @@ function Say([string]$m) { Write-Host $m }
 function Ok([string]$m) { Write-Host "  [ok] $m" -ForegroundColor Green }
 function Warn([string]$m) { Write-Host "  [!] $m" -ForegroundColor Yellow }
 function Fail([string]$m) { Write-Host "  [x] $m" -ForegroundColor Red; throw "tropa install stopped: $m" }
+function Step([int]$n, [string]$m) { Write-Host ''; Write-Host "=== Step $n of 4 - $m" -ForegroundColor Cyan; Write-Host '' }
 function Ask([string]$q) {
     if ($env:TROPA_YES -eq '1') { return $true }
     $a = Read-Host "$q [Y/n]"
@@ -58,10 +59,12 @@ function InWslOut([string]$cmd) {
 }
 
 Say ''
-Say 'tropa for Windows: sets up WSL 2 and installs tropa inside it'
-Say ''
+Say 'Setting up TropaAI on Windows. It runs inside WSL 2 (Linux, built into Windows):'
+Say '  1. check WSL   2. add the Linux tools TropaAI needs   3. install TropaAI   4. add the tropa command'
+Say 'It usually takes 5-15 minutes. You can stop it with Ctrl+C and run it again later.'
 
 # ---- 1. Windows + WSL
+Step 1 'Checking WSL'
 $build = [Environment]::OSVersion.Version.Build
 if ($IsWindows -ne $false -and $build -lt 19041) { Fail "Windows 10 version 2004 (build 19041) or newer is needed for WSL 2; this is build $build. Update Windows first." }
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { Fail 'wsl.exe was not found. Update Windows, then run: wsl --install' }
@@ -112,42 +115,35 @@ if ($user -eq 'root') { Warn "$($script:Distro) logs in as root. That works, but
 if (-not (InWslOut 'command -v apt-get || true')) { Warn "No apt-get in $($script:Distro): install tmux, python3, curl and git with its package manager yourself." }
 
 # ---- 2. Linux packages
+Step 2 'Adding the Linux tools TropaAI needs'
 $missing = InWslOut 'for b in tmux python3 curl git; do command -v $b >/dev/null 2>&1 || printf "%s " $b; done'
 if ($missing) {
-    Say "Installing inside $($script:Distro): $missing(sudo will ask for your Linux password)"
+    Say "Installing inside $($script:Distro): $missing"
+    Say 'Enter your Linux password when asked (the one you made when you set up Ubuntu). Nothing shows while you type; that is normal.'
     $rc = InWsl "sudo apt-get update -qq && sudo apt-get install -y $missing"
     if ($rc -ne 0) { Fail "Could not install $missing. Open $($script:Distro) and run: sudo apt-get install -y $missing" }
 }
 Ok 'tmux, python3, curl and git are installed'
 
-# ---- 3. Docker or Node for the chat server
+# Docker or Node for the chat server: the Linux installer adds Node.js (no password) if neither is there
 $docker = InWslOut 'docker info >/dev/null 2>&1 && echo yes || true'
-$nodeOk = InWslOut 'node -e "const [a,b]=process.versions.node.split(\".\").map(Number);process.exit(a>22||(a==22&&b>=13)?0:1)" 2>/dev/null && echo yes || true'
-if ($docker -eq 'yes') { Ok 'Docker is available in WSL (the chat server and Kokoro voices run in containers)' }
-elseif ($nodeOk -eq 'yes') { Ok "Node.js $(InWslOut 'node -v') is available (the chat server runs on Node)" }
-else {
-    Warn 'The chat server needs Docker or Node.js 22.13+ inside WSL.'
-    Say  '     Docker: install Docker Desktop, then Settings > Resources > WSL integration > turn on your distro.'
-    if (Ask 'Install Node.js 22 inside WSL now instead? (NodeSource packages, needs sudo)') {
-        $rc = InWsl 'curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource_setup.sh && sudo -E bash /tmp/nodesource_setup.sh && sudo apt-get install -y nodejs && rm -f /tmp/nodesource_setup.sh'
-        if ($rc -eq 0) { Ok "Node.js $(InWslOut 'node -v') installed" } else { Warn 'Node.js install failed; install Docker Desktop or Node 22 later.' }
-    }
-}
+if ($docker -eq 'yes') { Ok 'Docker is available in WSL (the chat server can run in it)' }
 
-# ---- 4. tropa itself (the Linux installer, inside WSL)
+# ---- 3. tropa itself (the Linux installer, inside WSL)
+Step 3 'Installing TropaAI inside WSL'
 $envs = "TROPA_REPO='$Repo'"
 if ($env:TROPA_VERSION) { $envs += " TROPA_VERSION='$($env:TROPA_VERSION)'" }
 if ($env:TROPA_ARCHIVE) {   # local test archive: translate the Windows path for WSL
     $p = InWslOut "wslpath -a '$($env:TROPA_ARCHIVE -replace '\\', '/')'"
     $envs += " TROPA_ARCHIVE='$p'"
 }
-Say 'Installing tropa inside WSL...'
 $rc = InWsl "curl -fsSL https://raw.githubusercontent.com/$Repo/main/install.sh -o /tmp/tropa-install.sh && $envs bash /tmp/tropa-install.sh; r=`$?; rm -f /tmp/tropa-install.sh; exit `$r"
-if ($rc -ne 0) { Fail 'The tropa installer failed inside WSL (see above).' }
+if ($rc -ne 0) { Fail 'TropaAI is not installed yet: follow the steps printed above, then run this installer again.' }
 $ver = InWslOut 'tropa version 2>/dev/null || ~/.local/bin/tropa version'
 Ok $ver
 
-# ---- 5. Windows command that forwards to WSL
+# ---- 4. Windows command that forwards to WSL
+Step 4 'Adding the tropa command to Windows'
 if ($env:TROPA_NO_SHIM -ne '1') {
     $bin = Join-Path $env:LOCALAPPDATA 'tropa\bin'
     New-Item -ItemType Directory -Force -Path $bin | Out-Null
@@ -175,15 +171,11 @@ wsl.exe -d %TROPA_DISTRO% --cd "%TROPA_CD%" -e bash -lc "exec tropa \"`$@\"" tro
 
 $home_ = InWslOut 'echo $HOME'
 Say ''
-Say 'Done. Next steps:'
-Say "  1. Open the '$($script:Distro)' app (or run: wsl) and install at least one agent CLI there, for example:"
-Say '       curl -fsSL https://claude.ai/install.sh | bash        # Claude Code'
-Say '       npm install -g @openai/codex                           # Codex (needs Node)'
-Say '       curl -fsSL https://opencode.ai/install | bash          # OpenCode'
-Say '       npm install -g @qwen-code/qwen-code                    # Qwen Code (needs Node)'
-Say '     Then run each one once to sign in.'
-Say '  2. Start the chat:      tropa server up -p 8888'
-Say '  3. Open it in your Windows browser:  http://localhost:8888'
-Say "  4. Projects live in WSL at ~/projects; in File Explorer: \\wsl.localhost\$($script:Distro)$($home_ -replace '/', '\')\projects"
+Say 'Done. TropaAI is installed.'
+Say "  - If the installer added Claude Code or OpenCode, sign in once: open the '$($script:Distro)' app from the Start menu,"
+Say '    type  claude  (or  opencode ) and press Enter, and follow the steps.'
+Say '  - Start TropaAI any time from PowerShell or the Ubuntu app:   tropa start'
+Say '  - It opens in your Windows browser at http://localhost:8888'
+Say "  - Projects live in WSL at ~/projects; in File Explorer: \\wsl.localhost\$($script:Distro)$($home_ -replace '/', '\')\projects"
 Say '  Keep projects inside WSL (not on C:) - it is much faster and file watching works.'
 Say ''

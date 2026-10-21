@@ -50,20 +50,16 @@ curl -fsSL https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.sh 
 irm https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.ps1 | iex
 ```
 
-That's it. The installer:
+That's it. The installer walks you through 4 steps, in plain language:
 
-1. **Downloads tropa** to `~/.tropa` and puts the `tropa` command on your PATH. It adds a line to `~/.zshrc` or `~/.bashrc` if needed, so new terminals find it.
-2. **Offers to install what's missing:** `tmux`, `python3` and `git` with your package manager (Homebrew on macOS, apt/dnf/pacman on Linux), and **Node.js 22** into `~/.tropa/node`, with no admin rights needed. It asks first; answer `n` to do it yourself.
-3. **Starts TropaAI and opens it in your browser** at http://localhost:8888, on the **Setup check**: a list of what's ready and the exact command for anything that isn't.
+1. **Checks your computer** and lists what TropaAI needs, with a ✅ or ❌ for each: `git`, Python, `tmux`, Node.js 22 (or Docker), and an AI agent. On a Mac, `git` and Python come from Apple's Command Line Tools.
+2. **Installs what's missing, after asking you once.** Apple's Command Line Tools (a window from Apple pops up; the installer waits for it), Homebrew on a Mac (for `tmux`), `tmux`/`git`/`python3` with your package manager, **Node.js 22** into `~/.tropa/node` (no password needed), and **an AI agent**: you pick Claude Code, OpenCode, or both. It warns you before anything asks for your password. If something can't be installed, it stops here, before installing TropaAI, and tells you exactly what to do; then you paste the same command again.
+3. **Installs TropaAI** to `~/.tropa` and puts the `tropa` command (and anything it installed) on your PATH for new terminals.
+4. **Starts TropaAI and opens it in your browser** at http://localhost:8888, on the **Setup check**: a list of what's ready and the exact command for anything that isn't.
 
-**The one thing it doesn't install for you is an agent CLI.** You need at least one, signed in once. We suggest [Claude Code](https://code.claude.com), because it also powers [setting up projects by chat](#quick-start):
+**Last step: sign in to your agent once.** Open a new terminal, type `claude` (or `opencode`) and press Enter, and follow the steps. The installer reminds you.
 
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
-claude        # once, to sign in
-```
-
-The Setup check shows the commands for the others: [OpenCode](https://opencode.ai), [Codex](https://github.com/openai/codex), [Qwen Code](https://github.com/QwenLM/qwen-code) and [Gemini CLI](https://github.com/google-gemini/gemini-cli). Reopen it any time from **⚙ Settings → Setup**.
+The Setup check shows the commands for the other agents: [OpenCode](https://opencode.ai), [Codex](https://github.com/openai/codex), [Qwen Code](https://github.com/QwenLM/qwen-code) and [Gemini CLI](https://github.com/google-gemini/gemini-cli). Reopen it any time from **⚙ Settings → Setup**.
 
 ### Every day
 
@@ -84,11 +80,11 @@ tropa autostart on       # start it whenever you log in (macOS and Linux); off t
 | | |
 |---|---|
 | **Operating system** | macOS, Linux, or Windows 10/11 with WSL 2 |
-| **Installed for you** (it asks first) | `tmux`, `python3`, `git`, Node.js 22.13+ (or use Docker instead) |
-| **You install** | at least one agent CLI, signed in: Claude Code, OpenCode, Codex, Qwen Code or Gemini CLI |
+| **Installed for you** (it asks first) | `tmux`, `python3`, `git`, Node.js 22.13+ (or use Docker instead), and an AI agent: Claude Code and/or OpenCode |
+| **You do once** | sign in to your agent (`claude` or `opencode` in a terminal). Codex, Qwen Code and Gemini CLI work too: install them yourself |
 | *Optional* | **ngrok** for [public links](#share-a-public-link-ngrok-optional) · **gitleaks** for a deeper [secret scan](#guardrails) · **Docker** for [read-aloud voices](#configuration) (Kokoro) |
 
-On macOS, installing `tmux` needs [Homebrew](https://brew.sh); `git` and `python3` come with Apple's Command Line Tools (`xcode-select --install`).
+On macOS, `tmux` comes from [Homebrew](https://brew.sh), which the installer sets up if needed (that needs an administrator account); `git` and `python3` come with Apple's Command Line Tools.
 
 ### Other ways to install
 
@@ -97,6 +93,7 @@ On macOS, installing `tmux` needs [Homebrew](https://brew.sh); `git` and `python
 | A specific version | `curl -fsSL https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.sh \| TROPA_VERSION=0.5.0 bash` |
 | Don't install other tools, or don't start it | `… \| TROPA_NO_DEPS=1 bash` · `… \| TROPA_NO_START=1 bash` |
 | Answer yes to everything (scripts, CI) | `… \| TROPA_YES=1 bash` |
+| Choose the AI agent up front | `… \| TROPA_CLI=opencode bash` (`claude`, `opencode`, `both`, or `none` to skip it) |
 | A different location | `… \| TROPA_DIR=~/tools/tropa BIN_DIR=~/bin bash` |
 | From a clone (for development) | `git clone https://github.com/makmac213/tropa-ai.git && cd tropa-ai && ./tropa install && tropa start` |
 
