@@ -1209,7 +1209,9 @@ class Host:
         for n, _ in new_stuck:
             hist["warned:" + n] = time.time()
         if new_stuck:
-            lines.append(f"@{human} ⚠️ " + ", ".join(who(n) for n, _ in new_stuck) + " keeps stopping, so I've stopped restarting it for now. "
+            many = len(new_stuck) > 1
+            lines.append(f"@{human} ⚠️ " + ", ".join(who(n) for n, _ in new_stuck) + (" keep" if many else " keeps") + " stopping, so I've stopped "
+                         + ("restarting them" if many else "restarting it") + " for now. "
                          "In Advanced mode, ▦ Team shows its screen with the error; or press **Fix the team** to try again.")
         if force and not lines:
             lines.append("🩺 Checked the team: everyone is running.")
@@ -1219,10 +1221,26 @@ class Host:
             except Exception as e:
                 log(f"[{slug}] could not post the team check: {e}")
 
+    def heal_lock(self):
+        """Only one host helper per port heals (two would double every restart and message): hold a lock file."""
+        if getattr(self, "_heal_lock", None) is None:
+            import fcntl
+            path = os.path.expanduser(f"~/.tropa/heal-{self.port}.lock")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            f = open(path, "w")
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self._heal_lock = f
+            except OSError:
+                f.close()
+                self._heal_lock = False
+                log("another host helper for this port is already keeping teams running; this one won't")
+        return bool(self._heal_lock)
+
     def heal_all(self):
         """The automatic check, every HEAL_EVERY seconds in the background."""
         try:
-            if time.time() - self._last_job_at < self.HEAL_QUIET:
+            if time.time() - self._last_job_at < self.HEAL_QUIET or not self.heal_lock():
                 return
             for slug, root in self.team_roots().items():
                 res = self.heal(slug, root)
