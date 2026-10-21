@@ -187,6 +187,9 @@
   .bd-l { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; } .bd-in + .bd-l { margin-top: 12px; }
   .bd-r { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 14px; }
   .bd-pick { display: flex; gap: 8px; margin-top: 4px; } .bd-pick .tbtn { white-space: nowrap; }
+  .bd-par { align-items: center; flex-wrap: wrap; margin: -2px 0 10px 26px; } .bd-par .linkbtn { margin-left: 0; font-size: 13px; }
+  .bd-par + .bd-pick { margin: -4px 0 10px 26px; }
+  #npWhere { margin-left: 0; font-size: inherit; }
   .bd-warn { background: var(--mention); border-left: 3px solid var(--human); padding: 10px 12px; border-radius: 6px; font-size: 13.5px; }
   .bd-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: flex-end; position: sticky; bottom: 0; background: var(--bg); padding: 14px 0 18px; border-top: 1px solid var(--line); }
   .bd-foot .err { color: var(--danger); margin-right: auto; font-size: 13.5px; }
@@ -1144,7 +1147,7 @@
         <div class="np-hint">Any folder in your home folder or on an external drive (not hidden or system folders). To allow other places, set <code>TROPA_PROJECT_ROOTS</code> before starting the host helper.</div></div></div>
     <div class="np-grid">
       <div><label class="f" for="npName">Name</label><input id="npName" placeholder="e.g. Recipe Finder" autocomplete="off"></div>
-      <div id="npFolderBox"><label class="f" for="npFolder">Folder</label><div class="np-folder"><span id="npBase">~/projects/</span><input id="npFolder" placeholder="recipe-finder" autocomplete="off" spellcheck="false"></div></div>
+      <div id="npFolderBox"><label class="f" for="npFolder">Folder <small>created inside <button type="button" class="linkbtn" id="npWhere" title="Choose where the new folder is created">change where…</button></small></label><div class="np-folder"><span id="npBase">~/projects/</span><input id="npFolder" placeholder="recipe-finder" autocomplete="off" spellcheck="false"></div></div>
     </div>
     <label class="f" for="npBrief">Brief / spec <small id="npBriefHint">saved as docs/SPEC.md · markdown</small></label>
     <textarea id="npBrief" rows="7" placeholder="What are we building and for whom? Must-haves, tech constraints, and what “done” means…"></textarea>
@@ -3388,7 +3391,7 @@
   function renderHostNote() {
     const h = state.host || {}; const el = $('#npHost');
     if (h.connected) {
-      $('#npBase').textContent = (h.projects_dir || '~/projects').replace(h.home || '\u0000', '~') + '/';
+      $('#npBase').textContent = parentBase() + '/';
       const where = h.home ? 'this machine' : 'the host';
       el.className = 'np-host ok'; el.innerHTML = npExisting() ? `✓ Host helper connected — the team is added to the folder you choose on ${esc(where)}.`
         : `✓ Host helper connected — the project is created in <code>${esc($('#npBase').textContent)}</code> on ${esc(where)}.`;
@@ -3659,6 +3662,20 @@
     $('#npBlocked').hidden = !bl.length;
     $('#npBlocked').innerHTML = bl.length ? `⚠ macOS didn't let TropaAI look in ${esc(bl.join(', '))}, so projects there aren't listed. Use <b>Browse…</b>, or allow access in <b>System Settings → Privacy &amp; Security → Files &amp; Folders</b> for the app you started TropaAI from (usually Terminal), then restart it.` : '';
   }
+  $('#npWhere').addEventListener('click', async () => {
+    const b = $('#npWhere'), label = b.textContent;
+    $('#npErr').textContent = '';
+    if (!state.host?.picker) {   // no folder window on this machine: type it
+      const p = prompt('Where should the new folder be created? (full path, e.g. ~/Documents)', parentBase());
+      if (p == null) return;
+      if (p.trim() && !/^(~|\/)/.test(p.trim())) { $('#npErr').textContent = 'Type the full path, e.g. ~/Documents'; return; }
+      setNewParent(p); renderHostNote(); return;
+    }
+    b.disabled = true; b.textContent = 'choose in the window that opened…';
+    try { const p = await pickParent(); if (p) { setNewParent(p); renderHostNote(); } }
+    catch (e) { $('#npErr').textContent = e.message; }
+    finally { b.disabled = false; b.textContent = label; }
+  });
   $('#npBrowse').addEventListener('click', async () => {
     const b = $('#npBrowse'), label = b.textContent;
     b.disabled = true; b.textContent = 'Choose in the window that opened…'; $('#npErr').textContent = '';
@@ -3674,6 +3691,19 @@
     finally { b.disabled = false; b.textContent = label; }
   });
   const baseName = (p) => String(p || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
+  // Where new project folders are created: the projects folder (~/projects), unless you chose another place.
+  // The choice is remembered in this browser for the next project.
+  const tildePath = (p) => { const home = state.host?.home; return home && (p === home || p.startsWith(home + '/')) ? '~' + p.slice(home.length) : p; };
+  const defaultParent = () => tildePath(state.host?.projects_dir || '~/projects');
+  const newParent = () => localGet('airc.newParent') || '';
+  const parentBase = () => (newParent() || defaultParent()).replace(/\/+$/, '');
+  function setNewParent(p) { p = String(p || '').trim().replace(/\/+$/, ''); localSet('airc.newParent', p && p !== defaultParent() ? p : ''); }
+  async function pickParent() {   // the computer's own folder window; the chosen place, or null if cancelled
+    const r = await api('/host/pick-folder', { method: 'POST', body: { purpose: 'parent' } });
+    if (r.ok && r.path) return tildePath(r.path);
+    if (!r.cancelled) throw new Error(r.error || "Couldn't open the folder window.");
+    return null;
+  }
   function applyMode() {
     const ex = npExisting();
     $('#npExisting').hidden = !ex; $('#npFolderBox').hidden = ex;
@@ -4230,7 +4260,7 @@
       for (const f of np.files) { btn.textContent = `Uploading ${f.name}…`; files.push((await uploadFile(f, room.id)).id); }
       btn.textContent = 'Creating…';
       const made = await api('/projects', { method: 'POST', body: {
-        name: name || slug, slug, existing: ex, path: path || undefined, folder: ex ? (v.startsWith('f:') ? v.slice(2) : slug) : ($('#npFolder').value.trim() || slugOf(name)), topic: name || slug, brief: $('#npBrief').value,
+        name: name || slug, slug, existing: ex, path: path || undefined, parent: (!ex && newParent()) || undefined, folder: ex ? (v.startsWith('f:') ? v.slice(2) : slug) : ($('#npFolder').value.trim() || slugOf(name)), topic: name || slug, brief: $('#npBrief').value,
         files, agents: np.team.map((a) => ({ name: a.name, tool: a.tool, model: a.model, role: a.role, prompt: jobFor(a) })), lead: np.lead,
         kickoff: $('#npKickoff').value.trim(), tools: selectedTools(), design_system: np.design, git: $('#npGit').checked, auto_approve: $('#npAuto').checked, start: $('#npStart').checked, trust: $('#npTrust').checked, keys } });
       $('#projDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
@@ -4292,7 +4322,7 @@
   }
   function renderBuild() {
     const h = state.host || {}, ts = teamTemplates();
-    const base = (h.projects_dir || '~/projects').replace(h.home || '\u0000', '~');
+    const base = parentBase();
     $('#build').innerHTML = `<div class="bd-wrap">
       <div class="bd-top"><h1>Build your team</h1><button type="button" class="bd-x" data-bd="close" aria-label="Close">×</button></div>
       <p class="bd-lead">Hire the roles you need, the way you'd staff a small office. Each one gets a job you can read and change.</p>
@@ -4318,6 +4348,10 @@
         <textarea id="bdBrief" class="bd-in" rows="4" placeholder="What should the team do, for whom, and what does done look like? They'll ask you if anything is unclear.">${esc(bt.brief)}</textarea></section>
       <section><h2>4. Where it's saved</h2>
         <label class="bd-r"><input type="radio" name="bdWhere" value="new" ${bt.where !== 'existing' ? 'checked' : ''}> A new folder: <code id="bdSlug">${esc(base)}/${esc(slugOf(bt.name) || '…')}</code></label>
+        ${bt.where !== 'existing' ? `<div class="bd-pick bd-par">${h.picker ? '<button type="button" class="tbtn" data-bd="parent">📂 Change where…</button>' : ''}
+          ${bt.ptype || !h.picker ? '' : '<button type="button" class="linkbtn" data-bd="ptype">or type a location</button>'}
+          ${newParent() ? `<span class="mut">·</span><button type="button" class="linkbtn" data-bd="pdefault">back to ${esc(defaultParent())}</button>` : ''}</div>
+          ${bt.ptype || !h.picker ? `<div class="bd-pick"><input id="bdParent" class="bd-in" value="${esc(base)}" placeholder="~/Documents" spellcheck="false" aria-label="Where to create the folder"></div>` : ''}` : ''}
         <label class="bd-r"><input type="radio" name="bdWhere" value="existing" ${bt.where === 'existing' ? 'checked' : ''}> A folder I already have</label>
         ${bt.where === 'existing' ? `<div class="bd-pick"><input id="bdPath" class="bd-in" value="${esc(bt.path)}" placeholder="~/work/my-project" spellcheck="false" aria-label="Folder">${h.picker ? '<button type="button" class="tbtn" data-bd="browse">📂 Browse…</button>' : ''}</div>` : ''}</section>
       <div class="bd-foot"><span class="err" id="bdErr" role="alert"></span><span class="mut">Runs on Claude Code. Other models and CLIs: switch to Advanced.</span>
@@ -4332,6 +4366,7 @@
     else if (t.id === 'bdName') { bt.name = t.value; const sl = $('#bdSlug'); if (sl) sl.textContent = sl.textContent.replace(/[^/]*$/, slugOf(t.value) || '…'); }
     else if (t.id === 'bdBrief') bt.brief = t.value;
     else if (t.id === 'bdPath') bt.path = t.value;
+    else if (t.id === 'bdParent') { setNewParent(t.value); const sl = $('#bdSlug'); if (sl) sl.textContent = `${t.value.trim().replace(/\/+$/, '') || '…'}/${slugOf(bt.name) || '…'}`; }
   });
   $('#build').addEventListener('toggle', (e) => { const card = e.target.closest?.('.bd-mem'); if (card && e.target.tagName === 'DETAILS') bt.members[Number(card.dataset.i)].open = e.target.open; }, true);
   $('#build').addEventListener('change', (e) => { if (e.target.name === 'bdWhere') { bt.where = e.target.value; renderBuild(); } });
@@ -4361,6 +4396,14 @@
         if (!bt.lead) bt.lead = name;
         bt.hiring = false; break;
       }
+      case 'ptype': bt.ptype = true; break;
+      case 'pdefault': setNewParent(''); bt.ptype = false; break;
+      case 'parent': {
+        b.disabled = true; b.textContent = 'Choose in the window that opened…';
+        try { const p = await pickParent(); if (p) setNewParent(p); }
+        catch (err) { renderBuild(); $('#bdErr').textContent = err.message; return; }
+        break;
+      }
       case 'browse': {
         b.disabled = true; b.textContent = 'Choose in the window that opened…';
         try {
@@ -4386,13 +4429,15 @@
     if (!name) { $('#bdName').focus(); return fail('Give the work a name.'); }
     if (!bt.brief.trim()) { $('#bdBrief').focus(); return fail('Say what the team should work on.'); }
     if (existing && !/^(~|\/)/.test(path)) return fail('Choose the folder with Browse…, or type its full path, e.g. ~/work/my-app');
+    const parent = existing ? '' : newParent();
+    if (parent && !/^(~|\/)/.test(parent)) return fail('Type the full path of where to create the folder, e.g. ~/Documents');
     const lead = bt.members.some((m) => m.name === bt.lead) ? bt.lead : bt.members[0].name;
     const how = bt.how ? `## How this team works\n${forHuman(bt.how)}` : '';
     btn.disabled = true; btn.textContent = 'Creating…';
     try {
       const slug = slugOf(name), room = await ensureRoomFor(name);
       const made = await api('/projects', { method: 'POST', body: {
-        name, slug, existing, path: path || undefined, folder: slug, topic: name, brief: bt.brief.trim(), files: [],
+        name, slug, existing, path: path || undefined, parent: parent || undefined, folder: slug, topic: name, brief: bt.brief.trim(), files: [],
         agents: bt.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: m.role, prompt: [m.prompt, how].filter(Boolean).join('\n\n') })),
         lead, kickoff: `@${lead} The work is described in the brief in docs/. Plan it with the team, tell me the plan in a few lines, and ask me anything that's unclear.`,
         tools: [], design_system: '', git: bt.git && !!state.host?.git, auto_approve: false, start: true, trust: true, keys: {} } });

@@ -2053,13 +2053,13 @@ api.post('/host/keys/:provider', wrap(async (req) => {
 // Browse… in the New project form: the host helper shows the computer's own folder chooser and sends back the path
 // (a web page can't learn a folder's path). It waits for you in the dialog, so the request can take minutes.
 const pickJobs = new Map();   // id -> { resolve, timer }
-api.post('/host/pick-folder', wrap(async () => {
+api.post('/host/pick-folder', wrap(async (req) => {
   if (!hostOnline()) throw new UserError('the tropa host helper is not running on your machine — start it with: tropa host start');
   const id = crypto.randomUUID();
   return new Promise((resolve) => {
     const timer = setTimeout(() => { pickJobs.delete(id); resolve({ ok: false, error: 'the folder picker was open too long; try again' }); }, 10 * 60e3);
     pickJobs.set(id, { resolve, timer });
-    host.queue.push({ type: 'pick_folder', id });
+    host.queue.push({ type: 'pick_folder', id, purpose: req.body?.purpose === 'parent' ? 'parent' : 'project' });
     for (const f of [...host.waiters]) f();
   });
 }));
@@ -2109,6 +2109,9 @@ api.post('/projects', wrap((req) => {
   const path = b.path ? String(b.path).trim().slice(0, 500) : '';   // an existing project anywhere in the home folder (the host checks it)
   if (path && !/^(~|\/)/.test(path)) throw new UserError('give the folder\'s full path, e.g. ~/work/my-app');
   const existing = !!b.existing || !!path;
+  // a new folder somewhere other than the projects folder: <parent>/<folder> (the host checks it)
+  const parent = !existing && b.parent ? String(b.parent).trim().slice(0, 500) : '';
+  if (parent && !/^(~|\/)/.test(parent)) throw new UserError('give the full path of where to create it, e.g. ~/Documents');
   if (existing && !path && !(host.info.folders || []).some((f) => f.name === folder)) throw new UserError(`no folder "${folder}" in ${host.info.projects_dir || 'the projects folder'}`);
   const agents = (Array.isArray(b.agents) ? b.agents : []).slice(0, 12).map((a) => ({
     name: cleanName(a.name), tool: String(a.tool || 'claude'), model: String(a.model || '').trim(),
@@ -2178,7 +2181,7 @@ api.post('/projects', wrap((req) => {
     files.length ? `\nFiles are saved in \`${ATT_DIR}/\`.` : ''].filter(Boolean).join('\n').trim();
   const msg = postMessage({ room: roomId, sender: HUMAN_NAME, kind: 'human', content: intro, attachments: files });
   const job = { id: require('node:crypto').randomUUID(), type: 'create_project', room_id: roomId, slug, name: name || slug, folder,
-    brief: brief_, agents, lead: lead_, existing, path, tools, design_system: design, auto_approve: b.auto_approve === true, git: b.git !== false, start: b.start !== false, trust: b.trust !== false, kickoff: String(b.kickoff || '').slice(0, 4000),
+    brief: brief_, agents, lead: lead_, existing, path, parent, tools, design_system: design, auto_approve: b.auto_approve === true, git: b.git !== false, start: b.start !== false, trust: b.trust !== false, kickoff: String(b.kickoff || '').slice(0, 4000),
     human: HUMAN_NAME, status: 'queued', log: [], message_id: msg.id };
   jobs.set(job.id, job);
   host.queue.push({ ...job, log: undefined, keys: projectKeys });   // the keys only travel in the queue, never kept in `jobs`
