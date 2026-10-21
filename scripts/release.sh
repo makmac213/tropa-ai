@@ -10,5 +10,6 @@ echo "$V" > VERSION
 git add VERSION && git commit -m "Release v$V"
 git tag "v$V"
 git push && git push origin "v$V"
-if command -v gh >/dev/null; then gh release create "v$V" --title "v$V" --generate-notes; fi
+# TropaAI-Setup.cmd rides along so Windows users can download and double-click it
+if command -v gh >/dev/null; then gh release create "v$V" --title "v$V" --generate-notes TropaAI-Setup.cmd; fi
 echo "✅ Released v$V"

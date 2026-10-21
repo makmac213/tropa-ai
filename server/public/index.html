@@ -651,6 +651,10 @@
   .np-mode input { width: auto; margin: 0; }
   #npExisting[hidden], #npFolderBox[hidden], #npPathBox[hidden] { display: none; }
   .np-hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
+  .np-pick { display: flex; gap: 6px; align-items: stretch; margin-bottom: 10px; }
+  #projDlg .np-pick select { margin-bottom: 0; flex: 1; min-width: 0; }
+  .np-pick .tbtn { white-space: nowrap; }
+  .np-blocked { margin-top: 0; color: var(--human); }
   .np-folder { display: flex; align-items: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 10px; }
   .np-folder span { color: var(--muted); padding-left: 10px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; flex: none; }
   .np-folder input { border: 0 !important; margin: 0 !important; background: none !important; padding-left: 2px !important; flex: 1; width: auto !important; min-width: 0; }
@@ -663,8 +667,10 @@
   .np-files { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
   .np-team-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 6px 0 6px; flex-wrap: wrap; }
   .np-presets { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
-  .np-presets button { background: var(--panel2); border: 1px solid var(--line); color: var(--muted); border-radius: 12px; padding: 2px 10px; cursor: pointer; font-size: 12px; }
-  .np-presets button:hover { color: var(--text); border-color: var(--accent); }
+  .np-presets { align-items: center; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .np-presets label { font-size: 12px; color: var(--muted); }
+  #projDlg .np-presets select { width: auto; margin: 0; padding: 3px 8px; font-size: 12.5px; }
+  .np-team-sum { font-size: 12.5px; color: var(--muted); margin: -4px 0 8px; }
   /* design systems: cards + live previews rendered from each system's preview tokens */
   .md-h { font-weight: 650; margin: .7em 0 .25em; }
   .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
@@ -1058,9 +1064,10 @@
     <div class="np-host" id="npHost"></div>
     <div class="np-mode" id="npMode"><label><input type="radio" name="npMode" value="new" checked> New folder</label><label><input type="radio" name="npMode" value="existing"> Existing project folder</label></div>
     <div id="npExisting" hidden><label class="f" for="npFolderPick">Folder <small>the code is left as it is; the team kit is added next to it</small></label>
-      <select id="npFolderPick"></select>
+      <div class="np-pick"><select id="npFolderPick"></select><button type="button" class="tbtn" id="npBrowse" hidden title="Pick the folder with your computer's own folder window">📂 Browse…</button></div>
+      <div class="np-hint np-blocked" id="npBlocked" hidden></div>
       <div id="npPathBox" hidden><input id="npPath" placeholder="~/work/my-app" spellcheck="false" autocomplete="off">
-        <div class="np-hint">Any folder inside your home folder (not hidden or system folders). To allow folders elsewhere, set <code>TROPA_PROJECT_ROOTS</code> before starting the host helper.</div></div></div>
+        <div class="np-hint">Any folder in your home folder or on an external drive (not hidden or system folders). To allow other places, set <code>TROPA_PROJECT_ROOTS</code> before starting the host helper.</div></div></div>
     <div class="np-grid">
       <div><label class="f" for="npName">Name</label><input id="npName" placeholder="e.g. Recipe Finder" autocomplete="off"></div>
       <div id="npFolderBox"><label class="f" for="npFolder">Folder</label><div class="np-folder"><span id="npBase">~/projects/</span><input id="npFolder" placeholder="recipe-finder" autocomplete="off" spellcheck="false"></div></div>
@@ -1074,7 +1081,8 @@
       <div class="ds-grid" id="npDesigns" role="radiogroup" aria-label="Design system"></div>
       <div class="ds-detail" id="npDesignDetail" hidden></div></div>
     <div class="np-team-head">TEAM <span>· ★ = lead (gets your un-addressed messages)</span>
-      <span class="np-presets"><button type="button" data-preset="web">Web app · 5</button><button type="button" data-preset="small">Small · 3</button><button type="button" data-preset="solo">Solo</button></span></div>
+      <span class="np-presets"><label for="npTeamPick">Start from</label><select id="npTeamPick" title="Ready-made teams: one folder of prompts each in teams/ (add your own in ~/.tropa/teams/)"></select></span></div>
+    <div class="np-team-sum" id="npTeamSum"></div>
     <div id="npTeam"></div>
     <div id="npTaken" class="mut" style="font-size:12.5px;margin:-2px 0 8px" hidden></div>
     <button type="button" class="linkbtn" id="npAdd" style="margin:2px 0 12px">+ Add agent</button>
@@ -1528,7 +1536,7 @@
       }
       else if (e.type === 'host') {
         state.host = e.host;
-        if ($('#projDlg').open) { renderHostNote(); renderTeamRows(); }
+        if ($('#projDlg').open) { renderHostNote(); renderTeamPick(); renderTeamRows(); }
         if ($('#modelDlg').open) { fillModelLists(); mdRender(false); }
         if ($('#addAgentDlg').open) { fillModelLists(); aaRender(false); }
         if ($('#keyDlg').open || $('#settingsDlg').open) renderKeys();
@@ -3133,20 +3141,39 @@
   // ---------- new project (from the chat) ----------
   const slugOf = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
   const np = { files: [], team: [], lead: '', folderTouched: false, kickoffTouched: false };
-  const PRESETS = {
-    web: () => [['lead', 'sonnet', 'Tech lead: plans the work, assigns tasks, reviews, reports to ' + state.human], ['backend', 'sonnet', 'Backend developer'], ['frontend', 'sonnet', 'Frontend developer'], ['QA', 'haiku', 'QA engineer: writes and runs tests, reports bugs'], ['ops', 'haiku', 'DevOps: build/run scripts, Docker, README']],
-    small: () => [['lead', 'sonnet', 'Tech lead: plans the work, assigns tasks, reviews, reports to ' + state.human], ['dev', 'sonnet', 'Full-stack developer'], ['QA', 'haiku', 'QA engineer: writes and runs tests, reports bugs']],
-    solo: () => [['dev', 'sonnet', 'Full-stack developer: plans and builds the whole project']],
-  };
-  function setPreset(k) {
-    np.team = PRESETS[k]().map(([name, model, role]) => ({ name, tool: 'claude', model, role }));
-    np.lead = np.team[0].name; renderTeamRows(); defaultKickoff();
+  // Ready-made teams come from the teams/ folder (one folder of prompts each), sent by the host helper.
+  // These three are only a fallback for when it hasn't sent them (not running, or an older tropa).
+  const FALLBACK_TEAMS = [
+    { id: 'website-studio', name: 'Website studio', lead: 'lead', members: [['lead', 'sonnet', 'Tech lead: plans the work, assigns tasks, reviews, reports to {human}'], ['backend', 'sonnet', 'Backend developer'], ['frontend', 'sonnet', 'Frontend developer'], ['QA', 'haiku', 'QA engineer: writes and runs tests, reports bugs'], ['ops', 'haiku', 'DevOps: build/run scripts, Docker, README']] },
+    { id: 'small-dev-team', name: 'Small dev team', lead: 'lead', members: [['lead', 'sonnet', 'Tech lead: plans the work, assigns tasks, reviews, reports to {human}'], ['dev', 'sonnet', 'Full-stack developer'], ['QA', 'haiku', 'QA engineer: writes and runs tests, reports bugs']] },
+    { id: 'solo-developer', name: 'Solo developer', lead: 'dev', members: [['dev', 'sonnet', 'Full-stack developer: plans and builds the whole project']] },
+  ].map((t) => ({ ...t, summary: '', how: '', members: t.members.map(([name, model, role]) => ({ name, model, role, tool: 'claude', prompt: '' })) }));
+  const teamTemplates = () => (state.host?.teams?.length ? state.host.teams : FALLBACK_TEAMS);
+  const forHuman = (text) => String(text || '').replace(/\{human\}/g, state.human || 'the human');
+  function renderTeamPick() {
+    const ts = teamTemplates();
+    $('#npTeamPick').innerHTML = ts.map((t) => `<option value="${esc(t.id)}">${esc(t.name)} · ${t.members.length}</option>`).join('')
+      + `<option value="" ${np.teamId ? '' : 'selected'}>Start empty</option>`;
+    if (np.teamId) $('#npTeamPick').value = np.teamId;
+    const t = ts.find((x) => x.id === np.teamId);
+    $('#npTeamSum').textContent = t?.summary ? forHuman(t.summary) : '';
   }
+  function setPreset(id) {
+    const t = teamTemplates().find((x) => x.id === id);
+    np.teamId = t ? t.id : ''; np.how = t?.how || '';
+    np.team = t ? t.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: forHuman(m.role), prompt: forHuman(m.prompt) })) : [];
+    np.lead = t ? t.lead : ''; renderTeamPick(); renderTeamRows(); defaultKickoff();
+    if (t && !$('#npGit').disabled) $('#npGit').checked = t.git !== false;   // git: no in team.md: a team that doesn't write code
+  }
+  // each member's job (their prompt file) plus how the team works (team.md), saved in their AGENT.md
+  const jobFor = (a) => [a.prompt, np.how ? `## How this team works\n${forHuman(np.how)}` : ''].filter(Boolean).join('\n\n');
   function renderHostNote() {
     const h = state.host || {}; const el = $('#npHost');
     if (h.connected) {
       $('#npBase').textContent = (h.projects_dir || '~/projects').replace(h.home || '\u0000', '~') + '/';
-      el.className = 'np-host ok'; el.innerHTML = `✓ Host helper connected — the project is created in <code>${esc($('#npBase').textContent)}</code> on ${esc(h.home ? 'this machine' : 'the host')}.`;
+      const where = h.home ? 'this machine' : 'the host';
+      el.className = 'np-host ok'; el.innerHTML = npExisting() ? `✓ Host helper connected — the team is added to the folder you choose on ${esc(where)}.`
+        : `✓ Host helper connected — the project is created in <code>${esc($('#npBase').textContent)}</code> on ${esc(where)}.`;
     } else {
       el.className = 'np-host off';
       el.innerHTML = `The host helper isn't running, so the chat can't create folders or start agents. Run <code>tropa host start -p ${esc(location.port || '80')}</code> on the machine running TropaAI, then reopen this dialog. You can still create just the room.`;
@@ -3386,7 +3413,7 @@
     renderTeamRows(); defaultKickoff();
   });
   $('#npAdd').addEventListener('click', () => { np.team.push({ name: `agent${np.team.length + 1}`, tool: 'claude', model: 'sonnet', role: '' }); renderTeamRows(); });
-  document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => setPreset(b.dataset.preset)));
+  $('#npTeamPick').addEventListener('change', () => setPreset($('#npTeamPick').value));
   $('#npName').addEventListener('input', () => { if (!np.folderTouched) $('#npFolder').value = slugOf($('#npName').value); npTakenNote(); });
   $('#npFolder').addEventListener('input', () => { np.folderTouched = true; });
   $('#npKickoff').addEventListener('input', () => { np.kickoffTouched = true; });
@@ -3409,7 +3436,25 @@
       '<optgroup label="Not listed?"><option value="other" data-name="">Other folder… (type its path)</option></optgroup>';
     if ([...$('#npFolderPick').options].some((o) => o.value === keep)) $('#npFolderPick').value = keep;
     $('#npPathBox').hidden = $('#npFolderPick').value !== 'other';
+    $('#npBrowse').hidden = !state.host?.picker;
+    const bl = state.host?.blocked || [];   // macOS privacy protection kept the search out of these
+    $('#npBlocked').hidden = !bl.length;
+    $('#npBlocked').innerHTML = bl.length ? `⚠ macOS didn't let TropaAI look in ${esc(bl.join(', '))}, so projects there aren't listed. Use <b>Browse…</b>, or allow access in <b>System Settings → Privacy &amp; Security → Files &amp; Folders</b> for the app you started TropaAI from (usually Terminal), then restart it.` : '';
   }
+  $('#npBrowse').addEventListener('click', async () => {
+    const b = $('#npBrowse'), label = b.textContent;
+    b.disabled = true; b.textContent = 'Choose in the window that opened…'; $('#npErr').textContent = '';
+    try {
+      const r = await api('/host/pick-folder', { method: 'POST', body: {} });
+      if (r.ok && r.path) {
+        $('#npFolderPick').value = 'other'; $('#npPathBox').hidden = false;
+        const home = state.host?.home;
+        $('#npPath').value = home && r.path.startsWith(home + '/') ? '~' + r.path.slice(home.length) : r.path;
+        if (!$('#npName').dataset.touched) $('#npName').value = baseName(r.path);
+      } else if (!r.cancelled) $('#npErr').textContent = r.error || "Couldn't open the folder window.";
+    } catch (e) { $('#npErr').textContent = e.message; }
+    finally { b.disabled = false; b.textContent = label; }
+  });
   const baseName = (p) => String(p || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
   function applyMode() {
     const ex = npExisting();
@@ -3422,6 +3467,7 @@
       : 'developers then work on their own branches/worktrees; the lead reviews, QA tests, the lead merges';
     $('#npBriefHint').textContent = ex ? 'saved as docs/SPEC.md (or docs/BRIEF.md if a spec already exists) · optional' : 'saved as docs/SPEC.md · markdown';
     $('#npCreate').textContent = ex ? 'Add team' : 'Create project';
+    renderHostNote();
     if (ex) { renderFolderPick(); const o = $('#npFolderPick').selectedOptions[0]; if (o?.dataset.name && !$('#npName').dataset.touched) $('#npName').value = o.dataset.name; }
   }
   document.querySelectorAll('input[name="npMode"]').forEach((r) => r.addEventListener('change', applyMode));
@@ -3924,7 +3970,7 @@
     for (const id of ['#npName', '#npFolder', '#npBrief', '#npKickoff']) $(id).value = '';
     $('#npErr').textContent = ''; $('#npStart').checked = true; $('#npAuto').checked = false; $('#npTrust').checked = true; $('#npGit').checked = true;
     try { state.host = await api('/host'); } catch { state.host = { connected: false }; }
-    setPreset('web'); renderNpFiles(); renderHostNote(); applyMode(); renderDesigns();
+    setPreset(teamTemplates().some((t) => t.id === 'website-studio') ? 'website-studio' : teamTemplates()[0].id); renderNpFiles(); renderHostNote(); applyMode(); renderDesigns();
     $('#npToChat').hidden = !(state.host?.connected && state.host?.claude?.installed);
 
     $('#projDlg').showModal(); $('#npName').focus();
@@ -3967,7 +4013,7 @@
       btn.textContent = 'Creating…';
       const made = await api('/projects', { method: 'POST', body: {
         name: name || slug, slug, existing: ex, path: path || undefined, folder: ex ? (v.startsWith('f:') ? v.slice(2) : slug) : ($('#npFolder').value.trim() || slugOf(name)), topic: name || slug, brief: $('#npBrief').value,
-        files, agents: np.team.map((a) => ({ name: a.name, tool: a.tool, model: a.model, role: a.role })), lead: np.lead,
+        files, agents: np.team.map((a) => ({ name: a.name, tool: a.tool, model: a.model, role: a.role, prompt: jobFor(a) })), lead: np.lead,
         kickoff: $('#npKickoff').value.trim(), tools: selectedTools(), design_system: np.design, git: $('#npGit').checked, auto_approve: $('#npAuto').checked, start: $('#npStart').checked, trust: $('#npTrust').checked, keys } });
       $('#projDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
       if (Object.keys(made?.renamed || {}).length) infoInline(`Names already used elsewhere: ${Object.entries(made.renamed).map(([o, n]) => `${o} → @${n}`).join(', ')}.`);

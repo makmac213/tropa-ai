@@ -44,26 +44,22 @@ TropaAI starts a team of coding agents (Claude Code, Codex, OpenCode, Qwen Code 
 curl -fsSL https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.sh | bash
 ```
 
-**Windows:** paste this into PowerShell (it sets up WSL 2 and runs the same installer there; details in [Windows](#windows)):
+**Windows:** download **[TropaAI-Setup.cmd](https://github.com/makmac213/tropa-ai/blob/main/TropaAI-Setup.cmd)** (click the ⤓ *Download raw file* button on that page) and double-click it. Or paste this into PowerShell. Either way it sets up WSL 2 and Ubuntu for you; details in [Windows](#windows):
 
 ```powershell
 irm https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.ps1 | iex
 ```
 
-That's it. The installer:
+That's it. The installer walks you through 4 steps, in plain language:
 
-1. **Downloads tropa** to `~/.tropa` and puts the `tropa` command on your PATH. It adds a line to `~/.zshrc` or `~/.bashrc` if needed, so new terminals find it.
-2. **Offers to install what's missing:** `tmux`, `python3` and `git` with your package manager (Homebrew on macOS, apt/dnf/pacman on Linux), and **Node.js 22** into `~/.tropa/node`, with no admin rights needed. It asks first; answer `n` to do it yourself.
-3. **Starts TropaAI and opens it in your browser** at http://localhost:8888, on the **Setup check**: a list of what's ready and the exact command for anything that isn't.
+1. **Checks your computer** and lists what TropaAI needs, with a ✅ or ❌ for each: `git`, Python, `tmux`, Node.js 22 (or Docker), and an AI agent. On a Mac, `git` and Python come from Apple's Command Line Tools.
+2. **Installs what's missing, after asking you once.** Apple's Command Line Tools (a window from Apple pops up; the installer waits for it), Homebrew on a Mac (for `tmux`), `tmux`/`git`/`python3` with your package manager, **Node.js 22** into `~/.tropa/node` (no password needed), and **an AI agent**: you pick Claude Code, OpenCode, or both. It warns you before anything asks for your password. If something can't be installed, it stops here, before installing TropaAI, and tells you exactly what to do; then you paste the same command again.
+3. **Installs TropaAI** to `~/.tropa` and puts the `tropa` command (and anything it installed) on your PATH for new terminals.
+4. **Starts TropaAI and opens it in your browser** at http://localhost:8888, on the **Setup check**: a list of what's ready and the exact command for anything that isn't.
 
-**The one thing it doesn't install for you is an agent CLI.** You need at least one, signed in once. We suggest [Claude Code](https://code.claude.com), because it also powers [setting up projects by chat](#quick-start):
+**Last step: sign in to your agent once.** Open a new terminal, type `claude` (or `opencode`) and press Enter, and follow the steps. The installer reminds you.
 
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
-claude        # once, to sign in
-```
-
-The Setup check shows the commands for the others: [OpenCode](https://opencode.ai), [Codex](https://github.com/openai/codex), [Qwen Code](https://github.com/QwenLM/qwen-code) and [Gemini CLI](https://github.com/google-gemini/gemini-cli). Reopen it any time from **⚙ Settings → Setup**.
+The Setup check shows the commands for the other agents: [OpenCode](https://opencode.ai), [Codex](https://github.com/openai/codex), [Qwen Code](https://github.com/QwenLM/qwen-code) and [Gemini CLI](https://github.com/google-gemini/gemini-cli). Reopen it any time from **⚙ Settings → Setup**.
 
 ### Every day
 
@@ -84,11 +80,11 @@ tropa autostart on       # start it whenever you log in (macOS and Linux); off t
 | | |
 |---|---|
 | **Operating system** | macOS, Linux, or Windows 10/11 with WSL 2 |
-| **Installed for you** (it asks first) | `tmux`, `python3`, `git`, Node.js 22.13+ (or use Docker instead) |
-| **You install** | at least one agent CLI, signed in: Claude Code, OpenCode, Codex, Qwen Code or Gemini CLI |
+| **Installed for you** (it asks first) | `tmux`, `python3`, `git`, Node.js 22.13+ (or use Docker instead), and an AI agent: Claude Code and/or OpenCode |
+| **You do once** | sign in to your agent (`claude` or `opencode` in a terminal). Codex, Qwen Code and Gemini CLI work too: install them yourself |
 | *Optional* | **ngrok** for [public links](#share-a-public-link-ngrok-optional) · **gitleaks** for a deeper [secret scan](#guardrails) · **Docker** for [read-aloud voices](#configuration) (Kokoro) |
 
-On macOS, installing `tmux` needs [Homebrew](https://brew.sh); `git` and `python3` come with Apple's Command Line Tools (`xcode-select --install`).
+On macOS, `tmux` comes from [Homebrew](https://brew.sh), which the installer sets up if needed (that needs an administrator account); `git` and `python3` come with Apple's Command Line Tools.
 
 ### Other ways to install
 
@@ -97,6 +93,7 @@ On macOS, installing `tmux` needs [Homebrew](https://brew.sh); `git` and `python
 | A specific version | `curl -fsSL https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.sh \| TROPA_VERSION=0.5.0 bash` |
 | Don't install other tools, or don't start it | `… \| TROPA_NO_DEPS=1 bash` · `… \| TROPA_NO_START=1 bash` |
 | Answer yes to everything (scripts, CI) | `… \| TROPA_YES=1 bash` |
+| Choose the AI agent up front | `… \| TROPA_CLI=opencode bash` (`claude`, `opencode`, `both`, or `none` to skip it) |
 | A different location | `… \| TROPA_DIR=~/tools/tropa BIN_DIR=~/bin bash` |
 | From a clone (for development) | `git clone https://github.com/makmac213/tropa-ai.git && cd tropa-ai && ./tropa install && tropa start` |
 
@@ -119,12 +116,18 @@ Claude runs on your computer through the host helper (`claude -p`, with no tools
    - **Name.** The folder is created at `~/projects/<name>`.
    - **Brief / spec**, saved as `docs/SPEC.md`: what to build, must-haves, and what "done" means.
    - **Files** (optional): mockups, docs and images, saved in `docs/attachments/`.
-   - **Team:** start from a preset (*Web app · 5*, *Small · 3* or *Solo*) or build your own. Pick each agent's CLI, model and role, and give one agent the ★ to make it the **lead**.
+   - **Team:** **Start from** a [ready-made team](#ready-made-teams) (Website studio, Research & publishing desk, SEO team, Customer support desk, Market research team, Small dev team, Solo developer…) or start empty and build your own. Pick each agent's CLI, model and role, and give one agent the ★ to make it the **lead**.
    - **Design system** (optional): pick the look agents build the UI in. Each card shows a live preview; click one for details. See [Design systems](#design-systems).
    - **Tools** (optional): give agents [Vercel, Supabase or Render](#optional-tools-vercel-supabase-render).
    - **Kickoff message:** posted as you once the team is up.
 3. Click **Create project**. Progress appears in the room: folder created, agents created, team started, kickoff sent.
 4. Click **▦ Team** to watch every agent work, and chat with them in the room.
+
+### Ready-made teams
+
+Each ready-made team is a folder of prompts in [`teams/`](teams/): a `team.md` (name, summary, lead, and how the team works together) and one file per member, whose name is the agent's name and whose text is that member's job. When you start a project from a team, each agent's job, plus the team's way of working, is saved in its `AGENT.md` under *Your job* and stays there for the whole project.
+
+**Add a team by adding a folder**, no code needed: copy one, change the prompts, and it appears in **Start from** within a few seconds. Keep your own teams in `~/.tropa/teams/` so they survive updates (a folder there with the same name replaces the built-in one). `tropa teams` lists them. The format is in [teams/README.md](teams/README.md).
 
 ### Option B: from a terminal
 
@@ -151,12 +154,14 @@ tropa never changes your code. It adds a small team kit next to it:
 - `docs/`
 
 **From the chat:**
-1. Click **+**, choose **Existing project folder**, and pick the folder:
+1. Click **+**, choose **Existing project folder**, and pick the folder. The easiest way is **📂 Browse…**, which opens your computer's own folder window (Finder on a Mac, File Explorer on Windows, the file chooser on a Linux desktop). Or pick from the list:
    - **In ~/projects**: folders in your projects folder;
    - **Elsewhere in your home folder**: git repos tropa found up to three levels deep, e.g. `~/work/client-app`;
    - **Other folder…**: type any path, e.g. `~/clients/acme/portal`.
 
-   Folders that already have a team or use git are marked. For safety, the host helper only accepts folders inside your home folder, and never your home folder itself or hidden or system folders (`~/.ssh`, `~/Library`). To allow other locations, start the host helper with `TROPA_PROJECT_ROOTS=/srv/code:/Volumes/work`.
+   Folders that already have a team or use git are marked. The host helper accepts folders in your home folder and on **external drives** (`/Volumes/…` on a Mac; `/media/…`, `/mnt/…` on Linux, which in WSL includes Windows drives such as `/mnt/c/Users/you/code`), but never a whole drive, your home folder itself, or hidden or system folders (`~/.ssh`, `~/Library`, `C:\Windows`). To allow other locations, start the host helper with `TROPA_PROJECT_ROOTS=/srv/code:/opt/work`.
+
+   **On a Mac, projects in Documents, Desktop or Downloads** need macOS's permission. If TropaAI can't open them, the form says so: allow the app you start TropaAI from (usually **Terminal**) in **System Settings → Privacy & Security → Files & Folders** (or **Full Disk Access**), then run `tropa stop && tropa start`.
 2. Add a brief and files if you like. The brief is saved as `docs/SPEC.md`, or as `docs/BRIEF.md` if you already have a spec.
 3. Add the team and click **Add team**. Agents are told it's an existing codebase and to follow its conventions.
 
@@ -914,39 +919,36 @@ tropa runs on Windows inside **WSL 2** (the Windows Subsystem for Linux). The ag
 
 ### Install
 
-Open **PowerShell** (you don't need administrator rights unless WSL itself is missing) and run:
+**The easy way:** download **[TropaAI-Setup.cmd](https://github.com/makmac213/tropa-ai/blob/main/TropaAI-Setup.cmd)** (the ⤓ *Download raw file* button on that page) and double-click it. If Windows shows *"Windows protected your PC"*, click **More info → Run anyway**: the file only downloads and runs the PowerShell installer below.
+
+**Or** open **PowerShell** (Start menu → type *PowerShell*) and paste:
 
 ```powershell
 irm https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.ps1 | iex
 ```
 
-The installer:
-1. **Checks for WSL 2 and a Linux distribution.** If there's none, it offers to install Ubuntu. Windows may then ask for a restart. Afterwards, open **Ubuntu** from the Start menu once to create your Linux user, and run the installer again.
-2. **Installs `tmux`, `python3`, `curl` and `git`** in Ubuntu. sudo asks for your *Linux* password.
-3. **Checks for a way to run the chat server:** Docker Desktop with WSL integration turned on (*Settings → Resources → WSL integration*), or Node.js 22.13+. If neither is there, it offers to install Node.js 22.
-4. **Installs tropa inside WSL** with the normal Linux installer.
-5. **Adds a `tropa` command to Windows** (`%LOCALAPPDATA%\tropa\bin\tropa.cmd`) that runs tropa in WSL, so `tropa server up` also works from PowerShell or CMD.
+You don't need to know anything about Linux. Setup walks you through 4 steps and says what it's doing at each one:
+
+1. **Turns on WSL and sets up Ubuntu.** If WSL is off, Windows asks for permission once (click **Yes**). If Windows needs a restart, setup asks first and **carries on by itself after the restart**. It then installs Ubuntu and opens it so you can pick a Linux user name and password, telling you exactly what to type; it waits for you and continues.
+2. **Adds the Linux tools TropaAI needs** (`tmux`, `python3`, `curl`, `git`). No password to type.
+3. **Installs TropaAI** with the normal installer inside Ubuntu, which also adds **Node.js** and **an AI agent** (you pick Claude Code, OpenCode, or both), and opens TropaAI in your browser.
+4. **Adds TropaAI shortcuts** to your Desktop and Start menu, offers to start TropaAI when you sign in to Windows, and **offers to sign you in to your AI agent** right there.
+
+If something goes wrong, setup says what to do in plain words (for example, when virtualization is turned off in your computer's settings), and keeps a log at `%TEMP%\tropa-install.log` to send if you need help.
 
 | Option (set before running) | Meaning |
 |---|---|
 | `$env:TROPA_DISTRO = "Ubuntu-24.04"` | Which WSL distribution to use (default: `Ubuntu`, else your default one) |
 | `$env:TROPA_VERSION = "0.4.0"` | Install a specific version |
-| `$env:TROPA_NO_SHIM = "1"` | Don't add the Windows `tropa` command |
-| `$env:TROPA_YES = "1"` | Answer yes to every question |
+| `$env:TROPA_NO_SHIM = "1"` | Don't add the Windows `tropa` command or the shortcuts |
+| `$env:TROPA_YES = "1"` | Answer yes to every question (and skip the sign-in, which needs you) |
 
-### Then
+### Every day
 
-1. **Install an agent CLI in Ubuntu** (open the *Ubuntu* app, or run `wsl`) and sign in once:
-   ```bash
-   curl -fsSL https://claude.ai/install.sh | bash      # Claude Code
-   curl -fsSL https://opencode.ai/install | bash        # OpenCode
-   npm install -g @openai/codex                         # Codex (needs Node)
-   npm install -g @qwen-code/qwen-code                  # Qwen Code (needs Node)
-   npm install -g @google/gemini-cli                    # Gemini CLI (needs Node)
-   ```
-   If `npm install -g` reports a permissions error, run `npm config set prefix ~/.local` once, then try again.
-2. **Start TropaAI:** the installer already did, and opened your Windows browser. Next time run `tropa start` (from Ubuntu or PowerShell).
-3. **Create a project** with **＋ New project** at **http://localhost:8888**.
+- **Start TropaAI:** double-click **TropaAI** on your Desktop (or in the Start menu). It opens at **http://localhost:8888**.
+- **Create a project** with **＋ New project** in the browser.
+- **More agents:** Codex, Qwen Code and Gemini CLI work too. Open **Ubuntu** from the Start menu and install them there (the Setup page in the browser shows the commands), then sign in once.
+- **From a terminal:** the `tropa` command works in PowerShell, CMD and Ubuntu (`tropa start`, `tropa stop`).
 
 ### Good to know
 
@@ -958,7 +960,7 @@ The installer:
 - **Public links (ngrok)** and **usage** work the same as on Linux. Install ngrok inside Ubuntu (`sudo snap install ngrok`, or see ngrok.com/download).
 - **Line endings:** the repo's `.gitattributes` keeps scripts LF, so cloning it on Windows doesn't break them.
 
-**Uninstall:** in Ubuntu, follow [Update and uninstall](#update-and-uninstall). On Windows, delete `%LOCALAPPDATA%\tropa` and remove it from your user PATH.
+**Uninstall:** in Ubuntu, follow [Update and uninstall](#update-and-uninstall). On Windows, delete `%LOCALAPPDATA%\tropa`, remove it from your user PATH, and delete the **TropaAI** shortcuts (Desktop, Start menu, and `shell:startup` if you chose to start it at sign-in).
 
 ---
 
