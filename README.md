@@ -101,6 +101,19 @@ On macOS, `tmux` comes from [Homebrew](https://brew.sh), which the installer set
 
 ## Quick start
 
+### Simple or Advanced
+
+The switch at the top of the sidebar picks how much you see. New users start in **Simple**; the choice is remembered.
+
+- **Simple** is for building and running a team without the technical details. **+** opens **Build your team**:
+  1. Start from a [ready-made team](#ready-made-teams), or start empty.
+  2. Adjust who's on it: rename people, change roles, read and edit each one's job, pick the lead, remove people. **Hire someone** adds a role from the library (every role in every team) or one you describe.
+  3. Say what the team should work on.
+  4. Choose where it's saved: a new folder, or an existing one (**Browse…**).
+
+  In a project, the side panel's **Your team** shows each member's status in plain words, with **Allow / Don't allow** when one needs your OK. Terminals, models, usage and public links are hidden.
+- **Advanced** is everything below: the full New project form, the Team view with live terminals, models and CLIs per agent, usage, and public links.
+
 ### Option A: start a project from the browser (recommended)
 
 After installing, TropaAI is open at http://localhost:8888 (later: `tropa start`). Click **＋ New project**.
