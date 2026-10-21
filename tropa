@@ -3,6 +3,7 @@
 #
 #   tropa start [-p PORT] [--docker] [--no-open]   start TropaAI (chat server + host helper) and open it in the browser
 #   tropa stop [-p PORT]                    stop it
+#   tropa restart [-p PORT]                 restart what's running (chat server + host helper) on the current code
 #   tropa autostart on|off|status [-p PORT] start TropaAI when you log in
 #   tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--no-tts] [--panel] [DIR]
 #   tropa panel  [DIR]                      open the agent control panel
@@ -433,6 +434,33 @@ cmd_stop() {
     while [ $# -gt 0 ]; do case "$1" in -p|--port) port="$2"; shift ;; *) die "unknown option '$1'" ;; esac; shift; done
     server_down "${port:-$(default_port)}"
 }
+known_ports() {   # every port TropaAI has run on here (the remembered one first)
+    local p f out=""
+    p=$(cat "$STATE_DIR/port" 2>/dev/null); valid_port "$p" && out="$p"
+    for f in "$STATE_DIR"/projects-*.json "$STATE_DIR"/server-*.mode "$STATE_DIR"/host-*.log "$STATE_DIR"/ai-irc-*.pid; do
+        [ -e "$f" ] || continue
+        p=${f##*/}; p=${p#*-}; p=${p#irc-}; p=${p%%.*}
+        valid_port "$p" || continue
+        case " $out " in *" $p "*) ;; *) out="$out $p" ;; esac
+    done
+    echo $out
+}
+cmd_restart() {   # stop and start again whatever is running, so it runs the code on disk (after self-update)
+    local port="" p ports n=0 i
+    while [ $# -gt 0 ]; do case "$1" in -p|--port) port="$2"; shift ;; *) die "unknown option '$1'" ;; esac; shift; done
+    ports="${port:-$(known_ports)}"
+    for p in $ports; do
+        valid_port "$p" || die "invalid port '$p'"
+        { health "$p" && is_tropa_server "$p"; } || host_running "$p" || continue
+        n=$((n+1))
+        info "↻ Restarting TropaAI on port $p (your chats, projects and running teams are kept)..."
+        server_down "$p" >/dev/null
+        i=0; while health "$p" && [ $i -lt 15 ]; do sleep 1; i=$((i+1)); done
+        TROPA_NO_HOST=0 server_up "$p" "$(default_human)" 0 ""
+        info "   Reload the TropaAI page in your browser to see the new version."
+    done
+    [ "$n" -gt 0 ] || info "TropaAI isn't running; 'tropa start' starts the new version."
+}
 cmd_autostart() {   # start TropaAI at login: launchd (macOS) or a systemd user service (Linux)
     local sub="${1:-status}" port; port=$(default_port); shift || true
     while [ $# -gt 0 ]; do case "$1" in -p|--port) port="$2"; shift ;; *) die "unknown option '$1'" ;; esac; shift; done
@@ -803,11 +831,15 @@ case "${1:-help}" in
     install) shift; cmd_install "$@" ;;
     self-update|selfupdate)
         if [ -d "$TROPA_HOME/.git" ]; then
-            git -C "$TROPA_HOME" pull --ff-only && echo "✅ tropa $(cat "$TROPA_HOME/VERSION")"
+            git -C "$TROPA_HOME" pull --ff-only && echo "✅ tropa $(cat "$TROPA_HOME/VERSION")" || exit 1
         else
-            curl -fsSL "https://raw.githubusercontent.com/$TROPA_REPO/main/install.sh" | TROPA_REPO="$TROPA_REPO" TROPA_NO_START=1 bash
+            curl -fsSL "https://raw.githubusercontent.com/$TROPA_REPO/main/install.sh" | TROPA_REPO="$TROPA_REPO" TROPA_NO_START=1 bash || exit 1
         fi
-        echo "   Run 'tropa update' in each project to refresh its kit." ;;
+        echo "   Run 'tropa update' in each project to refresh its kit."
+        # the chat server and host helper still run the old code: restart them with the new script
+        # (exec: this file was just replaced on disk, so don't read any more of it)
+        exec "$TROPA_HOME/tropa" restart ;;
+    restart) shift; cmd_restart "$@" ;;
     version|--version|-v) echo "tropa $VERSION — built by Mark Allan Meriales with Claude (Anthropic)" ;;
     help|-h|--help) usage ;;
     *) die "unknown command '$1' (see: tropa help)" ;;

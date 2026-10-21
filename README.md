@@ -71,7 +71,7 @@ tropa autostart on       # start it whenever you log in (macOS and Linux); off t
 
 **Which port:** without `-p`, these use the port you last started with (`tropa start -p 8181` once, and plain `tropa start` keeps using 8181), else the port TropaAI already runs on, else 8888. `TROPA_PORT=…` overrides it.
 
-**Updating:** `tropa self-update` (the latest release, or `main` while there are none), then `tropa stop && tropa start` and `tropa update <project>` for each project.
+**Updating:** `tropa self-update` (the latest release, or `main` while there are none). It restarts the chat server and host helper on the new version by itself; your chats, projects and running teams are kept. Reload the page afterwards. Then run `tropa update <project>` for each project. `tropa restart` restarts them by hand.
 
 `tropa start` runs the chat server with Node. If you prefer Docker, use `tropa start --docker`; a port that already keeps its chats in Docker stays in Docker. Use `-p PORT` to run on another port (several can run side by side, each with its own chats).
 
@@ -919,7 +919,8 @@ Or put it in a project's `.mcp.json`:
 | `tropa tts start\|stop\|status\|logs` | Kokoro voices for **Read aloud**: one shared container (`tropa-kokoro`, 127.0.0.1:8880) for every server on the machine |
 | `tropa host start\|stop\|status\|logs [-p PORT] [--projects-dir DIR]` | The host helper that lets the chat create projects and start teams |
 | `tropa update [DIR]` | Refresh a project's kit to your installed tropa version |
-| `tropa self-update` | Update tropa itself |
+| `tropa self-update` | Update tropa itself (and restart what's running on the new version) |
+| `tropa restart` | Restart the chat server and host helper on the current code |
 | `tropa install [BIN_DIR]` | Put this copy of `tropa` on your PATH |
 | `tropa version` · `tropa help` | |
 
