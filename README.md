@@ -339,6 +339,23 @@ For a few minutes the name can't sign back in, so a CLI that's still shutting do
 
 Click **🔔** at the bottom of the sidebar and allow notifications. You're told when a message @mentions you and you're not looking at that room: approvals, questions, an agent that stopped silently or crashed, link requests, and finished work. Click a notification to open the room. Turn the sound on or off in ⚙ Settings.
 
+### ⌨️ The agents' own slash commands
+
+Type an agent's slash command in the chat and it runs in that agent's terminal, with the answer posted back to the room:
+
+- `/btw is the build green?` asks the **lead** a side question without stopping its work (Claude Code's `/btw`).
+- `@dev /compact` or `@dev, @qa /cost` picks the agents; `@all /context` asks everyone.
+- **Skills and custom commands work too:** `/deploy staging` runs the project's `deploy` skill.
+
+Typing `/` lists what the team's agents can run, with who has each command. That covers each CLI's useful built-ins (Claude Code: `/btw /compact /context /cost /usage /status /review /init`; Codex: `/compact /status /diff /review /init`; Gemini CLI and Qwen Code: `/compress /stats /tools /mcp /memory /init`; OpenCode: `/compact /init`), plus the skills and custom commands found for each agent:
+
+- the team's skills (`.agents/skills/`) and Claude skills and commands in the project, the agent's folder or `~/.claude`;
+- Gemini and Qwen `commands/*.toml`;
+- OpenCode `.opencode/command/`;
+- Codex `~/.codex/prompts/` (as `/prompts:name`).
+
+Commands aren't the same on every CLI. An agent whose CLI doesn't have the command gets your text as an ordinary message instead, so it still does what you asked. Commands that would end, reset or lock up a session (`/exit`, `/clear`, `/login`, `/model`…) can't be sent from the chat. Nothing is typed into an agent that is waiting for your approval, and one agent runs one command at a time. The browser's own commands (`/read`, `/theme`…) keep their names, so use `@agent /read` to send one of those to an agent. Older projects need `tropa update` first.
+
 ### 💳 Out of credits, usage limits and rate limits
 
 When an agent can't work because of its AI provider, TropaAI shows why instead of a plain *idle*. The watcher reads each agent's screen (Claude Code, Codex, Gemini CLI, OpenCode/OpenRouter and Qwen word these differently) and sorts it into:
@@ -475,7 +492,7 @@ How it's set up:
 - **Other rooms:** `#general` is for talk across projects. **All activity** shows every room together.
 - **Light / dark mode:** the ◐ button next to ⚙ cycles **Auto** (follows your system) → **Light** → **Dark**, and your choice is remembered in the browser. Both themes meet WCAG AA contrast.
 - **Read aloud:** hover a message and click **▶ Read**, or type `/read`, `/read 5` or `/read #37`. Each sender gets their own voice. It uses **Kokoro**, natural local voices started automatically by `tropa server up` (needs Docker), and falls back to your system's voices while Kokoro downloads (a few GB, the first time only) or if Docker isn't running. ⚙ Settings picks the engine, voices and speed.
-- **Slash commands in the chat box:** `/help`, `/theme light|dark|auto`, `/download md|txt|json` (transcript), `/read` (read aloud), `/blur`.
+- **Slash commands in the chat box:** `/help`, `/theme light|dark|auto`, `/download md|txt|json` (transcript), `/read` (read aloud), `/blur`. Any other `/command` goes to the agents (see *The agents' own slash commands*).
 
 ---
 

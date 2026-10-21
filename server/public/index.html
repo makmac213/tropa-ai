@@ -305,11 +305,13 @@
   .dl-menu button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 7px 12px; cursor: pointer; font-size: 13px; }
   .dl-menu button span { color: var(--muted); font-size: 12px; margin-left: 6px; }
   .dl-menu button:hover { background: var(--accent-weak); }
-  .cmds { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; overflow: hidden; }
+  .cmds { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; overflow: hidden auto; max-height: 300px; }
   .cmds[hidden] { display: none; }
   .cmd { display: flex; gap: 10px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
-  .cmd b { font-family: ui-monospace, monospace; font-weight: 600; min-width: 70px; }
-  .cmd span { color: var(--muted); }
+  .cmd b { font-family: ui-monospace, monospace; font-weight: 600; min-width: 70px; flex-shrink: 0; }
+  .cmd span { color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cmd .cmd-who { color: var(--muted); font-style: normal; font-size: 12px; white-space: nowrap; }
+  .cmd .cmd-who em { font-style: normal; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-right: 4px; }
   .cmd.sel, .cmd:hover { background: var(--accent-weak); }
   .older { display: block; margin: 4px auto 10px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 4px 12px; cursor: pointer; }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 20px; width: min(420px, 92vw); }
@@ -1713,6 +1715,7 @@
     if (!content && !ready.length) return;
     if (state.pending.some((p) => !p.att && !p.error)) { alertInline('Wait for the files to finish uploading.'); return; }
     if (content.startsWith('//')) content = content.slice(1);          // "//text" posts a literal "/text"
+    else if (isAgentSlash(content)) { if (ready.length) { alertInline('Send the files in a message of their own.'); return; } sendSlash(content); return; }
     else if (content.startsWith('/')) { runCommand(content); return; }
     if (state.current === ALL || state.searching) { alertInline('Pick a room in the sidebar to post a message.'); return; }
     $('#sendBtn').disabled = true;
@@ -2914,13 +2917,60 @@
     { name: 'stop', desc: 'Stop reading aloud', run: () => { ttsStop(); infoInline('Stopped reading.'); } },
     { name: 'tts', desc: 'Show which voice engine reads aloud · /tts kokoro · /tts mac', run: (args) => ttsCommand(args[0]) },
     { name: 'theme', desc: 'Colour theme: /theme light · dark · auto', run: (args) => setTheme(args[0] || 'next') },
-    { name: 'help', desc: 'List available commands', run: () => infoInline('Commands: ' + COMMANDS.map((c) => '/' + c.name).join('  ·  ') + '   (start with // to post a message beginning with /)') },
+    { name: 'help', desc: 'List available commands', run: () => {
+      const ag = [...agentCmds().values()].map((c) => '/' + c.name);
+      infoInline('Commands: ' + COMMANDS.map((c) => '/' + c.name).join('  ·  ') + (ag.length ? '   ·   the team\'s: ' + ag.slice(0, 12).join(' ') + (ag.length > 12 ? ' …' : '') : '') + '   (start with // to post a message beginning with /)');
+    } },
   ];
+  // ---------- the agents' own slash commands (/btw, /compact, skills...), run in their terminals ----------
+  function agentCmds() {   // name(lower) -> { name, desc, kind, agents }
+    const t = state.team[state.current];
+    const out = new Map();
+    if (!t?.watching) return out;
+    for (const [agent, list] of Object.entries(t.commands || {})) {
+      if (!(t.agents || []).includes(agent)) continue;
+      for (const c of list) {
+        const k = c.name.toLowerCase();
+        if (!out.has(k)) out.set(k, { ...c, agents: [] });
+        out.get(k).agents.push(agent);
+      }
+    }
+    return out;
+  }
+  function slashLead() {
+    const t = state.team[state.current] || {};
+    const lead = (t.agents || []).find((a) => a.toLowerCase() === String(t.settings?.lead || '').toLowerCase());
+    return lead || ((t.agents || []).length === 1 ? t.agents[0] : '');
+  }
+  const SLASH_RE = /^((?:@[\w.-]+[\s,]*)*)\/([A-Za-z0-9_.-][A-Za-z0-9_.:-]*)/;
+  function isAgentSlash(text) {
+    const m = text.match(SLASH_RE);
+    if (!m || !state.team[state.current]?.watching) return false;
+    const name = m[2].toLowerCase(), cmd = agentCmds().get(name);
+    if (m[1].trim()) return !!cmd;                               // "@dev /path/to/x is broken" stays a message
+    if (COMMANDS.some((c) => c.name === name)) return false;      // this browser's own commands come first
+    return true;   // an agent command, or one its CLI lacks: then it gets the text as a message
+  }
+  async function sendSlash(text) {
+    const input = $('#input');
+    $('#sendBtn').disabled = true;
+    try {
+      const r = await api(`/rooms/${encodeURIComponent(state.current)}/slash`, { method: 'POST', body: { text, sender: myName(), reply_to: state.replyTo } });
+      input.value = ''; autosize(); hideCmds(); state.replyTo = null; renderReply();
+      const cmd = '/' + text.match(SLASH_RE)[2];
+      const bits = [];
+      if (r.sent.length) bits.push(`${cmd} sent to ${r.sent.join(', ')}; the answer shows up here.`);
+      if (r.as_message.length) bits.push(`${r.as_message.join(', ')} ${r.as_message.length > 1 ? "don't" : "doesn't"} have ${cmd}, so ${r.as_message.length > 1 ? 'they' : 'it'} got it as a message.`);
+      if (r.skipped.length) bits.push(`${r.skipped.join(', ')} ${r.skipped.length > 1 ? 'are' : 'is'} waiting for your approval, so not sent there.`);
+      infoInline(bits.join(' '));
+    } catch (e) { alertInline(e.message); }
+    finally { $('#sendBtn').disabled = false; input.focus(); }
+  }
   function runCommand(text) {
     const name = text.slice(1).split(/\s+/)[0].toLowerCase();
     const cmd = COMMANDS.find((c) => c.name === name);
     const input = $('#input');
-    if (!cmd) { alertInline(`Unknown command /${name}. Type /help for the list.`); return; }
+    if (!cmd) { alertInline(`Unknown command /${name}. Type /help for the list${state.team[state.current]?.watching ? '' : ' (agents\' commands need the team running)'}.`); return; }
     cmd.run(text.slice(1).trim().split(/\s+/).slice(1));
     input.value = ''; autosize(); hideCmds(); input.focus();
   }
@@ -2945,14 +2995,29 @@
   let cmdSel = 0;
   function renderCmds() {
     const v = $('#input').value;
-    const m = v.match(/^\/(\w*)$/);
+    const m = v.match(/^((?:@[\w.-]+[\s,]*)*)\/([\w:.-]*)$/);
     if (!m) return hideCmds();
-    const list = COMMANDS.filter((c) => c.name.startsWith(m[1].toLowerCase()));
+    const pre = m[1], q = m[2].toLowerCase();
+    const named = [...pre.matchAll(/@([\w.-]+)/g)].map((x) => x[1].toLowerCase());
+    const local = pre ? [] : COMMANDS.filter((c) => c.name.startsWith(q)).map((c) => ({ ...c, ins: '/' + c.name, local: true }));
+    const lead = slashLead();
+    const agent = [...agentCmds().values()]
+      .filter((c) => c.name.toLowerCase().startsWith(q) && !(!pre && COMMANDS.some((l) => l.name === c.name.toLowerCase())))
+      .filter((c) => !named.length || named.some((n) => ['all', 'here', 'team', 'everyone'].includes(n) || c.agents.some((a) => a.toLowerCase() === n)))
+      .map((c) => {
+        // bare /cmd goes to the lead: if the lead lacks this one, aim it at an agent that has it
+        const to = pre || !lead || c.agents.includes(lead) ? pre : '@' + c.agents[0] + ' ';
+        return { ...c, ins: `${to}/${c.name} `, who: named.length ? '' : c.agents.join(', ') };
+      });
+    const list = [...agent, ...local].slice(0, 40);
     if (!list.length) return hideCmds();
     cmdSel = Math.min(cmdSel, list.length - 1);
     const box = $('#cmds');
     box.hidden = false;
-    box.innerHTML = list.map((c, i) => `<div class="cmd ${i === cmdSel ? 'sel' : ''}" data-cmd="${c.name}"><b>/${c.name}</b><span>${esc(c.desc)}</span></div>`).join('');
+    const tag = { builtin: '', skill: 'skill', command: 'command' };
+    box.innerHTML = list.map((c, i) => `<div class="cmd ${i === cmdSel ? 'sel' : ''}" data-cmd="${esc(c.ins)}"${c.local ? ' data-local="1"' : ''}><b>/${esc(c.name)}</b><span>${esc(c.desc || '')}</span>` +
+      (c.local ? '<i class="cmd-who">this browser</i>' : `<i class="cmd-who">${tag[c.kind] ? `<em>${tag[c.kind]}</em> ` : ''}${c.who ? '→ ' + esc(c.who) : ''}</i>`) + '</div>').join('');
+    box.children[cmdSel]?.scrollIntoView({ block: 'nearest' });
     return list;
   }
   function hideCmds() { $('#cmds').hidden = true; cmdSel = 0; }
@@ -2986,7 +3051,11 @@
     }
     if (menuOpen && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey))) {
       const sel = $('#cmds').children[cmdSel];
-      if (sel) { e.preventDefault(); $('#input').value = '/' + sel.dataset.cmd; if (e.key === 'Enter') send(); else hideCmds(); return; }
+      if (sel) {
+        e.preventDefault(); $('#input').value = sel.dataset.cmd;
+        if (e.key === 'Enter' && sel.dataset.local) send(); else hideCmds();   // an agent command may take words after it
+        return;
+      }
     }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
     if (e.key === 'Escape') { if (menuOpen) hideCmds(); else { state.replyTo = null; renderReply(); } }
@@ -3044,7 +3113,7 @@
     if (dl) { downloadTranscript(dl.dataset.dl); return; }
     if (!e.target.closest('#dlMenu')) $('#dlMenu').hidden = true;
     const c = e.target.closest('[data-cmd]');
-    if (c) { $('#input').value = '/' + c.dataset.cmd; send(); return; }
+    if (c) { $('#input').value = c.dataset.cmd; if (c.dataset.local) send(); else { hideCmds(); $('#input').focus(); } return; }
     if (e.target.closest('#shareBtn')) { openShare(); return; }
     if (e.target.closest('[data-addagent]')) { openAddAgent(null); return; }
     if (e.target.closest('[data-projkeys]')) { openProjectKeys(); return; }

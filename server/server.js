@@ -1373,7 +1373,7 @@ function watcherFor(roomId) {
 function teamView(roomId) {
   const w = watcherFor(roomId);
   return { room_id: roomId, watching: !!w, tmux_session: w?.tmux || '', agents: w?.agents || [],
-    panes: w ? w.panes : {}, settings: wakeSettings(roomId), caps: w?.caps || [] };
+    panes: w ? w.panes : {}, settings: wakeSettings(roomId), caps: w?.caps || [], commands: w?.commands || {} };
 }
 function broadcastTeam(roomId) { broadcast({ type: 'team', team: teamView(roomId) }); }
 function pushEvent(roomId, ev) {
@@ -1539,6 +1539,70 @@ api.post('/rooms/:id/agents/:name/keys', wrap((req) => {
   if (!keys.length && !text) throw new UserError('nothing to send');
   pushEvent(roomId, { type: 'keys', agent, keys, text, enter: req.body.enter !== false });
   return { ok: true, agent };
+}));
+
+// run a slash command in agents' terminals from the chat: "/btw is the build green?", "@dev /compact".
+// Each agent's CLI has its own (the watcher lists its built-ins, skills and custom commands); an agent whose
+// CLI doesn't have the command gets the text as an ordinary message instead.
+const SLASH_BLOCKED = new Set(['exit', 'quit', 'q', 'logout', 'login', 'auth', 'clear', 'new', 'reset', 'resume', 'rewind', 'restore',
+  'chat', 'continue', 'model', 'models', 'config', 'settings', 'permissions', 'theme', 'vim', 'editor', 'terminal-setup', 'upgrade',
+  'privacy', 'ide', 'sessions', 'export']);
+api.post('/rooms/:id/slash', wrap((req) => {
+  const roomId = roomOf(req);
+  const w = watcherFor(roomId);
+  if (!w) throw new UserError('the team isn\'t running, so there is no one to run it (start the team first)');
+  if (!(w.caps || []).includes('slash')) throw new UserError("this project's watcher is older than agent slash commands: run tropa update in the project folder");
+  const raw = String(req.body.text || '').trim();
+  const m = raw.match(/^((?:@[\w.-]+[\s,]*)*)\/([A-Za-z0-9_.-][A-Za-z0-9_.:-]{0,79})(?:\s+([\s\S]*))?$/);
+  if (!m) throw new UserError('write it as /command, or @agent /command');
+  const [, who, name, args = ''] = m;
+  if (SLASH_BLOCKED.has(name.toLowerCase())) throw new UserError(`/${name} can't be run from the chat (it would end, reset or lock up the agent's session)`);
+  const text = `/${name}${args.trim() ? ' ' + args.trim() : ''}`;
+  if (text.length > 4000) throw new UserError('too long (4000 characters at most)');
+  if (/[\u0000-\u0009\u000b-\u001f\u007f]/.test(text)) throw new UserError('it has control characters');
+  const byLower = new Map(w.agents.map((a) => [a.toLowerCase(), a]));
+  const named = [...who.matchAll(/@([\w.-]+)/g)].map((x) => x[1].toLowerCase());
+  let targets;
+  if (named.some((x) => EVERYONE.has(x))) targets = [...w.agents];
+  else if (named.length) {
+    const bad = named.filter((x) => !byLower.has(x));
+    if (bad.length) throw new UserError(`@${bad[0]} isn't running in this team`);
+    targets = [...new Set(named.map((x) => byLower.get(x)))];
+  } else {
+    const lead = byLower.get(String(wakeSettings(roomId).lead || '').toLowerCase());
+    targets = lead ? [lead] : w.agents.length === 1 ? [...w.agents] : [];
+    if (!targets.length) throw new UserError(`say who should run it: @agent /${name}`);
+  }
+  const busy = targets.filter((a) => w.panes[a]?.state === 'approval');
+  if (busy.length === targets.length) throw new UserError(`@${busy[0]} is waiting for your approval first; answer that, then try again`);
+  const sent = [], asMessage = [];
+  for (const a of targets) {
+    if (busy.includes(a)) continue;
+    const cmd = (w.commands?.[a] || []).find((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (cmd) { sent.push(a); pushEvent(roomId, { type: 'slash', agent: a, text: `/${cmd.name}${text.slice(name.length + 1)}`, kind: cmd.kind }); }
+    else asMessage.push(a);
+  }
+  const human = cleanName(req.body.sender) || HUMAN_NAME;
+  if (sent.length) watcherSay(roomId, `⌨️ ${human} → ${sent.join(', ')}: \`${text.slice(0, 200)}\``);
+  // no such command in that agent's CLI: it still gets what was asked, as a message
+  if (asMessage.length) postMessage({ room: roomId, sender: human, kind: 'human', content: `${asMessage.map((a) => '@' + a).join(' ')} ${text}`, reply_to: req.body.reply_to });
+  return { ok: true, sent, as_message: asMessage, skipped: busy };
+}));
+api.post('/watch/commands', wrap((req) => {
+  const roomId = normalizeRoomId(req.body.room);
+  const w = watcherRecord(roomId);
+  w.seen = Date.now();
+  const all = req.body.commands && typeof req.body.commands === 'object' ? req.body.commands : {};
+  w.commands = {};
+  for (const [name, list] of Object.entries(all)) {
+    const n = cleanName(name) && shownName(w, cleanName(name));
+    if (!n || !Array.isArray(list)) continue;
+    w.commands[n] = list.slice(0, 200).map((c) => ({ name: String(c?.name || ''), desc: String(c?.desc || '').slice(0, 160),
+      kind: ['builtin', 'skill', 'command'].includes(c?.kind) ? c.kind : 'command' }))
+      .filter((c) => /^[A-Za-z0-9_.-][A-Za-z0-9_.:-]{0,79}$/.test(c.name) && !SLASH_BLOCKED.has(c.name.toLowerCase()));
+  }
+  broadcastTeam(roomId);
+  return { ok: true };
 }));
 
 // watcher endpoints
