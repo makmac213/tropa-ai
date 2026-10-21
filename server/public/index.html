@@ -198,6 +198,13 @@
   .msg.k-system .body { color: var(--system); font-style: italic; }
   .body { word-wrap: break-word; overflow-wrap: anywhere; }
   .body p { margin: 0 0 4px; }
+  .cb { position: relative; }
+  .cb pre { padding-right: 40px; }
+  .cb-copy { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border-radius: 5px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .15s; }
+  .cb:hover .cb-copy, .cb-copy:focus-visible, .cb-copy.done { opacity: 1; }
+  .cb-copy:hover { color: var(--text); border-color: var(--accent); } .cb-copy.done { color: var(--ok); border-color: var(--ok); }
+  @media (hover: none) { .cb-copy { opacity: 1; } }
   .body pre { background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow-x: auto; margin: 6px 0; font-size: 12.5px; }
   .body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
   .body :not(pre) > code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
@@ -1168,9 +1175,11 @@
   }
 
   // tiny, safe markdown: code fences, inline code, bold, italics, links, lists, @mentions
+  const COPY_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+  const CHECK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function md(src) {
     const blocks = [];
-    let s = src.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => { blocks.push(`<pre><code>${esc(code.replace(/\n$/, ''))}</code></pre>`); return `\u0000${blocks.length - 1}\u0000`; });
+    let s = src.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => { blocks.push(`<div class="cb"><pre><code>${esc(code.replace(/\n$/, ''))}</code></pre><button type="button" class="cb-copy" data-copy-code title="Copy" aria-label="Copy code">${COPY_SVG}</button></div>`); return `\u0000${blocks.length - 1}\u0000`; });
     s = esc(s);
     const inl = [];
     s = s.replace(/`([^`\n]+)`/g, (_, c) => { inl.push(`<code>${c}</code>`); return `\u0001${inl.length - 1}\u0001`; });
@@ -2827,6 +2836,18 @@
     return list;
   }
   function hideCmds() { $('#cmds').hidden = true; cmdSel = 0; }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch {}
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch {} ta.remove(); return ok;
+  }
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-copy-code]'); if (!b) return;
+    const code = b.parentElement.querySelector('code')?.textContent ?? '';
+    if (!(await copyText(code))) { alertInline("Couldn't copy: select the text and copy it instead."); return; }
+    b.innerHTML = CHECK_SVG; b.classList.add('done'); b.title = 'Copied';
+    clearTimeout(b._t); b._t = setTimeout(() => { b.innerHTML = COPY_SVG; b.classList.remove('done'); b.title = 'Copy'; }, 1400);
+  });
   function infoInline(text) {
     const h = $('.hint'); h.style.color = 'var(--accent)'; h.textContent = text;
     clearTimeout(infoInline.t); infoInline.t = setTimeout(() => { h.textContent = HINT; h.style.color = ''; }, 4000);
