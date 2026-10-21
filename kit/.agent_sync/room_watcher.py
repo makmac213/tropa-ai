@@ -503,8 +503,8 @@ class Watcher:
         write_sync(server)
         self.last_resp = r
         if r.get("human") and r["human"] != self.cfg["human"] and getattr(self, "human_noted", None) != r["human"]:
-            self.human_noted = r["human"]   # say it once, not on every poll
-            log(f"note: TropaAI human is @{r['human']} but settings.human is @{self.cfg['human']}")
+            self.human_noted = r["human"]   # once per name, not on every poll
+            self.adopt_human(r["human"])
         return r.get("events") or []
 
     def handle(self, ev, agents):
@@ -724,6 +724,33 @@ class Watcher:
             self.post_docs(force=True)
         except Exception as e:
             log(f"could not send the docs list: {e}")
+
+    def adopt_human(self, name):
+        """The human chose what the team calls them in the chat: use it here too (settings, TEAM.md, every AGENT.md)."""
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9._-]{0,29}", name):
+            return
+        old = self.cfg["human"]
+        config.save_key("human", json.dumps(name))
+        self.cfg = config.load()
+        # roles and jobs written with the old name ("reports to DESKTOP-7Q2X"): @old always, the bare word unless it's
+        # the generic "human" (that appears in ordinary sentences)
+        pat = re.compile(r"(?<![\w@-])" + (r"@" if old.lower() == "human" else r"@?") + rf"{re.escape(old)}(?![\w-])")
+        adir = os.path.join(config.ROOT, "agents")
+        for a in os.listdir(adir) if os.path.isdir(adir) else []:
+            path = os.path.join(adir, a, "agent.json")
+            try:
+                with open(path) as f:
+                    agent = json.load(f)
+            except (OSError, ValueError):
+                continue
+            new_agent = {k: pat.sub(lambda m: ("@" if m.group(0).startswith("@") else "") + name, v) if k in ("role", "instruction", "prompt") and isinstance(v, str) else v
+                         for k, v in agent.items()}
+            if new_agent != agent:
+                with open(path, "w") as f:
+                    json.dump(new_agent, f, indent=2)
+        r = subprocess.run([sys.executable, os.path.join(HERE, "setup_agent.py"), "refresh"], capture_output=True, text=True)
+        log(f"the human is now @{name} (was @{old})" + ("" if r.returncode == 0 else f"; refresh failed: {r.stderr.strip()[-200:]}"))
+        say(self.cfg, f"📛 From now on, call the human **@{name}** (not @{old}). Your instructions are updated; mention @{name} for questions and hand-offs.")
 
     # -- screens --
     def capture(self, agents):

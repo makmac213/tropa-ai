@@ -103,6 +103,12 @@ On macOS, `tmux` comes from [Homebrew](https://brew.sh), which the installer set
 
 ## Quick start
 
+### Your name
+
+TropaAI starts out calling you by your computer's login name, which can be odd (on Windows, the Linux user name in WSL, or something like `DESKTOP-7Q2X`). The first time you open it in Simple mode, or before your first project, it asks **what your team should call you**: one word they can @mention, e.g. *Maria* (spaces become dashes). Change it any time in the bottom-left **You are** box.
+
+The name is saved in the chat, so it outlives restarts. Every project's team picks it up: its watcher updates the project's settings, rewrites the agents' instructions, replaces the old name in their roles and jobs, and tells them in the room. `tropa start --human NAME` (or `TROPA_HUMAN`) only sets the starting name until you choose one.
+
 ### Simple or Advanced
 
 The switch at the top of the sidebar picks how much you see. New users start in **Simple**; the choice is remembered.

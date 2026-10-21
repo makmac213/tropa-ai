@@ -147,6 +147,8 @@
   .menu-btn { display: none; background: none; border: 0; font-size: 20px; cursor: pointer; }
   .msgs { flex: 1; overflow-y: auto; padding: 12px 0 8px; }
   /* Simple / Advanced: Simple hides the technical parts (terminals, models, usage, public links) */
+  #helloDlg { width: min(440px, 92vw); } #helloDlg input { font-size: 17px; }
+  .hello-prev { font-size: 13.5px; color: var(--muted); margin: -2px 0 10px; min-height: 20px; } .hello-prev b { color: var(--text); }
   .mode-sw { display: flex; margin: 10px 16px 2px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
   .mode-sw button { flex: 1; border: 0; background: none; color: var(--muted); padding: 5px 0; border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 600; }
   .mode-sw button[aria-checked="true"] { background: var(--fill-accent); color: var(--on-accent); }
@@ -1093,6 +1095,19 @@
   </form>
 </dialog>
 
+<dialog id="helloDlg" aria-labelledby="helloTitle">
+  <form id="helloForm" method="dialog" novalidate>
+    <h3 id="helloTitle">Welcome to TropaAI</h3>
+    <p class="mut" style="margin:-4px 0 14px">You'll build a team of AI agents that works for you. First, what should they call you?</p>
+    <label class="f" for="helloName">Your name <small>one word they can @mention</small></label>
+    <input id="helloName" autocomplete="given-name" spellcheck="false" maxlength="40" placeholder="e.g. Maria">
+    <div class="hello-prev" id="helloPrev" aria-live="polite"></div>
+    <div class="err" id="helloErr" role="alert"></div>
+    <div class="btns"><button type="submit" class="primary" id="helloGo">Continue</button></div>
+    <p class="mut" style="font-size:12px;margin:12px 0 0">You can change it any time in the bottom-left corner (“You are”).</p>
+  </form>
+</dialog>
+
 <dialog id="setupDlg">
   <form method="dialog">
     <h3>Set up TropaAI</h3>
@@ -1479,7 +1494,7 @@
     loadUsageAgents();
     api('/host').then((h) => { state.host = h; if (state.view === 'team' && !$('#team').hidden && !state.team[state.current]?.watching) renderTeam(); }).catch(() => {});
     const s = await api('/state');
-    state.human = s.human;
+    state.human = s.human; state.humanSet = !!s.human_set;
     if (!state.mode) setMode(s.rooms.some((r) => String(r.id).startsWith('project:')) ? 'advanced' : 'simple', true, false);
     if (!$('#myName').value) $('#myName').value = localGet('airc.name') || s.human;
     const prevUnread = Object.fromEntries(state.rooms.map((r) => [r.id, r.unread_live]));
@@ -1517,6 +1532,12 @@
         if (!prev || prev.provider !== e.agent.provider || prev.model !== e.agent.model) renderMessages({ stick: false });
       }
       else if (e.type === 'agents') { state.agents = e.agents; renderSidebar(); }
+      else if (e.type === 'human') {
+        const mine = myName();
+        state.human = e.human; state.humanSet = true;
+        if (!mine || mine.toLowerCase() === String(e.old || '').toLowerCase()) { $('#myName').value = e.human; localSet('airc.name', e.human); }
+        renderMessages({ stick: false });
+      }
       else if (e.type === 'agent_renamed') {
         state.agents = state.agents.filter((a) => a.name !== e.old_name && a.name !== e.agent.name); state.agents.unshift(e.agent);
         for (const arr of state.messages.values()) for (const m of arr) if (m.sender === e.old_name && m.sender_kind === 'agent') m.sender = e.agent.name;
@@ -2971,7 +2992,44 @@
     if (e.key === 'Escape') { if (menuOpen) hideCmds(); else { state.replyTo = null; renderReply(); } }
   });
   $('#sendBtn').addEventListener('click', send);
-  $('#myName').addEventListener('change', () => { localSet('airc.name', myName()); renderMessages({ stick: false }); });
+  async function setHuman(name) {   // what the team calls you: saved on the server, adopted by every project's team
+    const r = await api('/me', { method: 'POST', body: { name } });
+    state.human = r.human; state.humanSet = true;
+    $('#myName').value = r.human; localSet('airc.name', r.human);
+    renderMessages({ stick: false });
+    return r;
+  }
+  $('#myName').addEventListener('change', async () => {
+    const v = $('#myName').value.trim();
+    if (!v || v === state.human) { localSet('airc.name', myName()); return; }
+    try { const r = await setHuman(v); if (r.old && r.old !== r.human) infoInline(`Your team will call you @${r.human} from now on.`); }
+    catch (err) { alertInline(err.message); $('#myName').value = state.human; }
+  });
+  // ---------- welcome: what should the team call you? (once, before the first project) ----------
+  const ODD_NAMES = /^(user|admin|administrator|owner|human|guest|root|pc|desktop|laptop|default|me|ubuntu|windows)\d*$|^(desktop|laptop|pc|win)-/i;
+  const cleanHuman = (v) => String(v || '').trim().replace(/\s+/g, '-').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 30);
+  function helloPreview() {
+    const n = cleanHuman($('#helloName').value);
+    $('#helloPrev').innerHTML = n ? `Your agents will write: “Done, <b>@${esc(n)}</b>: here's the plan.”` : '';
+    $('#helloErr').textContent = '';
+  }
+  function openHello(then) {
+    const guess = state.human && !ODD_NAMES.test(state.human) && /^[A-Za-z]/.test(state.human) ? state.human : '';
+    $('#helloName').value = guess; helloPreview();
+    $('#helloDlg').showModal(); $('#helloName').focus(); $('#helloName').select();
+    openHello.then = then;
+  }
+  $('#helloName').addEventListener('input', helloPreview);
+  $('#helloForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const n = cleanHuman($('#helloName').value);
+    if (!n) { $('#helloErr').textContent = 'Type the name you want your team to use.'; return; }
+    $('#helloGo').disabled = true;
+    try { await setHuman(n); localSet('airc.named', '1'); $('#helloDlg').close(); openHello.then?.(); }
+    catch (err) { $('#helloErr').textContent = err.message.charAt(0).toUpperCase() + err.message.slice(1) + '.'; }
+    finally { $('#helloGo').disabled = false; }
+  });
+  $('#helloDlg').addEventListener('cancel', (e) => { if (!state.humanSet) e.preventDefault(); });   // Esc: a name is needed first
 
   // ---------- clicks ----------
   document.addEventListener('click', async (e) => {
@@ -4331,8 +4389,10 @@
   setTimeout(async () => {
     const asked = new URLSearchParams(location.search).has('setup');
     if (asked) history.replaceState(null, '', location.pathname + location.hash);
-    if (localGet('airc.setupDone') === '1') return;
-    if (asked || !state.rooms.some((r) => String(r.id).startsWith('project:'))) openSetup();
+    const fresh = !state.rooms.some((r) => String(r.id).startsWith('project:'));
+    const setup = () => { if (localGet('airc.setupDone') !== '1' && (asked || fresh)) openSetup(); };
+    if (!state.humanSet && localGet('airc.named') !== '1' && (simple() || fresh)) openHello(setup);
+    else setup();
   }, 1200);
 
   // ---------- New project by chat with Claude (Claude Code on the host; the form stays available) ----------
