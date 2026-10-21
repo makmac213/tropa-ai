@@ -6,6 +6,18 @@
 - **The installer is friendlier and checks everything before installing TropaAI.** It runs in 4 numbered steps: check the computer (✅/❌ for git, Python, tmux, Node.js and an AI agent), install what's missing after asking once, install TropaAI, open it. New: it installs Apple's Command Line Tools (and waits for Apple's window to finish), Homebrew when a Mac needs it for tmux, and an AI agent (Claude Code, OpenCode or both; `TROPA_CLI` chooses up front). It warns before anything asks for a password, and adds what it installed to your PATH. If something can't be installed it stops before installing TropaAI and says exactly what to do, so there's never a half-working install.
 - **Windows setup for everyone:** download **TropaAI-Setup.cmd** and double-click it (or paste the PowerShell line). It turns on WSL with one Windows permission prompt and, if Windows needs a restart, **carries on by itself after it**; installs Ubuntu and walks you through creating your Linux user in the same run (no more "open Ubuntu, then run the installer again"); installs Linux tools without asking for a password; lets the Linux installer add Node.js and an AI agent; adds **TropaAI shortcuts** to the Desktop and Start menu (and, if you like, starts it when you sign in); and offers to sign you in to Claude Code or OpenCode right there. Problems such as virtualization being off are explained in plain words, and each run is logged to `%TEMP%\tropa-install.log`.
 
+### More ready-made teams
+- **Seven new teams:**
+  - **Recruitment:** job ad, sourcing, fair screening against a scorecard, structured interviews and candidate updates. You make every decision.
+  - **Social media:** strategy and calendar, posts, community replies, monthly report.
+  - **Sales outreach:** ideal customer, researched prospects, short personal emails, replies.
+  - **Email marketing:** newsletters and automated journeys, tested and measured.
+  - **Paid ads:** Google and Meta within your budget, tracking first.
+  - **Bookkeeping:** month-end close with an independent reviewer; it never moves money.
+  - **Grant writing:** funder research, proposal, budget and a check against the guidelines.
+- **SEO team, refreshed:** a new link builder (digital PR, no bought links). The writer and lead follow Google's people-first and spam policies (no mass-produced pages). The site auditor checks indexing, Core Web Vitals and structured data.
+- The job descriptions follow how these teams are organised in practice: who does what, the hand-offs and what "done" means. Each includes the rules of the trade, such as anti-spam and opt-out rules for email, ad platform policies, fair-hiring and data-privacy care for candidates, and separating who records from who checks in bookkeeping. Anything that goes out is a draft until you sign it off.
+
 ### Agent slash commands
 - **Run an agent's own slash commands from the chat:** `/btw is the build green?` goes to the lead, `@dev /compact` to dev. TropaAI types it into the agent's terminal and posts what comes back to the room. Skills and custom commands work the same way (`/deploy staging`).
 - **Typing `/` lists them**, per agent: each CLI's useful built-ins plus the skills and custom commands found for it (Claude skills and commands, Gemini and Qwen `.toml` commands, OpenCode commands, Codex prompts). The list refreshes by itself when you add a skill.
