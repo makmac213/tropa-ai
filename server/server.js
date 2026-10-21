@@ -1587,7 +1587,10 @@ api.post('/watch/panes', wrap((req) => {
     w.approvalSince ||= {};
     if (p.state === 'approval') w.approvalSince[n] ||= Date.now(); else delete w.approvalSince[n];
     w.panes[n] = { text: String(p.text || '').slice(-8000), state: ['working', 'idle', 'approval', 'stopped'].includes(p.state) ? p.state : 'idle',
-      prompt: String(p.prompt || '').slice(0, 300), changed_at: Number(p.changed_at) || Date.now(), at: Date.now() };
+      prompt: String(p.prompt || '').slice(0, 300), changed_at: Number(p.changed_at) || Date.now(), at: Date.now(),
+      // out of credits / usage limit / rate-limited, read off the agent's screen by the watcher
+      limit: p.limit && ['credits', 'limit', 'rate'].includes(p.limit.kind)
+        ? { kind: p.limit.kind, text: String(p.limit.text || '').slice(0, 200), resets: String(p.limit.resets || '').slice(0, 60) } : null };
   }
   broadcast({ type: 'panes', room_id: roomId, panes: w.panes });
   return { ok: true };

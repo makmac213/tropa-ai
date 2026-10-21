@@ -181,6 +181,53 @@ def approval_alert(cfg, a, snippet):
 AUTH_ERR = re.compile(r"Please run /login|OAuth (access )?token (has )?expired|401 .*(authenticat|OAuth)|Invalid API key|Not logged in", re.I)
 
 
+# Out of credits, a usage limit or a rate limit: the agent sits idle until it resets, someone tops up, or its model
+# changes. Every CLI words it differently. Bottom of the screen only, so it clears by itself once the agent works again;
+# generic words ("rate limit", "429") only count next to error wording, so an agent *writing about* rate limits doesn't trip it.
+LIMIT_KINDS = [
+    ("credits", re.compile(r"credit balance is too low|insufficient (credits|balance|funds|quota)|out of credits|requires more credits|"
+                           r"\b402\b.{0,40}payment|payment required|exceeded your current quota|check your plan and billing", re.I)),
+    ("limit", re.compile(r"usage limit (reached|exceeded|hit)|(claude|codex|gemini|5-hour|weekly|daily|session|opus|sonnet) (usage )?limit (reached|hit|exceeded)|"
+                         r"hit your (usage |weekly |daily |session )?limit|limit reached\W.{0,30}reset|quota (exceeded|exhausted)|"
+                         r"exhausted your .{0,20}quota|RESOURCE_EXHAUSTED", re.I)),
+    ("rate", re.compile(r"rate.?limit|too many requests|\b429\b|overloaded|\b529\b", re.I)),
+]
+LIMIT_CONTEXT = re.compile(r"error|status|retry|retrying|failed|exceeded|reached|try again|rejected", re.I)
+RESETS = re.compile(r"(?:resets?|reset|available again|try again)\s*((?:at|in|on)\s+)?((?:[0-9]|tomorrow|(?:mon|tue|wed|thu|fri|sat|sun|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b)[^.·∙|│\]]{0,40})", re.I)
+
+
+def resets_text(m):
+    """ "in 2 hours 13 minutes", "at 3pm (Asia/Manila)", "Mon 9:00 AM" from a RESETS match."""
+    when = re.split(r"\s*\((?:attempt|retry)", m.group(2), maxsplit=1)[0].strip().rstrip(",;:")
+    if when.count("(") > when.count(")"):
+        when += ")"
+    return ((m.group(1) or "").strip() + " " + when).strip()
+
+
+def limit_in(rows):
+    """(kind, line, resets) when the bottom of the screen shows a usage, rate or credit limit, else None.
+    kind: "credits" (top up), "limit" (usage limit, waits for its reset) or "rate" (provider throttling, retries by itself)."""
+    tail = [BOX.sub(" ", r).strip() for r in rows if r.strip()][-12:]
+    for r in reversed(tail):
+        for kind, rx in LIMIT_KINDS:
+            if rx.search(r) and (kind != "rate" or LIMIT_CONTEXT.search(r)):
+                m = RESETS.search(r) or next((x for x in (RESETS.search(t) for t in tail) if x), None)
+                return kind, r[:200], (resets_text(m) if m else "")[:60]
+    return None
+
+
+def limit_alert(cfg, a, kind, line, resets):
+    h = cfg["human"]
+    if kind == "credits":
+        return (f"@{h} 💳 `{a}` is out of credits with its AI provider, so it has stopped working. Top up that account, or switch "
+                f"`{a}` to another model (**Model** on its card in ▦ Team) or **Clone** it on another model.\n> {line}")
+    if kind == "limit":
+        return (f"@{h} ⏳ `{a}` reached its usage limit{f', which resets {resets}' if resets else ''}, so it's paused until then. "
+                f"To keep going now, switch its model (**Model** on its card in ▦ Team) or **Clone** it on another model.\n> {line}")
+    return (f"🐢 `{a}` has been rate-limited by its AI provider for over a minute. It keeps retrying by itself; "
+            f"if this keeps happening, switch it to another model.\n> {line}")
+
+
 def auth_error(rows):
     """The last auth-error line on screen (only if it's still among the bottom rows), else ''."""
     rows = [r for r in rows if r.strip()][-12:]
@@ -412,6 +459,8 @@ class Watcher:
         self.nudges = {}        # agent -> (assignment message id, nudges sent)
         self.auto_pressed = {}  # agent -> prompt signature we already auto-approved once
         self.auth_alerted = {}  # agent -> auth-error line we already posted
+        self.limit_alerted = {}  # agent -> the credit/usage/rate limit we already posted ("kind:resets")
+        self.limit_since = {}    # agent -> (that limit, when we first saw it)
         self.reconnected = {}   # agent -> time we last restarted it because its tropa connection was lost
         self.dismissed = {}     # agent -> (pop-up pattern, last press time, presses)
         self.model_switch = {}  # agent -> new model, applied once the agent is idle
@@ -703,7 +752,9 @@ class Watcher:
             prev = self.panes.get(a)
             changed_at = now if not prev or prev["text"] != text else prev["changed_at"]
             state = "approval" if prompt else ("working" if now - changed_at < WORKING_FOR and prev else "idle")
-            self.panes[a] = {"text": text, "state": state, "prompt": prompt[0] if prompt else "", "changed_at": changed_at}
+            lim = None if prompt else limit_in(rows)
+            self.panes[a] = {"text": text, "state": state, "prompt": prompt[0] if prompt else "", "changed_at": changed_at,
+                             "limit": {"kind": lim[0], "text": lim[1], "resets": lim[2]} if lim else None}
             # auto-approve: press the CLI's "yes" once per prompt; if the prompt stays, fall back to asking
             sig, at, n = self.auto_pressed.get(a, ("", 0, 0))
             same = prompt and sig == prompt[0]
@@ -720,6 +771,18 @@ class Watcher:
                     continue
             if not prompt:
                 self.auto_pressed.pop(a, None)
+            # out of credits / usage limit / rate-limited: tell the room once (a rate limit only after a minute: CLIs retry those)
+            if lim:
+                sig = f"{lim[0]}:{lim[2]}"
+                first = self.limit_since.setdefault(a, (sig, now))
+                if first[0] != sig:
+                    self.limit_since[a] = first = (sig, now)
+                if self.limit_alerted.get(a) != sig and (lim[0] != "rate" or now - first[1] >= 60):
+                    self.limit_alerted[a] = sig
+                    say(self.cfg, limit_alert(self.cfg, a, *lim))
+                    log(f"{a}: {lim[0]} limit on screen; posted to room")
+            else:
+                self.limit_since.pop(a, None); self.limit_alerted.pop(a, None)
             bad = auth_error(rows)
             if bad and self.auth_alerted.get(a) != bad:
                 say(self.cfg, auth_alert(self.cfg, a, bad))

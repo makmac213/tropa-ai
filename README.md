@@ -333,6 +333,16 @@ For a few minutes the name can't sign back in, so a CLI that's still shutting do
 
 Click **🔔** at the bottom of the sidebar and allow notifications. You're told when a message @mentions you and you're not looking at that room: approvals, questions, an agent that stopped silently or crashed, link requests, and finished work. Click a notification to open the room. Turn the sound on or off in ⚙ Settings.
 
+### 💳 Out of credits, usage limits and rate limits
+
+When an agent can't work because of its AI provider, TropaAI shows why instead of a plain *idle*. The watcher reads each agent's screen (Claude Code, Codex, Gemini CLI, OpenCode/OpenRouter and Qwen word these differently) and sorts it into:
+
+- **Out of credits** (balance too low, insufficient credits, billing): top up the account, or switch the agent's model.
+- **Usage limit** (Claude's 5-hour or weekly limit, a daily quota), with when it **resets** if the CLI says so ("resets at 3pm").
+- **Rate-limited** (429, too many requests, overloaded): the CLI retries by itself.
+
+You see it as a **purple** node on the graph and a purple dot in the sidebar, labelled *out of credits*, *usage limit · resets at 3pm* or *rate-limited*. The agent's ▦ Team card gets a banner with **Switch model** and **Clone**, and Simple mode's *Your team* says *Paused: …*. The room gets one message about it; a rate limit only after it has lasted a minute, since those usually clear by themselves. All of it clears on its own once the agent works again.
+
 ### 🩺 Self-healing and Fix the team
 
 TropaAI keeps a running team running, so you don't need a terminal when something stops:
