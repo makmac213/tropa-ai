@@ -651,6 +651,10 @@
   .np-mode input { width: auto; margin: 0; }
   #npExisting[hidden], #npFolderBox[hidden], #npPathBox[hidden] { display: none; }
   .np-hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
+  .np-pick { display: flex; gap: 6px; align-items: stretch; margin-bottom: 10px; }
+  #projDlg .np-pick select { margin-bottom: 0; flex: 1; min-width: 0; }
+  .np-pick .tbtn { white-space: nowrap; }
+  .np-blocked { margin-top: 0; color: var(--human); }
   .np-folder { display: flex; align-items: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 10px; }
   .np-folder span { color: var(--muted); padding-left: 10px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; flex: none; }
   .np-folder input { border: 0 !important; margin: 0 !important; background: none !important; padding-left: 2px !important; flex: 1; width: auto !important; min-width: 0; }
@@ -1058,9 +1062,10 @@
     <div class="np-host" id="npHost"></div>
     <div class="np-mode" id="npMode"><label><input type="radio" name="npMode" value="new" checked> New folder</label><label><input type="radio" name="npMode" value="existing"> Existing project folder</label></div>
     <div id="npExisting" hidden><label class="f" for="npFolderPick">Folder <small>the code is left as it is; the team kit is added next to it</small></label>
-      <select id="npFolderPick"></select>
+      <div class="np-pick"><select id="npFolderPick"></select><button type="button" class="tbtn" id="npBrowse" hidden title="Pick the folder with your computer's own folder window">📂 Browse…</button></div>
+      <div class="np-hint np-blocked" id="npBlocked" hidden></div>
       <div id="npPathBox" hidden><input id="npPath" placeholder="~/work/my-app" spellcheck="false" autocomplete="off">
-        <div class="np-hint">Any folder inside your home folder (not hidden or system folders). To allow folders elsewhere, set <code>TROPA_PROJECT_ROOTS</code> before starting the host helper.</div></div></div>
+        <div class="np-hint">Any folder in your home folder or on an external drive (not hidden or system folders). To allow other places, set <code>TROPA_PROJECT_ROOTS</code> before starting the host helper.</div></div></div>
     <div class="np-grid">
       <div><label class="f" for="npName">Name</label><input id="npName" placeholder="e.g. Recipe Finder" autocomplete="off"></div>
       <div id="npFolderBox"><label class="f" for="npFolder">Folder</label><div class="np-folder"><span id="npBase">~/projects/</span><input id="npFolder" placeholder="recipe-finder" autocomplete="off" spellcheck="false"></div></div>
@@ -3146,7 +3151,9 @@
     const h = state.host || {}; const el = $('#npHost');
     if (h.connected) {
       $('#npBase').textContent = (h.projects_dir || '~/projects').replace(h.home || '\u0000', '~') + '/';
-      el.className = 'np-host ok'; el.innerHTML = `✓ Host helper connected — the project is created in <code>${esc($('#npBase').textContent)}</code> on ${esc(h.home ? 'this machine' : 'the host')}.`;
+      const where = h.home ? 'this machine' : 'the host';
+      el.className = 'np-host ok'; el.innerHTML = npExisting() ? `✓ Host helper connected — the team is added to the folder you choose on ${esc(where)}.`
+        : `✓ Host helper connected — the project is created in <code>${esc($('#npBase').textContent)}</code> on ${esc(where)}.`;
     } else {
       el.className = 'np-host off';
       el.innerHTML = `The host helper isn't running, so the chat can't create folders or start agents. Run <code>tropa host start -p ${esc(location.port || '80')}</code> on the machine running TropaAI, then reopen this dialog. You can still create just the room.`;
@@ -3409,7 +3416,25 @@
       '<optgroup label="Not listed?"><option value="other" data-name="">Other folder… (type its path)</option></optgroup>';
     if ([...$('#npFolderPick').options].some((o) => o.value === keep)) $('#npFolderPick').value = keep;
     $('#npPathBox').hidden = $('#npFolderPick').value !== 'other';
+    $('#npBrowse').hidden = !state.host?.picker;
+    const bl = state.host?.blocked || [];   // macOS privacy protection kept the search out of these
+    $('#npBlocked').hidden = !bl.length;
+    $('#npBlocked').innerHTML = bl.length ? `⚠ macOS didn't let TropaAI look in ${esc(bl.join(', '))}, so projects there aren't listed. Use <b>Browse…</b>, or allow access in <b>System Settings → Privacy &amp; Security → Files &amp; Folders</b> for the app you started TropaAI from (usually Terminal), then restart it.` : '';
   }
+  $('#npBrowse').addEventListener('click', async () => {
+    const b = $('#npBrowse'), label = b.textContent;
+    b.disabled = true; b.textContent = 'Choose in the window that opened…'; $('#npErr').textContent = '';
+    try {
+      const r = await api('/host/pick-folder', { method: 'POST', body: {} });
+      if (r.ok && r.path) {
+        $('#npFolderPick').value = 'other'; $('#npPathBox').hidden = false;
+        const home = state.host?.home;
+        $('#npPath').value = home && r.path.startsWith(home + '/') ? '~' + r.path.slice(home.length) : r.path;
+        if (!$('#npName').dataset.touched) $('#npName').value = baseName(r.path);
+      } else if (!r.cancelled) $('#npErr').textContent = r.error || "Couldn't open the folder window.";
+    } catch (e) { $('#npErr').textContent = e.message; }
+    finally { b.disabled = false; b.textContent = label; }
+  });
   const baseName = (p) => String(p || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
   function applyMode() {
     const ex = npExisting();
@@ -3422,6 +3447,7 @@
       : 'developers then work on their own branches/worktrees; the lead reviews, QA tests, the lead merges';
     $('#npBriefHint').textContent = ex ? 'saved as docs/SPEC.md (or docs/BRIEF.md if a spec already exists) · optional' : 'saved as docs/SPEC.md · markdown';
     $('#npCreate').textContent = ex ? 'Add team' : 'Create project';
+    renderHostNote();
     if (ex) { renderFolderPick(); const o = $('#npFolderPick').selectedOptions[0]; if (o?.dataset.name && !$('#npName').dataset.touched) $('#npName').value = o.dataset.name; }
   }
   document.querySelectorAll('input[name="npMode"]').forEach((r) => r.addEventListener('change', applyMode));

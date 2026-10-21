@@ -148,12 +148,14 @@ tropa never changes your code. It adds a small team kit next to it:
 - `docs/`
 
 **From the chat:**
-1. Click **+**, choose **Existing project folder**, and pick the folder:
+1. Click **+**, choose **Existing project folder**, and pick the folder. The easiest way is **📂 Browse…**, which opens your computer's own folder window (Finder on a Mac, File Explorer on Windows, the file chooser on a Linux desktop). Or pick from the list:
    - **In ~/projects**: folders in your projects folder;
    - **Elsewhere in your home folder**: git repos tropa found up to three levels deep, e.g. `~/work/client-app`;
    - **Other folder…**: type any path, e.g. `~/clients/acme/portal`.
 
-   Folders that already have a team or use git are marked. For safety, the host helper only accepts folders inside your home folder, and never your home folder itself or hidden or system folders (`~/.ssh`, `~/Library`). To allow other locations, start the host helper with `TROPA_PROJECT_ROOTS=/srv/code:/Volumes/work`.
+   Folders that already have a team or use git are marked. The host helper accepts folders in your home folder and on **external drives** (`/Volumes/…` on a Mac; `/media/…`, `/mnt/…` on Linux, which in WSL includes Windows drives such as `/mnt/c/Users/you/code`), but never a whole drive, your home folder itself, or hidden or system folders (`~/.ssh`, `~/Library`, `C:\Windows`). To allow other locations, start the host helper with `TROPA_PROJECT_ROOTS=/srv/code:/opt/work`.
+
+   **On a Mac, projects in Documents, Desktop or Downloads** need macOS's permission. If TropaAI can't open them, the form says so: allow the app you start TropaAI from (usually **Terminal**) in **System Settings → Privacy & Security → Files & Folders** (or **Full Disk Access**), then run `tropa stop && tropa start`.
 2. Add a brief and files if you like. The brief is saved as `docs/SPEC.md`, or as `docs/BRIEF.md` if you already have a spec.
 3. Add the team and click **Add team**. Agents are told it's an existing codebase and to follow its conventions.
 

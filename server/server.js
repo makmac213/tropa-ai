@@ -1826,6 +1826,8 @@ api.post('/host/poll', wrap(async (req, res) => {
     elsewhere: (Array.isArray(req.body.elsewhere) ? req.body.elsewhere : []).slice(0, 200)
       .filter((f) => typeof f?.path === 'string' && f.path.length < 500 && /^[^\0]+$/.test(f.path))
       .map((f) => ({ name: String(f.name || '').slice(0, 80), path: String(f.path), display: String(f.display || f.path).slice(0, 500), kit: !!f.kit, git: !!f.git, slug: slugify(f.slug || f.name) })),
+    blocked: (Array.isArray(req.body.blocked) ? req.body.blocked : []).slice(0, 20).map((x) => String(x).slice(0, 60)),
+    picker: !!req.body.picker,
     keys: sanitizeKeys(req.body.keys, req.body.openrouter_info),
     usage: !!req.body.usage,
     ngrok: { installed: !!req.body.ngrok?.installed, authed: !!req.body.ngrok?.authed, version: String(req.body.ngrok?.version || '').slice(0, 40) },
@@ -1965,6 +1967,27 @@ api.post('/host/keys/:provider', wrap(async (req) => {
       : `🔑 This project now has its own ${KEY_PROVIDERS[prov]} key (${result.masked || 'set'}); agents use it from their next restart.`);
   }
   return result;
+}));
+// Browse… in the New project form: the host helper shows the computer's own folder chooser and sends back the path
+// (a web page can't learn a folder's path). It waits for you in the dialog, so the request can take minutes.
+const pickJobs = new Map();   // id -> { resolve, timer }
+api.post('/host/pick-folder', wrap(async () => {
+  if (!hostOnline()) throw new UserError('the tropa host helper is not running on your machine — start it with: tropa host start');
+  const id = crypto.randomUUID();
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { pickJobs.delete(id); resolve({ ok: false, error: 'the folder picker was open too long; try again' }); }, 10 * 60e3);
+    pickJobs.set(id, { resolve, timer });
+    host.queue.push({ type: 'pick_folder', id });
+    for (const f of [...host.waiters]) f();
+  });
+}));
+api.post('/host/picked/:id', wrap((req) => {
+  const j = pickJobs.get(req.params.id);
+  if (!j) throw new UserError('unknown request (it may have timed out)');
+  pickJobs.delete(req.params.id); clearTimeout(j.timer);
+  const b = req.body || {};
+  j.resolve({ ok: !!b.ok, cancelled: !!b.cancelled, path: typeof b.path === 'string' ? b.path.slice(0, 500) : '', error: String(b.error || '').slice(0, 400) });
+  return { ok: true };
 }));
 api.post('/host/secret/:id', wrap((req) => {
   const j = secretJobs.get(req.params.id);

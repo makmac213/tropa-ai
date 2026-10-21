@@ -494,13 +494,29 @@ class Host:
     # ---------- projects outside the projects folder ----------
     SKIP_HOME = {"Library", "Applications", "Pictures", "Music", "Movies", "Public", "node_modules", "snap", "go", "flutter", "VirtualBox VMs"}
 
-    def allowed_roots(self):
-        """Folders the chat may adopt projects from: your home (and TROPA_PROJECT_ROOTS, ':'-separated)."""
+    def scan_roots(self):
+        """Folders searched for existing projects: your home (and TROPA_PROJECT_ROOTS, ':'-separated)."""
         roots = [os.path.realpath(os.path.expanduser("~"))]
         for r in os.environ.get("TROPA_PROJECT_ROOTS", "").split(os.pathsep):
             if r.strip():
                 roots.append(os.path.realpath(os.path.expanduser(r.strip())))
         return roots
+
+    # external drives (and, in WSL, the Windows drives): allowed, but not searched (they can be slow)
+    DRIVES = ["/Volumes"] if sys.platform == "darwin" else ["/media", "/run/media", "/mnt"]
+    WINDOWS_SYSTEM = {"windows", "program files", "program files (x86)", "programdata", "$recycle.bin", "system volume information"}
+
+    def allowed_roots(self):
+        """Folders the chat may adopt projects from: the scanned ones plus external drives."""
+        return self.scan_roots() + [os.path.realpath(d) for d in self.DRIVES if os.path.isdir(d)]
+
+    @staticmethod
+    def denied(p):
+        if sys.platform == "darwin":
+            return (f"macOS isn't letting TropaAI open {p}. Open System Settings → Privacy & Security → Files & Folders "
+                    f"(or Full Disk Access) and allow the app you started TropaAI from (usually Terminal), "
+                    f"then restart TropaAI: tropa stop && tropa start")
+        return f"you don't have permission to open {p}"
 
     def check_path(self, path):
         """Resolve a folder the human typed or picked, and refuse anything that isn't a normal project folder."""
@@ -508,17 +524,75 @@ class Host:
         home = os.path.realpath(os.path.expanduser("~"))
         if not str(path or "").strip() or not os.path.isabs(os.path.expanduser(str(path).strip())):
             raise RuntimeError("give the folder's full path, e.g. ~/work/my-app")
-        if not os.path.isdir(p):
+        try:
+            os.listdir(p)   # macOS privacy protection (Documents, Desktop, Downloads…) shows up here, not as "missing"
+        except PermissionError:
+            raise RuntimeError(self.denied(p))
+        except OSError:
             raise RuntimeError(f"{p} isn't a folder on this machine")
         root = next((r for r in self.allowed_roots() if p == r or p.startswith(r + os.sep)), None)
         if not root:
-            raise RuntimeError(f"{p} is outside your home folder; to allow it, add its parent to TROPA_PROJECT_ROOTS and restart the host helper")
-        if p in (home, root, self.projects_dir) or p == "/":
-            raise RuntimeError(f"{p} is a whole folder of folders, not a project; pick the project folder inside it")
+            raise RuntimeError(f"{p} is outside your home folder and external drives; to allow it, add its parent to TROPA_PROJECT_ROOTS and restart the host helper")
         rel = os.path.relpath(p, root).split(os.sep)
-        if any(x.startswith(".") for x in rel) or (root == home and rel[0] in self.SKIP_HOME):
+        drive = root in [os.path.realpath(d) for d in self.DRIVES]
+        if p in (home, root, self.projects_dir) or p == "/" or (drive and (os.path.ismount(p) or (os.path.basename(root) != "Volumes" and len(rel) < 2))):
+            raise RuntimeError(f"{p} is a whole drive or folder of folders, not a project; pick the project folder inside it")
+        if any(x.startswith(".") for x in rel) or (root == home and rel[0] in self.SKIP_HOME) \
+                or (drive and os.path.basename(root) == "mnt" and len(rel) > 1 and rel[1].lower() in self.WINDOWS_SYSTEM):
             raise RuntimeError(f"{p} is a hidden or system folder; tropa won't set up a team there")
         return p
+
+    # ---------- the computer's own folder picker: a web page can't learn a folder's path, the host can ----------
+    def pick_folder(self, job):
+        try:
+            path = self.folder_dialog()
+            res = {"ok": False, "cancelled": True} if not path else {"ok": True, "path": self.check_path(path)}
+        except Exception as e:
+            res = {"ok": False, "error": str(e)[:400]}
+        try:
+            self.http(f"/host/picked/{job['id']}", res)
+        except Exception as e:
+            log(f"could not send the picked folder: {e}")
+
+    def folder_dialog(self):
+        """Show the system's folder chooser on this machine; the chosen folder, or None if cancelled."""
+        home = os.path.expanduser("~")
+        title = "Choose your project folder"
+        if sys.platform == "darwin":
+            loc = home.replace("\\", "\\\\").replace('"', '\\"')
+            r = subprocess.run(["osascript", "-e", "activate", "-e",
+                                f'POSIX path of (choose folder with prompt "{title}" default location (POSIX file "{loc}"))'],
+                               capture_output=True, text=True, timeout=900)
+            if r.returncode != 0:
+                if "-128" in r.stderr:   # Cancel
+                    return None
+                raise RuntimeError(r.stderr.strip()[-200:] or "the folder picker didn't open")
+            return r.stdout.strip().rstrip("/") or None
+        if os.environ.get("WSL_DISTRO_NAME") and shutil.which("powershell.exe"):   # Windows' own dialog, starting in your Linux home
+            start = subprocess.run(["wslpath", "-w", home], capture_output=True, text=True).stdout.strip().replace("'", "''")
+            ps = ("Add-Type -AssemblyName System.Windows.Forms;"
+                  "$f=New-Object System.Windows.Forms.Form -Property @{TopMost=$true};"
+                  "$d=New-Object System.Windows.Forms.FolderBrowserDialog;"
+                  f"$d.Description='{title}';$d.ShowNewFolderButton=$false;$d.SelectedPath='{start}';"
+                  "if($d.ShowDialog($f) -eq 'OK'){[Console]::Out.Write($d.SelectedPath)}")
+            r = subprocess.run(["powershell.exe", "-NoProfile", "-STA", "-Command", ps], capture_output=True, text=True, timeout=900)
+            win = r.stdout.strip()
+            return subprocess.run(["wslpath", "-u", win], capture_output=True, text=True).stdout.strip() or None if win else None
+        if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+            for cmd in (["zenity", "--file-selection", "--directory", f"--title={title}", f"--filename={home}/"],
+                        ["kdialog", "--getexistingdirectory", home, "--title", title]):
+                if shutil.which(cmd[0]):
+                    return subprocess.run(cmd, capture_output=True, text=True, timeout=900).stdout.strip() or None   # Cancel: no output
+        raise RuntimeError("this machine has no folder picker the host helper can open (it needs a desktop with zenity or kdialog); type the folder's path instead")
+
+    @staticmethod
+    def has_picker():
+        """Can folder_dialog show a chooser here (so the chat offers Browse…)?"""
+        if sys.platform == "darwin":
+            return True
+        if os.environ.get("WSL_DISTRO_NAME"):
+            return bool(shutil.which("powershell.exe"))
+        return bool((os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")) and (shutil.which("zenity") or shutil.which("kdialog")))
 
     def elsewhere(self):
         """Git repos (and tropa projects) under your home, outside the projects folder: offered as existing projects."""
@@ -526,6 +600,8 @@ class Host:
         if getattr(self, "_elsewhere_at", 0) > now - 300:
             return self._elsewhere
         out, seen, deadline = [], set(), now + 2.5
+        home = os.path.realpath(os.path.expanduser("~"))
+        blocked = set()
         reg = self.registry()
         for path in reg.values():
             if os.path.isdir(path):
@@ -535,6 +611,10 @@ class Host:
                 return
             try:
                 entries = sorted(os.scandir(d), key=lambda e: e.name.lower())
+            except PermissionError:
+                if sys.platform == "darwin" and os.path.dirname(d) == home:
+                    blocked.add(os.path.basename(d))   # Documents, Desktop…: macOS privacy protection
+                return
             except OSError:
                 return
             for e in entries:
@@ -547,9 +627,9 @@ class Host:
                     seen.add(p)
                 elif depth < 3:
                     walk(p, depth + 1)
-        for r in self.allowed_roots():
+        for r in self.scan_roots():
             walk(r, 1)
-        home = os.path.realpath(os.path.expanduser("~"))
+        self.blocked = sorted(blocked)
         for p in sorted(seen, key=str.lower)[:200]:
             if os.path.dirname(p) == self.projects_dir:
                 continue
@@ -1075,6 +1155,7 @@ class Host:
                                               "version": VERSION, "clis": [c for c in CLIS if (opencode_bin() if c == "opencode" else shutil.which(c))],
                                               "openrouter": openrouter_ready(), "openrouter_info": openrouter_status(), "keys": keys_status(), "claude": claude_status(),
                                               "models": self.models(), "folders": self.folders(), "elsewhere": self.elsewhere(),
+                                              "blocked": getattr(self, "blocked", []), "picker": self.has_picker(),
                                               "git": git_version(), "git_hint": git_hint(), "tools": tools_catalog(),
                                               "design_systems": design_catalog(),
                                               "ngrok": self.ngrok_info(), "shares": self.shares.ids(), "usage": self.usage_on,
@@ -1096,6 +1177,8 @@ class Host:
                     self.openrouter_job(job); continue
                 if job.get("type") == "api_key":
                     self.key_job(job); continue
+                if job.get("type") == "pick_folder":   # waits for you in the dialog: don't hold up other jobs
+                    threading.Thread(target=self.pick_folder, args=(job,), daemon=True).start(); continue
                 if job.get("type") == "project_chat":   # can take a while: don't hold up other jobs
                     threading.Thread(target=self.project_chat, args=(job,), daemon=True).start(); continue
                 if job.get("type") == "share":
