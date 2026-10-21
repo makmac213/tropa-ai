@@ -667,8 +667,10 @@
   .np-files { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
   .np-team-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 6px 0 6px; flex-wrap: wrap; }
   .np-presets { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
-  .np-presets button { background: var(--panel2); border: 1px solid var(--line); color: var(--muted); border-radius: 12px; padding: 2px 10px; cursor: pointer; font-size: 12px; }
-  .np-presets button:hover { color: var(--text); border-color: var(--accent); }
+  .np-presets { align-items: center; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .np-presets label { font-size: 12px; color: var(--muted); }
+  #projDlg .np-presets select { width: auto; margin: 0; padding: 3px 8px; font-size: 12.5px; }
+  .np-team-sum { font-size: 12.5px; color: var(--muted); margin: -4px 0 8px; }
   /* design systems: cards + live previews rendered from each system's preview tokens */
   .md-h { font-weight: 650; margin: .7em 0 .25em; }
   .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
@@ -1079,7 +1081,8 @@
       <div class="ds-grid" id="npDesigns" role="radiogroup" aria-label="Design system"></div>
       <div class="ds-detail" id="npDesignDetail" hidden></div></div>
     <div class="np-team-head">TEAM <span>· ★ = lead (gets your un-addressed messages)</span>
-      <span class="np-presets"><button type="button" data-preset="web">Web app · 5</button><button type="button" data-preset="small">Small · 3</button><button type="button" data-preset="solo">Solo</button></span></div>
+      <span class="np-presets"><label for="npTeamPick">Start from</label><select id="npTeamPick" title="Ready-made teams: one folder of prompts each in teams/ (add your own in ~/.tropa/teams/)"></select></span></div>
+    <div class="np-team-sum" id="npTeamSum"></div>
     <div id="npTeam"></div>
     <div id="npTaken" class="mut" style="font-size:12.5px;margin:-2px 0 8px" hidden></div>
     <button type="button" class="linkbtn" id="npAdd" style="margin:2px 0 12px">+ Add agent</button>
@@ -1533,7 +1536,7 @@
       }
       else if (e.type === 'host') {
         state.host = e.host;
-        if ($('#projDlg').open) { renderHostNote(); renderTeamRows(); }
+        if ($('#projDlg').open) { renderHostNote(); renderTeamPick(); renderTeamRows(); }
         if ($('#modelDlg').open) { fillModelLists(); mdRender(false); }
         if ($('#addAgentDlg').open) { fillModelLists(); aaRender(false); }
         if ($('#keyDlg').open || $('#settingsDlg').open) renderKeys();
@@ -3138,15 +3141,32 @@
   // ---------- new project (from the chat) ----------
   const slugOf = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
   const np = { files: [], team: [], lead: '', folderTouched: false, kickoffTouched: false };
-  const PRESETS = {
-    web: () => [['lead', 'sonnet', 'Tech lead: plans the work, assigns tasks, reviews, reports to ' + state.human], ['backend', 'sonnet', 'Backend developer'], ['frontend', 'sonnet', 'Frontend developer'], ['QA', 'haiku', 'QA engineer: writes and runs tests, reports bugs'], ['ops', 'haiku', 'DevOps: build/run scripts, Docker, README']],
-    small: () => [['lead', 'sonnet', 'Tech lead: plans the work, assigns tasks, reviews, reports to ' + state.human], ['dev', 'sonnet', 'Full-stack developer'], ['QA', 'haiku', 'QA engineer: writes and runs tests, reports bugs']],
-    solo: () => [['dev', 'sonnet', 'Full-stack developer: plans and builds the whole project']],
-  };
-  function setPreset(k) {
-    np.team = PRESETS[k]().map(([name, model, role]) => ({ name, tool: 'claude', model, role }));
-    np.lead = np.team[0].name; renderTeamRows(); defaultKickoff();
+  // Ready-made teams come from the teams/ folder (one folder of prompts each), sent by the host helper.
+  // These three are only a fallback for when it hasn't sent them (not running, or an older tropa).
+  const FALLBACK_TEAMS = [
+    { id: 'website-studio', name: 'Website studio', lead: 'lead', members: [['lead', 'sonnet', 'Tech lead: plans the work, assigns tasks, reviews, reports to {human}'], ['backend', 'sonnet', 'Backend developer'], ['frontend', 'sonnet', 'Frontend developer'], ['QA', 'haiku', 'QA engineer: writes and runs tests, reports bugs'], ['ops', 'haiku', 'DevOps: build/run scripts, Docker, README']] },
+    { id: 'small-dev-team', name: 'Small dev team', lead: 'lead', members: [['lead', 'sonnet', 'Tech lead: plans the work, assigns tasks, reviews, reports to {human}'], ['dev', 'sonnet', 'Full-stack developer'], ['QA', 'haiku', 'QA engineer: writes and runs tests, reports bugs']] },
+    { id: 'solo-developer', name: 'Solo developer', lead: 'dev', members: [['dev', 'sonnet', 'Full-stack developer: plans and builds the whole project']] },
+  ].map((t) => ({ ...t, summary: '', how: '', members: t.members.map(([name, model, role]) => ({ name, model, role, tool: 'claude', prompt: '' })) }));
+  const teamTemplates = () => (state.host?.teams?.length ? state.host.teams : FALLBACK_TEAMS);
+  const forHuman = (text) => String(text || '').replace(/\{human\}/g, state.human || 'the human');
+  function renderTeamPick() {
+    const ts = teamTemplates();
+    $('#npTeamPick').innerHTML = ts.map((t) => `<option value="${esc(t.id)}">${esc(t.name)} · ${t.members.length}</option>`).join('')
+      + `<option value="" ${np.teamId ? '' : 'selected'}>Start empty</option>`;
+    if (np.teamId) $('#npTeamPick').value = np.teamId;
+    const t = ts.find((x) => x.id === np.teamId);
+    $('#npTeamSum').textContent = t?.summary ? forHuman(t.summary) : '';
   }
+  function setPreset(id) {
+    const t = teamTemplates().find((x) => x.id === id);
+    np.teamId = t ? t.id : ''; np.how = t?.how || '';
+    np.team = t ? t.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: forHuman(m.role), prompt: forHuman(m.prompt) })) : [];
+    np.lead = t ? t.lead : ''; renderTeamPick(); renderTeamRows(); defaultKickoff();
+    if (t && !$('#npGit').disabled) $('#npGit').checked = t.git !== false;   // git: no in team.md: a team that doesn't write code
+  }
+  // each member's job (their prompt file) plus how the team works (team.md), saved in their AGENT.md
+  const jobFor = (a) => [a.prompt, np.how ? `## How this team works\n${forHuman(np.how)}` : ''].filter(Boolean).join('\n\n');
   function renderHostNote() {
     const h = state.host || {}; const el = $('#npHost');
     if (h.connected) {
@@ -3393,7 +3413,7 @@
     renderTeamRows(); defaultKickoff();
   });
   $('#npAdd').addEventListener('click', () => { np.team.push({ name: `agent${np.team.length + 1}`, tool: 'claude', model: 'sonnet', role: '' }); renderTeamRows(); });
-  document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => setPreset(b.dataset.preset)));
+  $('#npTeamPick').addEventListener('change', () => setPreset($('#npTeamPick').value));
   $('#npName').addEventListener('input', () => { if (!np.folderTouched) $('#npFolder').value = slugOf($('#npName').value); npTakenNote(); });
   $('#npFolder').addEventListener('input', () => { np.folderTouched = true; });
   $('#npKickoff').addEventListener('input', () => { np.kickoffTouched = true; });
@@ -3950,7 +3970,7 @@
     for (const id of ['#npName', '#npFolder', '#npBrief', '#npKickoff']) $(id).value = '';
     $('#npErr').textContent = ''; $('#npStart').checked = true; $('#npAuto').checked = false; $('#npTrust').checked = true; $('#npGit').checked = true;
     try { state.host = await api('/host'); } catch { state.host = { connected: false }; }
-    setPreset('web'); renderNpFiles(); renderHostNote(); applyMode(); renderDesigns();
+    setPreset(teamTemplates().some((t) => t.id === 'website-studio') ? 'website-studio' : teamTemplates()[0].id); renderNpFiles(); renderHostNote(); applyMode(); renderDesigns();
     $('#npToChat').hidden = !(state.host?.connected && state.host?.claude?.installed);
 
     $('#projDlg').showModal(); $('#npName').focus();
@@ -3993,7 +4013,7 @@
       btn.textContent = 'Creating…';
       const made = await api('/projects', { method: 'POST', body: {
         name: name || slug, slug, existing: ex, path: path || undefined, folder: ex ? (v.startsWith('f:') ? v.slice(2) : slug) : ($('#npFolder').value.trim() || slugOf(name)), topic: name || slug, brief: $('#npBrief').value,
-        files, agents: np.team.map((a) => ({ name: a.name, tool: a.tool, model: a.model, role: a.role })), lead: np.lead,
+        files, agents: np.team.map((a) => ({ name: a.name, tool: a.tool, model: a.model, role: a.role, prompt: jobFor(a) })), lead: np.lead,
         kickoff: $('#npKickoff').value.trim(), tools: selectedTools(), design_system: np.design, git: $('#npGit').checked, auto_approve: $('#npAuto').checked, start: $('#npStart').checked, trust: $('#npTrust').checked, keys } });
       $('#projDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
       if (Object.keys(made?.renamed || {}).length) infoInline(`Names already used elsewhere: ${Object.entries(made.renamed).map(([o, n]) => `${o} → @${n}`).join(', ')}.`);

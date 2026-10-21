@@ -1828,6 +1828,16 @@ api.post('/host/poll', wrap(async (req, res) => {
       .map((f) => ({ name: String(f.name || '').slice(0, 80), path: String(f.path), display: String(f.display || f.path).slice(0, 500), kit: !!f.kit, git: !!f.git, slug: slugify(f.slug || f.name) })),
     blocked: (Array.isArray(req.body.blocked) ? req.body.blocked : []).slice(0, 20).map((x) => String(x).slice(0, 60)),
     picker: !!req.body.picker,
+    // ready-made teams (teams/<id>/: team.md + one prompt file per member), offered in the New project form
+    teams: (Array.isArray(req.body.teams) ? req.body.teams : []).slice(0, 100)
+      .filter((t) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(t?.id || '')) && Array.isArray(t.members) && t.members.length)
+      .map((t) => {
+        const members = t.members.slice(0, 12).filter((m) => cleanName(m?.name) === String(m?.name || '') && m.name)
+          .map((m) => ({ name: String(m.name), role: String(m.role || '').slice(0, 200), model: String(m.model || '').slice(0, 80),
+            tool: ['claude', 'codex', 'opencode', 'qwen', 'gemini'].includes(m.tool) ? m.tool : 'claude', prompt: String(m.prompt || '').slice(0, 6000) }));
+        return { id: String(t.id), name: String(t.name || t.id).slice(0, 60), summary: String(t.summary || '').slice(0, 300),
+          lead: members.some((m) => m.name === t.lead) ? String(t.lead) : (members[0]?.name || ''), how: String(t.how || '').slice(0, 6000), git: t.git !== false, members };
+      }).filter((t) => t.members.length),
     keys: sanitizeKeys(req.body.keys, req.body.openrouter_info),
     usage: !!req.body.usage,
     ngrok: { installed: !!req.body.ngrok?.installed, authed: !!req.body.ngrok?.authed, version: String(req.body.ngrok?.version || '').slice(0, 40) },
@@ -2031,6 +2041,7 @@ api.post('/projects', wrap((req) => {
   const agents = (Array.isArray(b.agents) ? b.agents : []).slice(0, 12).map((a) => ({
     name: cleanName(a.name), tool: String(a.tool || 'claude'), model: String(a.model || '').trim(),
     role: String(a.role || '').trim().slice(0, 200), instruction: String(a.instruction || '').trim().slice(0, 2000),
+    prompt: String(a.prompt || '').trim().slice(0, 12000),
   }));
   const seen = new Set();
   for (const a of agents) {
@@ -2080,7 +2091,7 @@ api.post('/projects', wrap((req) => {
       const bare = n.replace(/\.+$/, ''), dots = n.slice(bare.length);   // "@lead." at the end of a sentence
       return renamed.has(bare.toLowerCase()) ? `@${renamed.get(bare.toLowerCase())}${dots}` : m;
     });
-    for (const a of agents) { a.name = to(a.name); a.role = fix(a.role); a.instruction = fix(a.instruction); }
+    for (const a of agents) { a.name = to(a.name); a.role = fix(a.role); a.instruction = fix(a.instruction); a.prompt = fix(a.prompt); }
     for (const t of tools) if (t.agents !== '*') t.agents = t.agents.map(to);
     b.kickoff = fix(b.kickoff); b.brief = fix(b.brief);
   }

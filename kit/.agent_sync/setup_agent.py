@@ -157,6 +157,12 @@ def duty(cfg, a):
     return "dev"
 
 
+def job_block(a):
+    """The member's job description (from a ready-made team in teams/, or written in agent.json): kept for the whole project."""
+    job = (a.get("prompt") or "").strip()
+    return f"\n# Your job\n{job}\n" if job else ""
+
+
 def git_rules(cfg, a, team):
     if cfg.get("git_workflow", "worktrees") == "off":
         return ""
@@ -378,7 +384,7 @@ def write_agent(cfg, a):
 - **Project room:** `{cfg['room']}`
 - **Project folder:** `{cfg['root']}` (docs and specs in `{cfg['docs_path']}`)
 - **Where to write:** all project files go under `{cfg['root']}` — use absolute paths. Your own folder `{ws}` only holds your config; never put project code there.
-{lead_block}{git_rules(cfg, a, all_agents(cfg))}{tool_rules(cfg, a)}{skill_rules(cfg, a)}
+{lead_block}{job_block(a)}{git_rules(cfg, a, all_agents(cfg))}{tool_rules(cfg, a)}{skill_rules(cfg, a)}
 # Initial instruction
 {a.get('instruction', '')}
 
@@ -683,12 +689,19 @@ def main():
     if cmd == "create":
         lead = "--lead" in args
         args = [x for x in args if x != "--lead"]
+        prompt = ""
+        if "--prompt" in args:   # the member's job description (ready-made teams)
+            i = args.index("--prompt")
+            prompt = args[i + 1] if i + 1 < len(args) else ""
+            del args[i:i + 2]
         if len(args) < 4 or args[1] not in PROVIDERS:
             sys.exit(__doc__)
         name, tool, role, instruction = args[:4]
         model = args[4] if len(args) > 4 else ""
         a = {"name": name, "tool": tool, "provider": PROVIDERS[tool], "model": model,
              "role": role, "instruction": instruction}
+        if prompt.strip():
+            a["prompt"] = prompt.strip()
         dump(os.path.join(agents_dir(cfg), name, "agent.json"), a)
         if lead:
             config.save_key("lead", name)

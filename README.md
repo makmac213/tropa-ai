@@ -116,12 +116,18 @@ Claude runs on your computer through the host helper (`claude -p`, with no tools
    - **Name.** The folder is created at `~/projects/<name>`.
    - **Brief / spec**, saved as `docs/SPEC.md`: what to build, must-haves, and what "done" means.
    - **Files** (optional): mockups, docs and images, saved in `docs/attachments/`.
-   - **Team:** start from a preset (*Web app · 5*, *Small · 3* or *Solo*) or build your own. Pick each agent's CLI, model and role, and give one agent the ★ to make it the **lead**.
+   - **Team:** **Start from** a [ready-made team](#ready-made-teams) (Website studio, Research & publishing desk, SEO team, Customer support desk, Market research team, Small dev team, Solo developer…) or start empty and build your own. Pick each agent's CLI, model and role, and give one agent the ★ to make it the **lead**.
    - **Design system** (optional): pick the look agents build the UI in. Each card shows a live preview; click one for details. See [Design systems](#design-systems).
    - **Tools** (optional): give agents [Vercel, Supabase or Render](#optional-tools-vercel-supabase-render).
    - **Kickoff message:** posted as you once the team is up.
 3. Click **Create project**. Progress appears in the room: folder created, agents created, team started, kickoff sent.
 4. Click **▦ Team** to watch every agent work, and chat with them in the room.
+
+### Ready-made teams
+
+Each ready-made team is a folder of prompts in [`teams/`](teams/): a `team.md` (name, summary, lead, and how the team works together) and one file per member, whose name is the agent's name and whose text is that member's job. When you start a project from a team, each agent's job, plus the team's way of working, is saved in its `AGENT.md` under *Your job* and stays there for the whole project.
+
+**Add a team by adding a folder**, no code needed: copy one, change the prompts, and it appears in **Start from** within a few seconds. Keep your own teams in `~/.tropa/teams/` so they survive updates (a folder there with the same name replaces the built-in one). `tropa teams` lists them. The format is in [teams/README.md](teams/README.md).
 
 ### Option B: from a terminal
 

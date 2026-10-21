@@ -57,6 +57,17 @@ def design_catalog():
         return []
 
 
+def teams_catalog():
+    """Ready-made teams from <tropa>/teams/ and ~/.tropa/teams/ (one folder of prompts each)."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import teams
+        return teams.catalog()
+    except Exception as e:
+        log(f"teams: {e}")
+        return []
+
+
 def tools_catalog():
     """The optional tools (hosted MCP servers) a project can enable, from the kit's tools.json."""
     try:
@@ -848,6 +859,8 @@ class Host:
             args = [sys.executable, setup, "create", a["name"], a["tool"], role, instr, a.get("model") or ""]
             if a["name"] == job.get("lead"):
                 args.append("--lead")
+            if a.get("prompt"):   # the job from a ready-made team (teams/<id>/<name>.md), kept in AGENT.md
+                args += ["--prompt", a["prompt"]]
             self.run(args)
         if job.get("lead"):
             self.setc(root, "lead", job["lead"])
@@ -1157,7 +1170,7 @@ class Host:
                                               "models": self.models(), "folders": self.folders(), "elsewhere": self.elsewhere(),
                                               "blocked": getattr(self, "blocked", []), "picker": self.has_picker(),
                                               "git": git_version(), "git_hint": git_hint(), "tools": tools_catalog(),
-                                              "design_systems": design_catalog(),
+                                              "design_systems": design_catalog(), "teams": teams_catalog(),
                                               "ngrok": self.ngrok_info(), "shares": self.shares.ids(), "usage": self.usage_on,
                                               "timeout": 20}, timeout=35)
                 if ok is not True:

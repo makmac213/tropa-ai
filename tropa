@@ -8,6 +8,7 @@
 #   tropa panel  [DIR]                      open the agent control panel
 #   tropa doctor [DIR]                      check tools, server, agents, tmux
 #   tropa reap [--kill [-y]] [--all] [DIR]  list (or stop) dev servers and shells the agents left running
+#   tropa teams                             ready-made teams (teams/ and ~/.tropa/teams/: one folder of prompts each)
 #   tropa server up|down|status|logs [-p PORT] [--no-tts] [--node] [--human NAME]
 #   tropa host start|stop|status|logs [-p PORT] [--projects-dir DIR]   (lets the chat create projects)
 #   tropa design list | show ID | use ID [DIR]   design systems (e.g. use carbon) for a project's UI
@@ -43,7 +44,7 @@ TROPA_REPO="${TROPA_REPO:-makmac213/tropa-ai}"
 
 die()  { echo "❌ $*" >&2; exit 1; }
 info() { echo "$*"; }
-usage() { sed -n '2,27p' "$TROPA_HOME/tropa" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,28p' "$TROPA_HOME/tropa" | sed 's/^# \{0,1\}//'; }
 
 abspath() { mkdir -p "$1" && (cd "$1" && pwd -P); }
 health()  { curl -fsS --max-time 3 "http://localhost:$1/health" >/dev/null 2>&1; }
@@ -732,6 +733,7 @@ case "${1:-help}" in
     update) shift; cmd_init --no-server "$@" ;;
     panel)  shift; d=$(project_dir "$1") && cd "$d" && exec "$d/.agent_sync/manage_agents.sh" ;;
     doctor) shift; d=$(project_dir "$1") && exec python3 "$d/.agent_sync/doctor.py" ;;
+    teams) python3 "$TROPA_HOME/host/teams.py" list ;;
     reap) shift; act=list; ra=()
         while [ $# -gt 0 ]; do case "$1" in --kill) act=kill ;; -y|--all) ra+=("$1") ;; -*) die "unknown option '$1'" ;; *) break ;; esac; shift; done
         d=$(project_dir "$1") || exit 1
