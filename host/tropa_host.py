@@ -1118,13 +1118,134 @@ class Host:
         if "watcher" not in have:
             self.run(["tmux", "new-window", "-d", "-t", session, "-n", "watcher", "-c", root, cmd])
             return "started"
-        pid = (self.run(["tmux", "list-panes", "-t", f"{session}:watcher", "-F", "#{pane_pid}"], check=False).stdout.split() or [""])[0]
-        alive = bool(pid) and ("room_watcher" in self.run(["ps", "-o", "command=", "-p", pid], check=False).stdout
-                               or self.run(["pgrep", "-P", pid, "-f", "room_watcher"], check=False).returncode == 0)
-        if not alive:
+        if not self.watcher_alive(session):
             self.run(["tmux", "respawn-window", "-k", "-t", f"{session}:watcher", "-c", root, cmd])
             return "restarted"
         return "running"
+
+    # ---------- self-healing: keep running teams running (and the chat's "Fix the team" button) ----------
+    HEAL_EVERY = 30       # seconds between automatic checks
+    HEAL_QUIET = 90       # after any team job (create, add, remove, rename…): leave the team alone this long
+    HEAL_LIMIT = {"watcher": 3, "agent": 2}   # automatic restarts per hour; after that, say so once and stop trying
+
+    def team_roots(self):
+        """slug -> folder for every project on this machine that has a team kit."""
+        roots = {}
+        for d in glob.glob(os.path.join(self.projects_dir, "*", ".agent_sync", "settings.json")):
+            root = os.path.dirname(os.path.dirname(d))
+            try:
+                roots[slugify(json.load(open(d)).get("project") or os.path.basename(root))] = root
+            except (OSError, ValueError):
+                pass
+        for slug, root in self.registry().items():
+            if os.path.isfile(os.path.join(root, ".agent_sync", "settings.json")):
+                roots[slugify(slug)] = root
+        return roots
+
+    def watcher_alive(self, session):
+        """Is room_watcher.py running in the team's watcher window? The window runs it through a shell
+        (`python3 room_watcher.py; read -p …`) that outlives it, so look for the python process itself."""
+        pid = (self.run(["tmux", "list-panes", "-t", f"={session}:=watcher", "-F", "#{pane_pid}"], check=False).stdout.split() or [""])[0]
+        if not pid.isdigit():
+            return False
+        for line in self.run(["ps", "-ax", "-o", "pid=,ppid=,args="], check=False).stdout.splitlines():
+            f = line.split(None, 2)
+            if len(f) == 3 and pid in (f[0], f[1]) and "room_watcher.py" in f[2] and "python" in f[2].split()[0] and "read -p" not in f[2]:
+                return True
+        return False
+
+    def heal(self, slug, root, force=False):
+        """Restart what died in a running team: the room watcher, agents whose CLI crashed (stopped on its error screen)
+        or whose window is gone. Returns (fixed, stuck) lists, or None when the team isn't running (tmux session gone:
+        it was stopped, or the machine restarted). Starting a stopped team costs money, so that's the human's call."""
+        session = self.cfg(root, "tmux_session")
+        if not session or self.run(["tmux", "has-session", "-t", f"={session}"], check=False).returncode != 0:
+            return None
+        now, hist = time.time(), self._heals.setdefault(slug, {})
+        def allowed(key, kind):
+            hist[key] = [t for t in hist.get(key, []) if now - t < 3600]
+            if force or len(hist[key]) < self.HEAL_LIMIT[kind]:
+                hist[key].append(now)
+                return True
+            return False
+        fixed, stuck = [], []
+        wins = {}
+        for line in self.run(["tmux", "list-windows", "-t", f"={session}", "-F", "#{window_name}\t#{pane_dead}"], check=False).stdout.splitlines():
+            name, _, dead = line.partition("\t")
+            wins[name] = dead == "1"
+        adir = os.path.join(root, "agents")
+        for a in sorted(os.listdir(adir)) if os.path.isdir(adir) else []:
+            if a.startswith(".") or not os.path.isfile(os.path.join(adir, a, "agent.json")):
+                continue
+            if a in wins:
+                screen = self.run(["tmux", "capture-pane", "-p", "-t", f"={session}:={a}", "-S", "-15"], check=False).stdout
+                if not wins[a] and "Press Enter to close this window" not in screen:
+                    continue   # running (busy, idle or waiting for someone: the watcher handles those)
+                why = "it had crashed"
+            else:
+                why = "it had stopped"
+            if allowed(a, "agent"):
+                r = self.run([os.path.join(root, ".agent_sync", "start_agent.sh"), a], check=False)
+                (fixed if r.returncode == 0 else stuck).append((a, why))
+            else:
+                stuck.append((a, why))
+        if not self.watcher_alive(session):
+            if allowed("watcher", "watcher"):
+                self.ensure_watcher(root, session)
+                fixed.append(("watcher", "it had stopped"))
+            else:
+                stuck.append(("watcher", "it keeps stopping"))
+        return fixed, stuck
+
+    def heal_say(self, slug, fixed, stuck, force=False):
+        human = getattr(self, "human", "") or "human"
+        who = lambda n: "the room watcher" if n == "watcher" else f"@{n}"
+        lines = []
+        if fixed:
+            lines.append("🩺 Fixed the team: restarted " + ", ".join(f"{who(n)} ({why})" for n, why in fixed)
+                         + ". Restarted agents pick up their conversation where they left off.")
+        hist = self._heals.setdefault(slug, {})
+        new_stuck = [(n, why) for n, why in stuck if force or time.time() - hist.get("warned:" + n, 0) > 3600]
+        for n, _ in new_stuck:
+            hist["warned:" + n] = time.time()
+        if new_stuck:
+            lines.append(f"@{human} ⚠️ " + ", ".join(who(n) for n, _ in new_stuck) + " keeps stopping, so I've stopped restarting it for now. "
+                         "In Advanced mode, ▦ Team shows its screen with the error; or press **Fix the team** to try again.")
+        if force and not lines:
+            lines.append("🩺 Checked the team: everyone is running.")
+        if lines:
+            try:
+                self.http("/watch/say", {"room": f"project:{slug}", "content": "\n".join(lines)})
+            except Exception as e:
+                log(f"[{slug}] could not post the team check: {e}")
+
+    def heal_all(self):
+        """The automatic check, every HEAL_EVERY seconds in the background."""
+        try:
+            if time.time() - self._last_job_at < self.HEAL_QUIET:
+                return
+            for slug, root in self.team_roots().items():
+                res = self.heal(slug, root)
+                if res and (res[0] or res[1]):
+                    log(f"[{slug}] healed: {res[0]} stuck: {res[1]}")
+                    self.heal_say(slug, *res)
+        except Exception as e:
+            log(f"team check failed: {e}")
+        finally:
+            self._healing = False
+
+    def fix_team(self, job):
+        """The chat's "Fix the team": check now (no hourly limits), or start the team if it isn't running."""
+        slug = job["slug"]
+        root = self.project_root(slug)
+        if not root:
+            raise RuntimeError(f"I can't find the folder for `{slug}`. Run `tropa update` in that folder once (it registers it), then try again.")
+        res = self.heal(slug, root, force=True)
+        if res is None:
+            self.report(job, "🩺 The team wasn't running, so I'm starting it.", status="running")
+            return self.start_team(job)
+        self.heal_say(slug, *res, force=True)
+        self.report(job, status="done")
 
     # ---------- start_team: the chat's "Start the team" button ----------
     def start_team(self, job):
@@ -1161,6 +1282,7 @@ class Host:
     # ---------- loop ----------
     def loop(self):
         log(f"tropa host helper {VERSION} → {self.server}; projects in {self.projects_dir}")
+        self._heals, self._heal_at, self._healing, self._last_job_at = {}, time.time(), False, 0.0
         ok = None
         while True:
             try:
@@ -1185,7 +1307,19 @@ class Host:
                 self.shares.stop(sid, "the chat server doesn't know this link")
             self.shares.tick()
             self.usage_tick()
+            if r.get("jobs"):
+                self._last_job_at = time.time()
+            self.human = r.get("human") or getattr(self, "human", "")
+            if time.time() - self._heal_at > self.HEAL_EVERY and not self._healing:
+                self._heal_at, self._healing = time.time(), True
+                threading.Thread(target=self.heal_all, daemon=True).start()
             for job in r.get("jobs") or []:
+                if job.get("type") == "fix_team":
+                    try:
+                        self.fix_team(job)
+                    except Exception as e:
+                        self.report(job, f"❌ Couldn't fix the team: {e}", status="failed")
+                    continue
                 if job.get("type") == "openrouter_key":
                     self.openrouter_job(job); continue
                 if job.get("type") == "api_key":

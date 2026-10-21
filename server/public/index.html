@@ -2199,7 +2199,8 @@
       <button class="tbtn" data-projkeys title="This project's own API keys (Gemini, OpenRouter)">🔑 Keys</button>
       <button class="tbtn" data-addagent title="Add a new agent to this running team">＋ Add agent</button>
       <span>${t.watching ? `tmux <code>${esc(t.tmux_session || '')}</code>` : 'watcher offline'}</span>
-      <button class="tbtn" data-wake="*" ${t.watching ? '' : 'disabled'}>Wake all</button>`;
+      <button class="tbtn" data-wake="*" ${t.watching ? '' : 'disabled'}>Wake all</button>
+      <button class="tbtn" data-fixteam title="Restart whatever stopped: the room watcher, and any agent that crashed or disappeared (they resume their conversation). Starts the team if it isn't running.">🩺 Fix team</button>`;
   }
   document.addEventListener('input', (e) => {
     if (e.target.id !== 'teamFilter') return;
@@ -2229,6 +2230,14 @@
     renderTeamBar(); renderAttention();
     el.querySelectorAll('pre.screen').forEach((pre) => { pre.scrollTop = pre.scrollHeight; });
   }
+  // Fix the team (Simple's Your team, Advanced's team bar): the host helper restarts what died, or starts the team
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-fixteam]'); if (!b) return;
+    const label = b.textContent; b.disabled = true; b.textContent = 'Checking…';
+    try { await api(`/rooms/${encodeURIComponent(state.current)}/fix`, { method: 'POST', body: {} }); b.textContent = 'Done: see the chat'; }
+    catch (err) { alertInline(err.message); b.textContent = label; }
+    setTimeout(() => { b.disabled = false; b.textContent = label; rsLast = ''; renderRside(); }, 4000);
+  });
   document.addEventListener('click', async (e) => {
     const b = e.target.closest('#startTeam'); if (!b) return;
     b.disabled = true; b.textContent = 'Starting…';
@@ -2500,7 +2509,7 @@
     let html = `<div class="rs-top"><span>Room</span><button type="button" data-rs-toggle title="${off ? 'Show' : 'Hide'} this panel">${off ? '⟨' : '⟩'}</button></div>`;
     if (proj && simple()) {
       const t = state.team[room], lead = String(t?.settings?.lead || '').toLowerCase();
-      const body = !t?.watching ? `<div class="rs-empty">The team isn't running. Start it from the chat's <b>Start the team</b>, or with <code>tropa start</code>.</div>`
+      const body = !t?.watching ? `<div class="rs-empty">The team isn't running.</div><div class="rs-ask" style="padding: 0 14px 6px"><button type="button" class="tbtn pri" data-fixteam>▶ Start the team</button></div>`
         : (t.agents || []).map((n) => {
           const p = t.panes?.[n] || {}, a = state.agents.find((x) => x.name.toLowerCase() === n.toLowerCase());
           const st = p.state === 'approval' ? ['wait', 'Needs your OK'] : p.state === 'working' ? ['busy', 'Working'] : bgTasks(p) ? ['bg', 'Running a long task'] : p.state ? ['idle', 'Waiting for work'] : ['', 'Not started'];
@@ -2510,7 +2519,8 @@
             ${p.state === 'approval' ? `<div class="s" style="white-space:normal">${esc(p.prompt || 'wants to do something that needs your permission')}</div>
               <div class="rs-ask"><button type="button" class="tbtn pri" data-approve="${esc(n)}" data-act="yes">Allow</button><button type="button" class="tbtn" data-approve="${esc(n)}" data-act="no">Don't allow</button></div>` : ''}</div></div>`;
         }).join('');
-      html += sec('who', 'Your team', t?.watching ? (t.agents || []).length : '', body);
+      const fix = t?.watching ? `<div class="rs-empty" style="padding-top: 6px">Something not working? <button type="button" class="linkbtn" data-fixteam style="margin: 0">🩺 Fix the team</button></div>` : '';
+      html += sec('who', 'Your team', t?.watching ? (t.agents || []).length : '', body + fix);
     }
     if (proj && !simple()) {
       const t = state.team[room];
