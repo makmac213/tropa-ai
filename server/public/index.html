@@ -17,6 +17,8 @@
     --fill-accent: #4566f7; --on-accent: #ffffff;   /* buttons, badges, selected segments */
     --fill-ok: #1a8359; --on-ok: #ffffff;           /* "auto-wake on", working */
     --fill-warn: #f0b35a; --on-warn: #1d1300;       /* approval pills, lead star, paused */
+    --fill-danger: #ff7a7a; --on-danger: #210404;   /* "needs attention" badges */
+    --review: #b9a0f5;                              /* tasks waiting for review */
     --run: #3cc4d9; --fill-run: #0f7f91; --on-run: #ffffff;   /* idle at the prompt with a background shell running */
     --lim: #c4a1ff; --fill-lim: #7c4dcc; --on-lim: #ffffff;   /* out of credits, usage limit or rate-limited */
     --shadow: rgba(0,0,0,.35);
@@ -25,11 +27,13 @@
   :root[data-theme="light"] { color-scheme: light;
     --bg: #f6f7f9; --panel: #ffffff; --panel2: #f0f2f5; --line: #dfe3e9;
     --text: #1b1f27; --muted: #5d6576; --accent: #3651d1; --accent-weak: rgba(54,81,209,.10);
-    --human: #9a5800; --system: #5f6778; --ok: #0d7a4f; --danger: #c22a2a; --mention: rgba(154,88,0,.09);
+    --human: #9a5800; --system: #5f6778; --ok: #0a6e47; --danger: #c22a2a; --mention: rgba(154,88,0,.09);
     --code: #f1f3f6; --idle: #6b7280;
     --fill-accent: #3651d1; --on-accent: #ffffff;
     --fill-ok: #0d7a4f; --on-ok: #ffffff;
     --fill-warn: #a96500; --on-warn: #ffffff;
+    --fill-danger: #c22a2a; --on-danger: #ffffff;
+    --review: #6d3fc0;
     --run: #0b7285; --fill-run: #0b7285; --on-run: #ffffff;
     --lim: #6d3fc0; --fill-lim: #6d3fc0; --on-lim: #ffffff;
     --shadow: rgba(16,24,40,.14);
@@ -39,11 +43,13 @@
     :root:not([data-theme="dark"]) { color-scheme: light;
     --bg: #f6f7f9; --panel: #ffffff; --panel2: #f0f2f5; --line: #dfe3e9;
     --text: #1b1f27; --muted: #5d6576; --accent: #3651d1; --accent-weak: rgba(54,81,209,.10);
-    --human: #9a5800; --system: #5f6778; --ok: #0d7a4f; --danger: #c22a2a; --mention: rgba(154,88,0,.09);
+    --human: #9a5800; --system: #5f6778; --ok: #0a6e47; --danger: #c22a2a; --mention: rgba(154,88,0,.09);
     --code: #f1f3f6; --idle: #6b7280;
     --fill-accent: #3651d1; --on-accent: #ffffff;
     --fill-ok: #0d7a4f; --on-ok: #ffffff;
     --fill-warn: #a96500; --on-warn: #ffffff;
+    --fill-danger: #c22a2a; --on-danger: #ffffff;
+    --review: #6d3fc0;
     --run: #0b7285; --fill-run: #0b7285; --on-run: #ffffff;
     --lim: #6d3fc0; --fill-lim: #6d3fc0; --on-lim: #ffffff;
     --shadow: rgba(16,24,40,.14);
@@ -57,7 +63,6 @@
   .app { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
   aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
   .brand { padding: 14px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
-  .brand .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--accent); color: #fff; display: grid; place-items: center; font-family: ui-monospace, monospace; font-weight: 700; }
   .brand b { font-size: 15px; }
   .brand .logo-img { width: 30px; height: 30px; flex: none; }
   .conn { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
@@ -106,7 +111,7 @@
   .dl-btn.hot { color: var(--human); border-color: var(--human); } .dl-btn.on { background: var(--accent-weak); color: var(--text); }
   .dl-btn.a-btn { color: var(--danger); border-color: var(--danger); }
   .room .pb, .pb { font-size: 10.5px; font-weight: 700; border-radius: 9px; padding: 0 6px; line-height: 16px; margin-left: 4px; }
-  .pb.q { background: var(--fill-warn); color: var(--on-warn); } .pb.a { background: var(--danger); color: #210404; }
+  .pb.q { background: var(--fill-warn); color: var(--on-warn); } .pb.a { background: var(--fill-danger); color: var(--on-danger); }
   .msg.q-open { background: color-mix(in srgb, var(--human) 9%, transparent); }
   .qbadge { margin-top: 4px; font-size: 11.5px; font-weight: 600; border: 0; border-radius: 9px; padding: 1px 9px; background: var(--fill-warn); color: var(--on-warn); cursor: pointer; }
   .qpanel { position: absolute; top: 57px; right: 0; bottom: 0; width: min(400px, 100%); z-index: 5; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line);
@@ -130,9 +135,10 @@
   .attn-row .at { flex: 1 1 340px; min-width: 0; font-size: 13.5px; } .attn-row .d { font-size: 12.5px; color: var(--muted); }
   .attn-row .aa { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .atag { min-width: 68px; text-align: center; border-radius: 5px; padding: 0 7px; font-size: 11.5px; font-weight: 600; }
-  .atag.k-stalled, .atag.k-blocked { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
-  .atag.k-approval { background: color-mix(in srgb, var(--human) 18%, transparent); color: var(--human); }
-  .atag.k-review { background: rgba(155,123,234,.18); color: #9b7bea; } .atag.k-idle { background: var(--accent-weak); color: var(--accent); }
+  /* text mixed a little toward --text: darker in light mode, lighter in dark, so it stays AA on the tinted pill */
+  .atag.k-stalled, .atag.k-blocked { background: color-mix(in srgb, var(--danger) 12%, transparent); color: color-mix(in srgb, var(--danger) 80%, var(--text)); }
+  .atag.k-approval { background: color-mix(in srgb, var(--human) 12%, transparent); color: color-mix(in srgb, var(--human) 80%, var(--text)); }
+  .atag.k-review { background: color-mix(in srgb, var(--review) 12%, transparent); color: color-mix(in srgb, var(--review) 80%, var(--text)); } .atag.k-idle { background: var(--accent-weak); color: var(--accent); }
   .attn-note { font-size: 12.5px; padding: 7px 0; border-top: 1px solid var(--line); }
   .attn-ok { font-size: 12.5px; margin: -4px 0 10px; }
   .attn-form { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 12.5px; padding: 8px 0; border-top: 1px solid var(--line); }
@@ -225,7 +231,7 @@
   .rs-item .ic img { width: 100%; height: 100%; object-fit: cover; }
   .rs-item .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
   .rs-item .go { color: var(--muted); font-size: 12px; margin-left: auto; padding: 0 2px; opacity: 0; background: none; border: 0; cursor: pointer; } .rs-item:hover .go { opacity: 1; }
-  .rs-item.missing { opacity: .55; cursor: default; }
+  .rs-item.missing { cursor: default; } .rs-item.missing .nm { color: var(--muted); font-style: italic; }   /* no opacity: it would drop the text below AA contrast */
   .msgs.blurred ~ .rside .ic img, .msgs.blurred ~ .rside .bd { filter: blur(6px); }   /* /blur covers the panel too */
   @media (max-width: 1100px) { .rside { display: none; } }
   .empty { color: var(--muted); text-align: center; margin-top: 18vh; padding: 0 20px; }
