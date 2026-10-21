@@ -136,7 +136,7 @@ function cleanProjectPath(p) {
 function attView(a) {
   return a && { id: a.id, room_id: a.room_id, message_id: a.message_id, name: a.name, mime: a.mime, size: a.size, path: a.path,
     uploader: a.uploader, uploader_kind: a.uploader_kind, stored: !!a.stored, synced: !!a.synced, error: a.error,
-    is_image: /^image\//.test(a.mime), url: `/api/files/${a.id}` };
+    is_image: /^image\//.test(a.mime), url: `/api/files/${a.id}`, created_at: a.created_at };
 }
 function storeBlob(id, buf, name) {
   fs.writeFileSync(path.join(FILES_DIR, String(id)), buf);
@@ -1368,7 +1368,7 @@ function watcherFor(roomId) {
 function teamView(roomId) {
   const w = watcherFor(roomId);
   return { room_id: roomId, watching: !!w, tmux_session: w?.tmux || '', agents: w?.agents || [],
-    panes: w ? w.panes : {}, settings: wakeSettings(roomId) };
+    panes: w ? w.panes : {}, settings: wakeSettings(roomId), caps: w?.caps || [] };
 }
 function broadcastTeam(roomId) { broadcast({ type: 'team', team: teamView(roomId) }); }
 function pushEvent(roomId, ev) {
@@ -1512,6 +1512,28 @@ api.post('/rooms/:id/approve', wrap((req) => {
   if (!agent) throw new UserError('agent is required');
   pushEvent(roomId, { type: 'command', action, agent });
   return { ok: true };
+}));
+
+// type into an agent's terminal from the Team view: answer a menu or question its CLI is showing.
+// keys are tmux key names from a short list; text is typed literally (then Enter, unless enter is false)
+const TERM_KEYS = new Set(['Enter', 'Escape', 'Up', 'Down', 'Left', 'Right', 'Tab', 'BTab', 'Space', 'BSpace', 'C-c',
+  ...'0123456789'.split(''), 'y', 'n']);
+api.post('/rooms/:id/agents/:name/keys', wrap((req) => {
+  const roomId = roomOf(req);
+  const w = watcherFor(roomId);
+  if (!w) throw new UserError('no watcher is running for this room (start the team with tropa)');
+  if (!(w.caps || []).includes('keys')) throw new UserError("this project's watcher is older than terminal input: run tropa update in the project folder");
+  const name = cleanName(req.params.name);
+  const agent = w.agents.find((n) => n.toLowerCase() === String(name).toLowerCase());
+  if (!agent) throw new UserError(`@${req.params.name} isn't running in this team`);
+  const keys = Array.isArray(req.body.keys) ? req.body.keys.map(String) : [];
+  if (keys.length > 20 || keys.some((k) => !TERM_KEYS.has(k))) throw new UserError(`keys must be some of: ${[...TERM_KEYS].join(' ')}`);
+  const text = typeof req.body.text === 'string' ? req.body.text : '';
+  if (text.length > 4000) throw new UserError('text is too long (4000 characters at most)');
+  if (/[\u0000-\u001f\u007f]/.test(text)) throw new UserError('text has control characters: use the key buttons for those');
+  if (!keys.length && !text) throw new UserError('nothing to send');
+  pushEvent(roomId, { type: 'keys', agent, keys, text, enter: req.body.enter !== false });
+  return { ok: true, agent };
 }));
 
 // watcher endpoints

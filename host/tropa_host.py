@@ -651,6 +651,15 @@ class Host:
             raise RuntimeError((r.stderr or r.stdout or f"{args[0]} failed").strip()[-600:])
         return r
 
+    def reap(self, root, agent=None):
+        """Stop the dev servers and shells an agent (or the whole team) started: they outlive the tmux window.
+        Uses the project's own reap.py; a kit from before it has none (tropa update adds it)."""
+        script = os.path.join(root, ".agent_sync", "reap.py")
+        if os.path.isfile(script):
+            r = self.run([sys.executable, script, *(["agent", agent] if agent else ["session"])], check=False)
+            if r.stdout.strip():
+                log(r.stdout.strip())
+
     def cfg(self, root, key):
         return self.run([sys.executable, os.path.join(root, ".agent_sync", "config.py"), "get", key]).stdout.strip()
 
@@ -969,6 +978,7 @@ class Host:
         done = []
         have = self.run(["tmux", "list-windows", "-t", f"={session}", "-F", "#{window_name}"], check=False).stdout.split()
         if a in have:
+            self.reap(root, a)
             self.run(["tmux", "kill-window", "-t", f"={session}:={a}"], check=False)
             done.append(f"stopped its window in `{session}`")
         src = os.path.join(root, "agents", a)
@@ -1040,15 +1050,18 @@ class Host:
         slug = slugify(job.get("slug") or "")
         names = {s for s in [job.get("tmux_session"), f"ai-{slug}"] if s and re.match(r"^[A-Za-z0-9._-]{1,80}$", s)}
         extra = self.registry().get(slug)
+        roots = {}
         for d in glob.glob(os.path.join(self.projects_dir, "*", ".agent_sync", "settings.json")) + ([os.path.join(extra, ".agent_sync", "settings.json")] if extra else []):
             try:
                 st = json.load(open(d))
             except (OSError, ValueError):
                 continue
             if slugify(st.get("project") or os.path.basename(os.path.dirname(os.path.dirname(d)))) == slug and st.get("tmux_session"):
-                names.add(st["tmux_session"])
+                names.add(st["tmux_session"]); roots[st["tmux_session"]] = os.path.dirname(os.path.dirname(d))
         for n in sorted(names):
             if subprocess.run(["tmux", "has-session", "-t", f"={n}"], capture_output=True).returncode == 0:
+                if n in roots:
+                    self.reap(roots[n])
                 subprocess.run(["tmux", "kill-session", "-t", f"={n}"], capture_output=True)
                 log(f"[{slug}] project deleted in the chat: stopped tmux session {n}")
 
