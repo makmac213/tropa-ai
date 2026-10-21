@@ -18,6 +18,7 @@
     --fill-ok: #1a8359; --on-ok: #ffffff;           /* "auto-wake on", working */
     --fill-warn: #f0b35a; --on-warn: #1d1300;       /* approval pills, lead star, paused */
     --run: #3cc4d9; --fill-run: #0f7f91; --on-run: #ffffff;   /* idle at the prompt with a background shell running */
+    --lim: #c4a1ff; --fill-lim: #7c4dcc; --on-lim: #ffffff;   /* out of credits, usage limit or rate-limited */
     --shadow: rgba(0,0,0,.35);
     --hm0: #1f242e; --hm1: #0e4429; --hm2: #006d32; --hm3: #26a641; --hm4: #39d353;
   }
@@ -30,6 +31,7 @@
     --fill-ok: #0d7a4f; --on-ok: #ffffff;
     --fill-warn: #a96500; --on-warn: #ffffff;
     --run: #0b7285; --fill-run: #0b7285; --on-run: #ffffff;
+    --lim: #6d3fc0; --fill-lim: #6d3fc0; --on-lim: #ffffff;
     --shadow: rgba(16,24,40,.14);
     --hm0: #ebedf0; --hm1: #9be9a8; --hm2: #40c463; --hm3: #30a14e; --hm4: #216e39;
   }
@@ -43,6 +45,7 @@
     --fill-ok: #0d7a4f; --on-ok: #ffffff;
     --fill-warn: #a96500; --on-warn: #ffffff;
     --run: #0b7285; --fill-run: #0b7285; --on-run: #ffffff;
+    --lim: #6d3fc0; --fill-lim: #6d3fc0; --on-lim: #ffffff;
     --shadow: rgba(16,24,40,.14);
     --hm0: #ebedf0; --hm1: #9be9a8; --hm2: #40c463; --hm3: #30a14e; --hm4: #216e39;
     }
@@ -144,6 +147,8 @@
   .menu-btn { display: none; background: none; border: 0; font-size: 20px; cursor: pointer; }
   .msgs { flex: 1; overflow-y: auto; padding: 12px 0 8px; }
   /* Simple / Advanced: Simple hides the technical parts (terminals, models, usage, public links) */
+  #helloDlg { width: min(440px, 92vw); } #helloDlg input { font-size: 17px; }
+  .hello-prev { font-size: 13.5px; color: var(--muted); margin: -2px 0 10px; min-height: 20px; } .hello-prev b { color: var(--text); }
   .mode-sw { display: flex; margin: 10px 16px 2px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
   .mode-sw button { flex: 1; border: 0; background: none; color: var(--muted); padding: 5px 0; border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 600; }
   .mode-sw button[aria-checked="true"] { background: var(--fill-accent); color: var(--on-accent); }
@@ -354,7 +359,7 @@
   .room .del { opacity: 0; color: var(--muted); padding: 0 2px; border-radius: 4px; }
   .room:hover .del { opacity: 1; }
   .room .del:hover { color: var(--danger); }
-  .dot.busy { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); } .dot.wait { background: var(--human); } .dot.idle { background: var(--idle); } .dot.bg { background: var(--run); }
+  .dot.busy { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); } .dot.wait { background: var(--human); } .dot.idle { background: var(--idle); } .dot.bg { background: var(--run); } .dot.lim { background: var(--lim); }
   /* Team view: every agent's screen, live */
   .team { flex: 1; overflow-y: auto; padding: 12px 20px 16px; min-height: 0; }
   .tbtn.warnon { background: var(--fill-warn); border-color: var(--fill-warn); color: var(--on-warn); }
@@ -599,6 +604,7 @@
   .card .ago { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
   .card .appr { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 7px 10px; background: var(--mention); border-bottom: 1px solid var(--line); font-size: 12.5px; }
   .card .appr span { flex: 1 1 160px; min-width: 0; }
+  .card .appr.lim { background: color-mix(in srgb, var(--lim) 14%, transparent); }
   .card .term { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--line); background: var(--panel2); }
   .card .term button { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 5px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; min-width: 26px; padding: 2px 6px; cursor: pointer; }
   .card .term button:hover { border-color: var(--accent); } .card .term button.sent { background: var(--accent-weak); border-color: var(--accent); }
@@ -801,6 +807,8 @@
   .node.s-working .core { fill: var(--fill-ok); stroke: var(--fill-ok); }
   .node.s-approval .core { fill: var(--fill-warn); stroke: var(--fill-warn); }
   .node.s-background .core { fill: var(--fill-run); stroke: var(--fill-run); }
+  .node.s-limited .core { fill: var(--fill-lim); stroke: var(--fill-lim); stroke-dasharray: 5 3; }
+  .node.s-limited .ini { fill: var(--on-lim); } .node.s-limited .sub { fill: var(--lim); }
   .node.s-offline .core { fill: var(--panel2); stroke: var(--muted); stroke-dasharray: 4 3; }
   .node.s-human .core { fill: var(--fill-accent); stroke: var(--fill-accent); }
   .node.sel .core { stroke: var(--text); stroke-width: 3.5; }
@@ -1087,6 +1095,19 @@
   </form>
 </dialog>
 
+<dialog id="helloDlg" aria-labelledby="helloTitle">
+  <form id="helloForm" method="dialog" novalidate>
+    <h3 id="helloTitle">Welcome to TropaAI</h3>
+    <p class="mut" style="margin:-4px 0 14px">You'll build a team of AI agents that works for you. First, what should they call you?</p>
+    <label class="f" for="helloName">Your name <small>one word they can @mention</small></label>
+    <input id="helloName" autocomplete="given-name" spellcheck="false" maxlength="40" placeholder="e.g. Maria">
+    <div class="hello-prev" id="helloPrev" aria-live="polite"></div>
+    <div class="err" id="helloErr" role="alert"></div>
+    <div class="btns"><button type="submit" class="primary" id="helloGo">Continue</button></div>
+    <p class="mut" style="font-size:12px;margin:12px 0 0">You can change it any time in the bottom-left corner (“You are”).</p>
+  </form>
+</dialog>
+
 <dialog id="setupDlg">
   <form method="dialog">
     <h3>Set up TropaAI</h3>
@@ -1284,12 +1305,12 @@
     $('#agentScope').hidden = !proj;
     $('#agentScope').textContent = scoped ? 'show all' : `only ${proj}`;
     $('#agentScope').title = scoped ? 'Show agents from every project' : `Show only agents in ${proj}`;
-    const dotCls = (a) => { const st = panes[a.name]?.state; return st === 'working' ? 'busy' : st === 'approval' ? 'wait' : st === 'idle' ? (bgTasks(panes[a.name]) ? 'bg' : 'idle') : a.online ? 'on' : ''; };
+    const dotCls = (a) => { const p = panes[a.name], st = p?.state; return p?.limit && st !== 'approval' ? 'lim' : st === 'working' ? 'busy' : st === 'approval' ? 'wait' : st === 'idle' ? (bgTasks(p) ? 'bg' : 'idle') : a.online ? 'on' : ''; };
     $('#agents').innerHTML = list.length ? list.map((a) => `
       <div class="agent" title="${esc(a.description || '')}">
         <span class="dot ${dotCls(a)}"></span>
         <div class="meta" data-edit-agent="${esc(a.name)}"><div class="n">${esc(a.name)}</div>
-          <div class="s">${esc([scoped ? (panes[a.name]?.state === 'idle' && bgTasks(panes[a.name]) ? `running ${bgTasks(panes[a.name])}` : panes[a.name]?.state) : a.project, a.status].filter(Boolean).join(' · ') || (a.last_seen ? 'seen ' + fmtTime(a.last_seen) : ''))}</div>
+          <div class="s">${esc([scoped ? (panes[a.name]?.limit ? limitLabel(panes[a.name]) : panes[a.name]?.state === 'idle' && bgTasks(panes[a.name]) ? `running ${bgTasks(panes[a.name])}` : panes[a.name]?.state) : a.project, a.status].filter(Boolean).join(' · ') || (a.last_seen ? 'seen ' + fmtTime(a.last_seen) : ''))}</div>
           ${a.provider || a.model ? `<div class="s s2">${esc([a.provider, a.model].filter(Boolean).join(' · '))}</div>` : ''}${usageToday(a.name, 's s3')}</div>
         <button class="x" data-edit-agent="${esc(a.name)}" title="Edit agent">✎</button>
         <button class="x" style="margin-left:0" data-del-agent="${esc(a.name)}" title="Remove agent (click twice): stops it and moves its folder to agents/.removed/">×</button>
@@ -1473,7 +1494,7 @@
     loadUsageAgents();
     api('/host').then((h) => { state.host = h; if (state.view === 'team' && !$('#team').hidden && !state.team[state.current]?.watching) renderTeam(); }).catch(() => {});
     const s = await api('/state');
-    state.human = s.human;
+    state.human = s.human; state.humanSet = !!s.human_set;
     if (!state.mode) setMode(s.rooms.some((r) => String(r.id).startsWith('project:')) ? 'advanced' : 'simple', true, false);
     if (!$('#myName').value) $('#myName').value = localGet('airc.name') || s.human;
     const prevUnread = Object.fromEntries(state.rooms.map((r) => [r.id, r.unread_live]));
@@ -1511,6 +1532,12 @@
         if (!prev || prev.provider !== e.agent.provider || prev.model !== e.agent.model) renderMessages({ stick: false });
       }
       else if (e.type === 'agents') { state.agents = e.agents; renderSidebar(); }
+      else if (e.type === 'human') {
+        const mine = myName();
+        state.human = e.human; state.humanSet = true;
+        if (!mine || mine.toLowerCase() === String(e.old || '').toLowerCase()) { $('#myName').value = e.human; localSet('airc.name', e.human); }
+        renderMessages({ stick: false });
+      }
       else if (e.type === 'agent_renamed') {
         state.agents = state.agents.filter((a) => a.name !== e.old_name && a.name !== e.agent.name); state.agents.unshift(e.agent);
         for (const arr of state.messages.values()) for (const m of arr) if (m.sender === e.old_name && m.sender_kind === 'agent') m.sender = e.agent.name;
@@ -1995,7 +2022,7 @@
     if (n.toLowerCase() === String(t.settings?.lead || '').toLowerCase()) return false;
     const p = t.panes?.[n];
     if (!p) return true;
-    if (p.state === 'approval' || p.state === 'working' || bgTasks(p)) return false;
+    if (p.state === 'approval' || p.state === 'working' || bgTasks(p) || p.limit) return false;
     return Date.now() - (p.changed_at || 0) > INACTIVE_MIN * 60e3;
   }
   const hiddenAgents = (t) => (state.hideInactive ? (t.agents || []).filter((n) => isInactive(t, n)) : []);
@@ -2020,7 +2047,7 @@
     const p = t.panes?.[name] || { text: '', state: 'idle' };
     const a = state.agents.find((x) => x.name.toLowerCase() === name.toLowerCase());
     const lead = (t.settings?.lead || '').toLowerCase() === name.toLowerCase();
-    return `<div class="card s-${esc(p.state)}" data-card="${esc(name)}">
+    return `<div class="card s-${esc(p.state)}" data-card="${esc(name)}" data-lim="${esc(p.limit?.kind || '')}">
       <div class="ch"><b>${esc(name)}</b>${lead ? '<span title="lead">★</span>' : ''}
         <span class="model">${esc([a?.provider, a?.model].filter(Boolean).join(' · '))}</span><span class="sp"></span>${usageToday(name, 'uc')}
         <span class="ago" data-ago="${p.changed_at || 0}">${agoText(p.changed_at)}</span><span class="st">${esc(p.state)}</span></div>
@@ -2030,6 +2057,9 @@
         <button class="tbtn" data-restart="${esc(name)}" title="Restart ${esc(name)}'s CLI (it resumes its conversation). Use it when it's stuck, crashed or logged out">Restart</button>
         <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)}: same CLI, model, role and instructions under a new name (change the model if this one is rate-limited)">Clone</button>
         <button class="tbtn warn" data-remove="${esc(name)}" title="Remove ${esc(name)} from the team: stops its CLI and moves agents/${esc(name)}/ to agents/.removed/">Remove</button></div>
+      ${p.limit && p.state !== 'approval' ? `<div class="appr lim"><span><b>${p.limit.kind === 'credits' ? '💳 Out of credits' : p.limit.kind === 'limit' ? '⏳ Usage limit reached' : '🐢 Rate-limited'}</b>${p.limit.resets ? ` · resets ${esc(p.limit.resets)}` : ''}${p.limit.kind === 'credits' ? ' · top up the account, or' : ' ·'} switch to another model</span>
+        <button class="tbtn" data-model="${esc(name)}">Switch model</button>
+        <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)} on another model">Clone</button></div>` : ''}
       ${p.state === 'approval' ? `<div class="appr"><span>Waiting for approval${p.prompt ? `: <b>${esc(p.prompt)}</b>` : ''}</span>
         <button class="tbtn" data-approve="${esc(name)}" data-act="yes">Approve</button>
         <button class="tbtn" data-approve="${esc(name)}" data-act="always" title="Yes, and don't ask again this session">Always</button>
@@ -2114,9 +2144,15 @@
   function nodeState(t, name, human) {
     if (name === human) return 'human';
     const p = t.panes?.[name];
-    return !p ? 'offline' : p.state === 'idle' && bgTasks(p) ? 'background' : p.state;
+    return !p ? 'offline' : p.limit && p.state !== 'approval' ? 'limited' : p.state === 'idle' && bgTasks(p) ? 'background' : p.state;
   }
-  const nodeSub = (t, name, st) => st === 'human' ? 'you' : st === 'approval' ? 'needs approval' : st === 'background' ? `running ${bgTasks(t.panes?.[name])}` : st;
+  const nodeSub = (t, name, st) => st === 'human' ? 'you' : st === 'approval' ? 'needs approval' : st === 'background' ? `running ${bgTasks(t.panes?.[name])}`
+    : st === 'limited' ? limitLabel(t.panes?.[name]) : st;
+  // out of credits / usage limit / rate-limited, as read off the agent's screen by the watcher
+  function limitLabel(p) {
+    const l = p?.limit; if (!l) return '';
+    return l.kind === 'credits' ? 'out of credits' : l.kind === 'limit' ? `usage limit${l.resets ? ` · resets ${l.resets}` : ''}` : 'rate-limited';
+  }
   function graphSvg(t) {
     const g = graphModel(t); const r = 30; const sel = graphSelected(t);
     const edgeSvg = g.edges.map((e) => {
@@ -2142,7 +2178,7 @@
         <marker id="arrM" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
         <marker id="arrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
       </defs>${edgeSvg}${nodeSvg}</svg>
-      <div class="legend"><span><i style="background:var(--fill-ok)"></i>working</span><span><i style="background:var(--fill-run)"></i>background shell</span><span><i style="background:var(--idle)"></i>idle</span><span><i style="background:var(--fill-warn)"></i>needs approval</span><span><i style="background:var(--fill-accent)"></i>you</span><span>arrows: who mentioned whom (last 60 messages) · click a node to see its terminal</span></div>`;
+      <div class="legend"><span><i style="background:var(--fill-ok)"></i>working</span><span><i style="background:var(--fill-run)"></i>background shell</span><span><i style="background:var(--fill-lim)"></i>limit / out of credits</span><span><i style="background:var(--idle)"></i>idle</span><span><i style="background:var(--fill-warn)"></i>needs approval</span><span><i style="background:var(--fill-accent)"></i>you</span><span>arrows: who mentioned whom (last 60 messages) · click a node to see its terminal</span></div>`;
   }
   function updateGraph() {
     const t = state.team[state.current]; const graph = $('#graph'); const side = $('#graphSide');
@@ -2151,12 +2187,12 @@
     if (nodes !== [...(t.agents || [])].sort().join()) { renderTeam(); return; }
     for (const g of graph.querySelectorAll('[data-node]')) {
       const st = nodeState(t, g.dataset.node, state.human);
-      if (!g.classList.contains('s-' + st)) { g.classList.remove('s-idle', 's-working', 's-approval', 's-background', 's-offline'); g.classList.add('s-' + st); }
+      if (!g.classList.contains('s-' + st)) { g.classList.remove('s-idle', 's-working', 's-approval', 's-background', 's-limited', 's-offline'); g.classList.add('s-' + st); }
       const sub = nodeSub(t, g.dataset.node, st), el = g.querySelector('.sub');
       if (el.textContent !== sub) el.textContent = sub;
     }
     const name = graphSelected(t), p = t.panes?.[name], card = side.querySelector('[data-card]');
-    if (!card || card.dataset.card !== name || !p || !card.classList.contains('s-' + p.state)) { keepTermFocus(() => { side.innerHTML = cardHtml(name, t); }); const pre = side.querySelector('pre.screen'); if (pre) pre.scrollTop = pre.scrollHeight; return; }
+    if (!card || card.dataset.card !== name || !p || !card.classList.contains('s-' + p.state) || card.dataset.lim !== (p.limit?.kind || '')) { keepTermFocus(() => { side.innerHTML = cardHtml(name, t); }); const pre = side.querySelector('pre.screen'); if (pre) pre.scrollTop = pre.scrollHeight; return; }
     const pre = card.querySelector('pre.screen'); const stick = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 24;
     if (pre.textContent !== p.text) { pre.textContent = p.text || '(no screen yet)'; if (stick) pre.scrollTop = pre.scrollHeight; }
     const ago = card.querySelector('.ago'); ago.dataset.ago = p.changed_at || 0; ago.textContent = agoText(p.changed_at);
@@ -2253,7 +2289,7 @@
     for (const n of names) {
       const card = document.querySelector(`#team [data-card="${CSS.escape(n)}"]`);
       const p = t.panes[n]; if (!card || !p) continue;
-      if (!card.classList.contains('s-' + p.state)) {   // state changed: rebuild this card (approval buttons etc.)
+      if (!card.classList.contains('s-' + p.state) || card.dataset.lim !== (p.limit?.kind || '')) {   // state or limit changed: rebuild this card (approval/limit buttons)
         const pre = card.querySelector('pre.screen'); const top = pre?.scrollTop;
         const stick = pre ? pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 24 : true;
         keepTermFocus(() => { card.outerHTML = cardHtml(n, t); });
@@ -2512,7 +2548,7 @@
       const body = !t?.watching ? `<div class="rs-empty">The team isn't running.</div><div class="rs-ask" style="padding: 0 14px 6px"><button type="button" class="tbtn pri" data-fixteam>▶ Start the team</button></div>`
         : (t.agents || []).map((n) => {
           const p = t.panes?.[n] || {}, a = state.agents.find((x) => x.name.toLowerCase() === n.toLowerCase());
-          const st = p.state === 'approval' ? ['wait', 'Needs your OK'] : p.state === 'working' ? ['busy', 'Working'] : bgTasks(p) ? ['bg', 'Running a long task'] : p.state ? ['idle', 'Waiting for work'] : ['', 'Not started'];
+          const st = p.state === 'approval' ? ['wait', 'Needs your OK'] : p.limit ? ['lim', `Paused: ${limitLabel(p)}${p.limit.kind === 'credits' ? ' (top up the account)' : ''}`] : p.state === 'working' ? ['busy', 'Working'] : bgTasks(p) ? ['bg', 'Running a long task'] : p.state ? ['idle', 'Waiting for work'] : ['', 'Not started'];
           return `<div class="rs-item" style="cursor:default"><span class="dot ${st[0]}"></span><div class="bd">
             <div class="t"><b>${esc(n)}</b>${n.toLowerCase() === lead ? '<span class="lab" style="color:var(--muted)">lead</span>' : ''}</div>
             <div class="s">${esc(st[1])}${a?.status && p.state === 'working' ? ` · ${esc(a.status)}` : a?.description ? ` · ${esc(a.description)}` : ''}</div>
@@ -2956,7 +2992,44 @@
     if (e.key === 'Escape') { if (menuOpen) hideCmds(); else { state.replyTo = null; renderReply(); } }
   });
   $('#sendBtn').addEventListener('click', send);
-  $('#myName').addEventListener('change', () => { localSet('airc.name', myName()); renderMessages({ stick: false }); });
+  async function setHuman(name) {   // what the team calls you: saved on the server, adopted by every project's team
+    const r = await api('/me', { method: 'POST', body: { name } });
+    state.human = r.human; state.humanSet = true;
+    $('#myName').value = r.human; localSet('airc.name', r.human);
+    renderMessages({ stick: false });
+    return r;
+  }
+  $('#myName').addEventListener('change', async () => {
+    const v = $('#myName').value.trim();
+    if (!v || v === state.human) { localSet('airc.name', myName()); return; }
+    try { const r = await setHuman(v); if (r.old && r.old !== r.human) infoInline(`Your team will call you @${r.human} from now on.`); }
+    catch (err) { alertInline(err.message); $('#myName').value = state.human; }
+  });
+  // ---------- welcome: what should the team call you? (once, before the first project) ----------
+  const ODD_NAMES = /^(user|admin|administrator|owner|human|guest|root|pc|desktop|laptop|default|me|ubuntu|windows)\d*$|^(desktop|laptop|pc|win)-/i;
+  const cleanHuman = (v) => String(v || '').trim().replace(/\s+/g, '-').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 30);
+  function helloPreview() {
+    const n = cleanHuman($('#helloName').value);
+    $('#helloPrev').innerHTML = n ? `Your agents will write: “Done, <b>@${esc(n)}</b>: here's the plan.”` : '';
+    $('#helloErr').textContent = '';
+  }
+  function openHello(then) {
+    const guess = state.human && !ODD_NAMES.test(state.human) && /^[A-Za-z]/.test(state.human) ? state.human : '';
+    $('#helloName').value = guess; helloPreview();
+    $('#helloDlg').showModal(); $('#helloName').focus(); $('#helloName').select();
+    openHello.then = then;
+  }
+  $('#helloName').addEventListener('input', helloPreview);
+  $('#helloForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const n = cleanHuman($('#helloName').value);
+    if (!n) { $('#helloErr').textContent = 'Type the name you want your team to use.'; return; }
+    $('#helloGo').disabled = true;
+    try { await setHuman(n); localSet('airc.named', '1'); $('#helloDlg').close(); openHello.then?.(); }
+    catch (err) { $('#helloErr').textContent = err.message.charAt(0).toUpperCase() + err.message.slice(1) + '.'; }
+    finally { $('#helloGo').disabled = false; }
+  });
+  $('#helloDlg').addEventListener('cancel', (e) => { if (!state.humanSet) e.preventDefault(); });   // Esc: a name is needed first
 
   // ---------- clicks ----------
   document.addEventListener('click', async (e) => {
@@ -4316,8 +4389,10 @@
   setTimeout(async () => {
     const asked = new URLSearchParams(location.search).has('setup');
     if (asked) history.replaceState(null, '', location.pathname + location.hash);
-    if (localGet('airc.setupDone') === '1') return;
-    if (asked || !state.rooms.some((r) => String(r.id).startsWith('project:'))) openSetup();
+    const fresh = !state.rooms.some((r) => String(r.id).startsWith('project:'));
+    const setup = () => { if (localGet('airc.setupDone') !== '1' && (asked || fresh)) openSetup(); };
+    if (!state.humanSet && localGet('airc.named') !== '1' && (simple() || fresh)) openHello(setup);
+    else setup();
   }, 1200);
 
   // ---------- New project by chat with Claude (Claude Code on the host; the form stays available) ----------

@@ -19,7 +19,7 @@ const PORT = Number(process.env.PORT || 8888);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const TZ = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 const PKG_VERSION = (() => { try { return require('./package.json').version; } catch { return ''; } })();
-const HUMAN_NAME = process.env.HUMAN_NAME || 'human';
+let HUMAN_NAME = process.env.HUMAN_NAME || 'human';   // replaced by the name you chose in the chat (app_settings), once there is one
 const KOKORO_URL = (process.env.KOKORO_URL || 'http://127.0.0.1:8880').replace(/\/+$/, '');
 const ONLINE_WINDOW_MS = 10 * 60 * 1000;
 const MAX_CONTENT = 20000;
@@ -248,6 +248,11 @@ const q = {
 // Deleted projects stay deleted: their watcher and agents may still be running for a moment, and
 // must not bring the room back. Only the human re-creating the project lifts this (revive).
 db.exec(`CREATE TABLE IF NOT EXISTS deleted_projects (slug TEXT PRIMARY KEY, deleted_at INTEGER NOT NULL)`);
+// settings chosen in the chat that outlive restarts (the human's name: what the team calls you)
+db.exec(`CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+const appSetting = { get: db.prepare('SELECT value FROM app_settings WHERE key = ?'), set: db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value') };
+const chosenHuman = appSetting.get.get('human')?.value;
+if (chosenHuman) HUMAN_NAME = chosenHuman;
 const qd = {
   get: db.prepare('SELECT * FROM deleted_projects WHERE slug = ?'),
   put: db.prepare('INSERT OR REPLACE INTO deleted_projects (slug, deleted_at) VALUES (?, ?)'),
@@ -551,7 +556,7 @@ function fmtInbox(ib) {
 }
 
 // ---------- MCP ----------
-const MCP_INSTRUCTIONS = `TropaAI is a shared chat for AI agents working in different sessions (Claude Code, Codex, OpenCode, Qwen Code, Gemini CLI…), and their human (${HUMAN_NAME}).
+const mcpInstructions = () => `TropaAI is a shared chat for AI agents working in different sessions (Claude Code, Codex, OpenCode, Qwen Code, Gemini CLI…), and their human (${HUMAN_NAME}).
 Wake-up prompts typed into your terminal start with "[tropa]": read the room when you see one.
 Rooms: "general" (all agents, any project) and "project:<slug>" (only agents working on that project).
 Workflow:
@@ -568,7 +573,7 @@ Workflow:
 Project-specific talk belongs in the project room; use general only for cross-project matters.`;
 
 const agentProp = { type: 'string', description: 'Your agent name (the one you registered with).' };
-const TOOLS = [
+const tools = () => [
   {
     name: 'register',
     description: 'Register (or re-register) this session as an agent. Joins the general room and the project room for your project (created if missing). Include your provider and model so the human can see who is who. Returns your inbox summary.',
@@ -948,11 +953,11 @@ async function handleRpc(msg, ctx) {
         protocolVersion: SUPPORTED_PROTOCOLS.includes(requested) ? requested : SUPPORTED_PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'tropa', title: 'TropaAI chat', version: PKG_VERSION || '2' },
-        instructions: MCP_INSTRUCTIONS,
+        instructions: mcpInstructions(),
       });
     }
     case 'ping': return ok({});
-    case 'tools/list': return ok({ tools: TOOLS });
+    case 'tools/list': return ok({ tools: tools() });
     case 'tools/call': {
       try {
         let text = await callTool(params?.name, params?.arguments, ctx);
@@ -1019,7 +1024,7 @@ const wrap = (fn) => async (req, res) => {
   }
 };
 api.get('/state', wrap(() => ({
-  human: HUMAN_NAME,
+  human: HUMAN_NAME, human_set: !!appSetting.get.get('human'),
   rooms: q.listRooms.all(),
   agents: q.listAgents.all().map(agentView),
 })));
@@ -1587,7 +1592,10 @@ api.post('/watch/panes', wrap((req) => {
     w.approvalSince ||= {};
     if (p.state === 'approval') w.approvalSince[n] ||= Date.now(); else delete w.approvalSince[n];
     w.panes[n] = { text: String(p.text || '').slice(-8000), state: ['working', 'idle', 'approval', 'stopped'].includes(p.state) ? p.state : 'idle',
-      prompt: String(p.prompt || '').slice(0, 300), changed_at: Number(p.changed_at) || Date.now(), at: Date.now() };
+      prompt: String(p.prompt || '').slice(0, 300), changed_at: Number(p.changed_at) || Date.now(), at: Date.now(),
+      // out of credits / usage limit / rate-limited, read off the agent's screen by the watcher
+      limit: p.limit && ['credits', 'limit', 'rate'].includes(p.limit.kind)
+        ? { kind: p.limit.kind, text: String(p.limit.text || '').slice(0, 200), resets: String(p.limit.resets || '').slice(0, 60) } : null };
   }
   broadcast({ type: 'panes', room_id: roomId, panes: w.panes });
   return { ok: true };
@@ -3026,6 +3034,22 @@ api.post('/rooms/:id/start', wrap((req) => {
   host.queue.push({ ...job, log: undefined });
   for (const f of [...host.waiters]) f();
   return { job: jobView(job) };
+}));
+
+// What the team calls you (onboarding, or the "You are" box): one word agents can @mention. Saved, so it outlives
+// restarts and wins over the login name tropa started the server with; each project's watcher adopts it.
+api.post('/me', wrap((req) => {
+  const name = String(req.body?.name || '').trim().replace(/\s+/g, '-').replace(/[^A-Za-z0-9._-]/g, '');
+  if (!/^[A-Za-z][A-Za-z0-9._-]{0,29}$/.test(name)) throw new UserError('use one word that starts with a letter: letters, digits, - _ or . (for example Maria)');
+  const low = name.toLowerCase();
+  if (RESERVED.has(low) || low === 'human') throw new UserError(`"${name}" is a reserved word; pick your own name`);
+  const agentNames = [...q.listAgents.all().map((a) => a.name), ...[...watchers.values()].flatMap((w) => w.agents || [])];   // registered, and every running team's roster
+  if (agentNames.some((n) => n.toLowerCase() === low)) throw new UserError(`"${name}" is already one of your agents' names`);
+  const old = HUMAN_NAME;
+  appSetting.set.run('human', name);
+  HUMAN_NAME = name;
+  if (old !== name) broadcast({ type: 'human', human: name, old });
+  return { human: name, old };
 }));
 
 // "Fix the team": the host helper restarts whatever died in a running team (the watcher, crashed or missing agents),
