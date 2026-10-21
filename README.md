@@ -44,7 +44,7 @@ TropaAI starts a team of coding agents (Claude Code, Codex, OpenCode, Qwen Code 
 curl -fsSL https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.sh | bash
 ```
 
-**Windows:** paste this into PowerShell (it sets up WSL 2 and runs the same installer there; details in [Windows](#windows)):
+**Windows:** download **[TropaAI-Setup.cmd](https://github.com/makmac213/tropa-ai/blob/main/TropaAI-Setup.cmd)** (click the ⤓ *Download raw file* button on that page) and double-click it. Or paste this into PowerShell. Either way it sets up WSL 2 and Ubuntu for you; details in [Windows](#windows):
 
 ```powershell
 irm https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.ps1 | iex
@@ -911,39 +911,36 @@ tropa runs on Windows inside **WSL 2** (the Windows Subsystem for Linux). The ag
 
 ### Install
 
-Open **PowerShell** (you don't need administrator rights unless WSL itself is missing) and run:
+**The easy way:** download **[TropaAI-Setup.cmd](https://github.com/makmac213/tropa-ai/blob/main/TropaAI-Setup.cmd)** (the ⤓ *Download raw file* button on that page) and double-click it. If Windows shows *"Windows protected your PC"*, click **More info → Run anyway**: the file only downloads and runs the PowerShell installer below.
+
+**Or** open **PowerShell** (Start menu → type *PowerShell*) and paste:
 
 ```powershell
 irm https://raw.githubusercontent.com/makmac213/tropa-ai/main/install.ps1 | iex
 ```
 
-The installer:
-1. **Checks for WSL 2 and a Linux distribution.** If there's none, it offers to install Ubuntu. Windows may then ask for a restart. Afterwards, open **Ubuntu** from the Start menu once to create your Linux user, and run the installer again.
-2. **Installs `tmux`, `python3`, `curl` and `git`** in Ubuntu. sudo asks for your *Linux* password.
-3. **Checks for a way to run the chat server:** Docker Desktop with WSL integration turned on (*Settings → Resources → WSL integration*), or Node.js 22.13+. If neither is there, it offers to install Node.js 22.
-4. **Installs tropa inside WSL** with the normal Linux installer.
-5. **Adds a `tropa` command to Windows** (`%LOCALAPPDATA%\tropa\bin\tropa.cmd`) that runs tropa in WSL, so `tropa server up` also works from PowerShell or CMD.
+You don't need to know anything about Linux. Setup walks you through 4 steps and says what it's doing at each one:
+
+1. **Turns on WSL and sets up Ubuntu.** If WSL is off, Windows asks for permission once (click **Yes**). If Windows needs a restart, setup asks first and **carries on by itself after the restart**. It then installs Ubuntu and opens it so you can pick a Linux user name and password, telling you exactly what to type; it waits for you and continues.
+2. **Adds the Linux tools TropaAI needs** (`tmux`, `python3`, `curl`, `git`). No password to type.
+3. **Installs TropaAI** with the normal installer inside Ubuntu, which also adds **Node.js** and **an AI agent** (you pick Claude Code, OpenCode, or both), and opens TropaAI in your browser.
+4. **Adds TropaAI shortcuts** to your Desktop and Start menu, offers to start TropaAI when you sign in to Windows, and **offers to sign you in to your AI agent** right there.
+
+If something goes wrong, setup says what to do in plain words (for example, when virtualization is turned off in your computer's settings), and keeps a log at `%TEMP%\tropa-install.log` to send if you need help.
 
 | Option (set before running) | Meaning |
 |---|---|
 | `$env:TROPA_DISTRO = "Ubuntu-24.04"` | Which WSL distribution to use (default: `Ubuntu`, else your default one) |
 | `$env:TROPA_VERSION = "0.4.0"` | Install a specific version |
-| `$env:TROPA_NO_SHIM = "1"` | Don't add the Windows `tropa` command |
-| `$env:TROPA_YES = "1"` | Answer yes to every question |
+| `$env:TROPA_NO_SHIM = "1"` | Don't add the Windows `tropa` command or the shortcuts |
+| `$env:TROPA_YES = "1"` | Answer yes to every question (and skip the sign-in, which needs you) |
 
-### Then
+### Every day
 
-1. **Install an agent CLI in Ubuntu** (open the *Ubuntu* app, or run `wsl`) and sign in once:
-   ```bash
-   curl -fsSL https://claude.ai/install.sh | bash      # Claude Code
-   curl -fsSL https://opencode.ai/install | bash        # OpenCode
-   npm install -g @openai/codex                         # Codex (needs Node)
-   npm install -g @qwen-code/qwen-code                  # Qwen Code (needs Node)
-   npm install -g @google/gemini-cli                    # Gemini CLI (needs Node)
-   ```
-   If `npm install -g` reports a permissions error, run `npm config set prefix ~/.local` once, then try again.
-2. **Start TropaAI:** the installer already did, and opened your Windows browser. Next time run `tropa start` (from Ubuntu or PowerShell).
-3. **Create a project** with **＋ New project** at **http://localhost:8888**.
+- **Start TropaAI:** double-click **TropaAI** on your Desktop (or in the Start menu). It opens at **http://localhost:8888**.
+- **Create a project** with **＋ New project** in the browser.
+- **More agents:** Codex, Qwen Code and Gemini CLI work too. Open **Ubuntu** from the Start menu and install them there (the Setup page in the browser shows the commands), then sign in once.
+- **From a terminal:** the `tropa` command works in PowerShell, CMD and Ubuntu (`tropa start`, `tropa stop`).
 
 ### Good to know
 
@@ -955,7 +952,7 @@ The installer:
 - **Public links (ngrok)** and **usage** work the same as on Linux. Install ngrok inside Ubuntu (`sudo snap install ngrok`, or see ngrok.com/download).
 - **Line endings:** the repo's `.gitattributes` keeps scripts LF, so cloning it on Windows doesn't break them.
 
-**Uninstall:** in Ubuntu, follow [Update and uninstall](#update-and-uninstall). On Windows, delete `%LOCALAPPDATA%\tropa` and remove it from your user PATH.
+**Uninstall:** in Ubuntu, follow [Update and uninstall](#update-and-uninstall). On Windows, delete `%LOCALAPPDATA%\tropa`, remove it from your user PATH, and delete the **TropaAI** shortcuts (Desktop, Start menu, and `shell:startup` if you chose to start it at sign-in).
 
 ---
 
