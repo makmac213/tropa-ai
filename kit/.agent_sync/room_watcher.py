@@ -439,7 +439,7 @@ class Watcher:
         r = http(self.cfg, "/watch/poll", {"room": self.cfg["room"], "agents": agents,
                                            "tmux_session": self.cfg["tmux_session"],
                                            "settings": local, "settings_changed": changed,
-                                           "timeout": timeout, "caps": ["rename_agent"]}, timeout=timeout + 10)
+                                           "timeout": timeout, "caps": ["rename_agent", "keys"]}, timeout=timeout + 10)
         server = routing(r.get("settings") or {})
         if changed:
             log(f"pushed settings to TropaAI: {local}")
@@ -508,6 +508,22 @@ class Watcher:
             self.write_plan(ev); return
         if ev.get("type") == "restart":
             self.restart(a or str(ev.get("agent", ""))); return
+        if ev.get("type") == "keys":   # the human typing into the agent's terminal from the Team view
+            if not a:
+                say(self.cfg, f"@{self.cfg['human']} no running agent named `{ev.get('agent')}`; nothing typed."); return
+            keys = [k for k in ev.get("keys") or [] if re.fullmatch(r"Enter|Escape|Up|Down|Left|Right|Tab|BTab|Space|BSpace|C-c|[0-9yn]", str(k))]
+            text = re.sub(r"[\x00-\x1f\x7f]", "", str(ev.get("text") or ""))[:4000]
+            if keys:
+                press(self.cfg, a, keys)
+            if text:
+                if ev.get("enter", True):
+                    type_into(self.cfg, a, text)
+                else:
+                    subprocess.run(["tmux", "send-keys", "-t", f"{self.cfg['tmux_session']}:{a}", "-l", text], check=False)
+            log(f"typed into {a}: {' '.join(keys + ([repr(text[:60])] if text else []))}")
+            self.alerted.pop(a, None)   # a question it was stuck on may be answered now
+            self.last_capture = 0       # show the new screen right away
+            return
         if ev.get("type") == "wake":
             if not a:
                 return

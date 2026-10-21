@@ -143,6 +143,37 @@
   header .search { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; width: 200px; }
   .menu-btn { display: none; background: none; border: 0; font-size: 20px; cursor: pointer; }
   .msgs { flex: 1; overflow-y: auto; padding: 12px 0 8px; }
+  /* chat side panel: background tasks, files shared, docs mentioned (4/5 chat, 1/5 panel) */
+  .chatrow { flex: 1; min-height: 0; display: flex; }
+  .chatrow:has(> .msgs[hidden]) { display: none; }
+  .chatrow > .msgs { flex: 4 1 0; min-width: 0; }
+  .rside { flex: 1 1 0; min-width: 230px; max-width: 360px; border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 4px 0 14px; font-size: 13px; }
+  .rside[hidden] { display: none; }
+  .rside.off { flex: none; min-width: 0; width: 30px; padding: 6px 0; overflow: hidden; }
+  .rside.off > :not(.rs-top) { display: none; } .rside.off .rs-top { padding: 4px 0; justify-content: center; } .rside.off .rs-top span { display: none; }
+  .rs-top { display: flex; align-items: center; padding: 10px 10px 4px 14px; font-weight: 600; font-size: 13px; }
+  .rs-top button { margin-left: auto; background: none; border: 0; color: var(--muted); font-size: 15px; cursor: pointer; padding: 0 4px; }
+  .rs-top button:hover { color: var(--text); }
+  .rside details { border-bottom: 1px solid var(--line); padding: 2px 0 8px; }
+  .rside summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 10px 14px 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .rside summary::-webkit-details-marker { display: none; }
+  .rside summary::before { content: '▾'; font-size: 10px; } .rside details:not([open]) summary::before { content: '▸'; }
+  .rside summary .n { margin-left: auto; background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 0 7px; font-size: 10.5px; letter-spacing: 0; }
+  .rs-empty { padding: 2px 14px 4px; color: var(--muted); font-size: 12px; }
+  .rs-item { display: flex; gap: 9px; align-items: flex-start; padding: 6px 14px; cursor: pointer; color: var(--text); text-decoration: none; }
+  .rs-item:hover { background: var(--panel2); }
+  .rs-item .dot { margin-top: 6px; }
+  .rs-item .bd { min-width: 0; flex: 1; }
+  .rs-item .t { display: flex; gap: 6px; align-items: baseline; min-width: 0; } .rs-item .t b { font-weight: 600; }
+  .rs-item .t .lab { color: var(--run); font-size: 12px; white-space: nowrap; }
+  .rs-item .s { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rs-item .ic { width: 34px; height: 34px; flex: none; border-radius: 6px; background: var(--panel2); border: 1px solid var(--line); display: grid; place-items: center; font-size: 16px; overflow: hidden; }
+  .rs-item .ic img { width: 100%; height: 100%; object-fit: cover; }
+  .rs-item .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  .rs-item .go { color: var(--muted); font-size: 12px; margin-left: auto; padding: 0 2px; opacity: 0; background: none; border: 0; cursor: pointer; } .rs-item:hover .go { opacity: 1; }
+  .rs-item.missing { opacity: .55; cursor: default; }
+  .msgs.blurred ~ .rside .ic img, .msgs.blurred ~ .rside .bd { filter: blur(6px); }   /* /blur covers the panel too */
+  @media (max-width: 1100px) { .rside { display: none; } }
   .empty { color: var(--muted); text-align: center; margin-top: 18vh; padding: 0 20px; }
   .empty code { background: var(--code); padding: 2px 6px; border-radius: 4px; }
   .day { text-align: center; color: var(--muted); font-size: 12px; margin: 14px 0 6px; }
@@ -515,6 +546,12 @@
   .card .ago { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
   .card .appr { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 7px 10px; background: var(--mention); border-bottom: 1px solid var(--line); font-size: 12.5px; }
   .card .appr span { flex: 1 1 160px; min-width: 0; }
+  .card .term { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--line); background: var(--panel2); }
+  .card .term button { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 5px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; min-width: 26px; padding: 2px 6px; cursor: pointer; }
+  .card .term button:hover { border-color: var(--accent); } .card .term button.sent { background: var(--accent-weak); border-color: var(--accent); }
+  .card .term button.cc { color: var(--danger); }
+  .card .term input { flex: 1 1 140px; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 5px; color: var(--text); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 4px 7px; }
+  .card .term .old { font-size: 12px; color: var(--muted); }
   .card pre.screen { margin: 0; padding: 8px 10px; height: 260px; overflow: auto; background: var(--code); font: 11.5px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; color: var(--text); }
   .team .empty { margin-top: 10vh; }
   /* attachments */
@@ -773,7 +810,7 @@
       <button class="dl-btn" id="teamBtn" hidden title="See every agent's screen live">▦ Team</button>
       <input class="search" id="search" placeholder="Search…">
     </header>
-    <div class="msgs" id="msgs"></div>
+    <div class="chatrow" id="chatRow"><div class="msgs" id="msgs"></div><aside class="rside" id="rside" hidden aria-label="Background tasks, files and docs"></aside></div>
     <div class="team" id="team" hidden></div>
     <div class="usage" id="usage" hidden></div>
     <div class="tasks" id="tasks" hidden></div>
@@ -1189,6 +1226,7 @@
         <button class="x" data-edit-agent="${esc(a.name)}" title="Edit agent">✎</button>
         <button class="x" style="margin-left:0" data-del-agent="${esc(a.name)}" title="Remove agent (click twice): stops it and moves its folder to agents/.removed/">×</button>
       </div>`).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">${scoped ? `No agents in ${esc(proj)} yet` : 'No agents yet'}</span></div>`;
+    renderRside();   // background tasks follow the same pane and status updates
   }
 
   // ---------- messages ----------
@@ -1292,6 +1330,7 @@
     return null;
   }
   function renderMessages({ keepScroll = false, stick = true } = {}) {
+    renderRside();   // new messages can mention docs; search hides the panel
     if (state.searching) { $('#msgs').hidden = false; $('#team').hidden = true; $('#usage').hidden = true; $('#tasks').hidden = true; $('#composer').hidden = false; }
     const box = $('#msgs');
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
@@ -1430,6 +1469,7 @@
         const a = e.attachment; let hit = false;
         for (const arr of state.messages.values()) for (const m of arr) if (m.id === a.message_id) { m.attachments = (m.attachments || []).map((x) => (x.id === a.id ? a : x)); hit = true; }
         if (hit) renderMessages({ stick: false });
+        if (a.room_id) { addFiles(a.room_id, [a]); if (a.room_id === state.current) renderRside(); }
       }
       else if (e.type === 'question') {
         const i = state.questions.findIndex((x) => x.id === e.question.id);
@@ -1497,6 +1537,7 @@
       const arr = state.messages.get(key);
       if (arr && !arr.some((x) => x.id === m.id)) arr.push(m);
     }
+    if (m.attachments?.length) addFiles(m.room_id, m.attachments.map((a) => ({ ...a, message_id: m.id, created_at: a.created_at || m.created_at })));
     const r = state.rooms.find((x) => x.id === m.room_id);
     if (r) { r.last_message_id = m.id; r.message_count = (r.message_count || 0) + 1; }
     const visible = !state.searching && (state.current === m.room_id || state.current === ALL);
@@ -1924,8 +1965,45 @@
         <button class="tbtn" data-approve="${esc(name)}" data-act="yes">Approve</button>
         <button class="tbtn" data-approve="${esc(name)}" data-act="always" title="Yes, and don't ask again this session">Always</button>
         <button class="tbtn warn" data-approve="${esc(name)}" data-act="no">Deny</button></div>` : ''}
-      <pre class="screen">${esc(p.text || '(no screen yet)')}</pre></div>`;
+      <pre class="screen">${esc(p.text || '(no screen yet)')}</pre>${termBar(name, t)}</div>`;
   }
+  // type into the agent's terminal: answer a menu or question its CLI is showing (the watcher sends it with tmux send-keys)
+  const TERM_KEYS = [['Up', '↑', 'Up arrow'], ['Down', '↓', 'Down arrow'], ['Enter', '⏎', 'Enter'], ['Escape', 'Esc', 'Escape'], ['Tab', 'Tab', 'Tab'],
+    ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['y', 'y'], ['n', 'n'], ['C-c', '^C', 'Ctrl+C: interrupts what the agent is doing']];
+  state.termDraft = {};
+  function termBar(name, t) {
+    if (!t.watching) return '';
+    if (!(t.caps || []).includes('keys')) return `<div class="term"><span class="old">To type into this terminal from here, run <code>tropa update</code> in the project folder.</span></div>`;
+    return `<div class="term" data-term="${esc(name)}">${TERM_KEYS.map(([k, l, tip]) => `<button type="button" class="${k === 'C-c' ? 'cc' : ''}" data-tkey="${esc(k)}" title="Send ${esc(tip || k)} to ${esc(name)}">${esc(l)}</button>`).join('')}
+      <input data-term-in="${esc(name)}" value="${esc(state.termDraft[name] || '')}" placeholder="Type to ${esc(name)}… Enter sends" autocomplete="off" spellcheck="false" title="Typed into ${esc(name)}'s terminal, then Enter. Empty + Enter just presses Enter."></div>`;
+  }
+  // re-rendering a card replaces its input: keep the cursor in it while you type
+  function keepTermFocus(fn) {
+    const el = document.activeElement?.dataset?.termIn !== undefined ? document.activeElement : null;
+    const at = el ? [el.dataset.termIn, el.selectionStart, el.selectionEnd] : null;
+    fn();
+    if (at) { const i = document.querySelector(`[data-term-in="${CSS.escape(at[0])}"]`); if (i && i !== document.activeElement) { i.focus(); i.setSelectionRange(at[1], at[2]); } }
+  }
+  async function sendTerm(name, body, btn) {
+    try {
+      await api(`/rooms/${encodeURIComponent(state.current)}/agents/${encodeURIComponent(name)}/keys`, { method: 'POST', body });
+      if (btn) { btn.classList.add('sent'); setTimeout(() => btn.classList.remove('sent'), 500); }
+      return true;
+    } catch (err) { alertInline(err.message); return false; }
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.term [data-tkey]'); if (!b) return;
+    const name = b.closest('[data-term]').dataset.term, k = b.dataset.tkey;
+    if (k === 'C-c' && !confirm(`Send Ctrl+C to ${name}? It interrupts what ${name} is doing right now.`)) return;
+    sendTerm(name, { keys: [k] }, b);
+  });
+  document.addEventListener('input', (e) => { const n = e.target.dataset?.termIn; if (n !== undefined) state.termDraft[n] = e.target.value; });
+  document.addEventListener('keydown', async (e) => {
+    const n = e.target.dataset?.termIn; if (n === undefined || e.key !== 'Enter' || e.isComposing) return;
+    e.preventDefault();
+    const text = e.target.value;
+    if (await sendTerm(n, text ? { text } : { keys: ['Enter'] })) { e.target.value = ''; state.termDraft[n] = ''; }
+  });
   // ---- graph layout ----
   function graphSelected(t) {
     const names = t.agents || [];
@@ -2009,7 +2087,7 @@
       if (el.textContent !== sub) el.textContent = sub;
     }
     const name = graphSelected(t), p = t.panes?.[name], card = side.querySelector('[data-card]');
-    if (!card || card.dataset.card !== name || !p || !card.classList.contains('s-' + p.state)) { side.innerHTML = cardHtml(name, t); const pre = side.querySelector('pre.screen'); if (pre) pre.scrollTop = pre.scrollHeight; return; }
+    if (!card || card.dataset.card !== name || !p || !card.classList.contains('s-' + p.state)) { keepTermFocus(() => { side.innerHTML = cardHtml(name, t); }); const pre = side.querySelector('pre.screen'); if (pre) pre.scrollTop = pre.scrollHeight; return; }
     const pre = card.querySelector('pre.screen'); const stick = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 24;
     if (pre.textContent !== p.text) { pre.textContent = p.text || '(no screen yet)'; if (stick) pre.scrollTop = pre.scrollHeight; }
     const ago = card.querySelector('.ago'); ago.dataset.ago = p.changed_at || 0; ago.textContent = agoText(p.changed_at);
@@ -2059,7 +2137,7 @@
     state.teamFilter = e.target.value.trim();
     renderTeam();
   });
-  function renderTeam() { keepFilterFocus(renderTeamNow); }
+  function renderTeam() { keepTermFocus(() => keepFilterFocus(renderTeamNow)); }
   function renderTeamNow() {
     const el = $('#team'); const t = state.team[state.current];
     if (!t) { el.innerHTML = '<div class="empty">Loading…</div>'; return; }
@@ -2100,7 +2178,7 @@
       if (!card.classList.contains('s-' + p.state)) {   // state changed: rebuild this card (approval buttons etc.)
         const pre = card.querySelector('pre.screen'); const top = pre?.scrollTop;
         const stick = pre ? pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 24 : true;
-        card.outerHTML = cardHtml(n, t);
+        keepTermFocus(() => { card.outerHTML = cardHtml(n, t); });
         const np = document.querySelector(`#team [data-card="${CSS.escape(n)}"] pre.screen`);
         if (np) np.scrollTop = stick ? np.scrollHeight : top;
         continue;
@@ -2190,6 +2268,7 @@
   function docsChanged(d) {
     const prev = state.docs[d.room_id];
     state.docs[d.room_id] = d;
+    if (d.room_id === state.current) renderRside();
     if (d.room_id !== state.current || state.view !== 'docs' || $('#docs').hidden) return;
     const open = state.docOpen[d.room_id];
     const was = prev?.tree?.find((f) => f.path === open), now = d.tree.find((f) => f.path === open);
@@ -2307,6 +2386,97 @@
       }
     }
   }
+  // ---- chat side panel: background tasks, files shared, docs mentioned ----
+  state.files = {}; state.docsAsked = {};
+  async function loadFiles(room) {
+    try { state.files[room] = await api(`/rooms/${encodeURIComponent(room)}/files?limit=300`); } catch { state.files[room] = []; }
+    if (room === state.current) renderRside();
+  }
+  function addFiles(room, atts) {
+    const list = state.files[room]; if (!list || !atts?.length) return;
+    for (const a of atts) { const i = list.findIndex((x) => x.id === a.id); if (i >= 0) list[i] = { ...list[i], ...a }; else list.unshift(a); }
+  }
+  // paths like docs/plans/x.md that people and agents mention; the ones in the docs folder open in the Docs view
+  function docsMentioned(room) {
+    const d = state.docs[room]; if (!d) return [];
+    const dir = String(d.dir || 'docs').replace(/\/+$/, '');
+    const have = new Set((d.tree || []).map((f) => f.path));
+    const seen = new Map();
+    const re = /(?:^|[\s`'"(\[<*])((?:\.\/)?(?:[\w@.+-]+\/)*[\w@+-][\w@.+-]*\.[A-Za-z][A-Za-z0-9]{0,7})(?=$|[\s`'")\]>*,;:!?]|\.(?:\s|$))/g;
+    for (const m of state.messages.get(room) || []) {
+      if (m.sender_kind === 'system') continue;
+      for (const hit of String(m.content || '').matchAll(re)) {
+        let p = hit[1].replace(/^\.\//, '');
+        const underDir = p.startsWith(dir + '/');
+        if (underDir) p = p.slice(dir.length + 1);
+        if (p.startsWith('attachments/') || (!underDir && !have.has(p))) continue;   // shared files are listed above
+        const e = seen.get(p) || { path: p, who: new Set(), count: 0, last: 0, at: 0 };
+        e.who.add(m.sender); e.count++; e.last = m.id; e.at = m.created_at; seen.set(p, e);
+      }
+    }
+    return [...seen.values()].map((e) => ({ ...e, exists: have.has(e.path) })).sort((a, b) => b.last - a.last).slice(0, 20);
+  }
+  const rsOpen = (k) => localGet('airc.rs.' + k) !== 'closed';
+  let rsLast = '';
+  function renderRside() {
+    const el = $('#rside'); if (!el) return;
+    const room = state.current, proj = projectOf(room);
+    if (room === ALL || room === USAGE || state.searching) { el.hidden = true; rsLast = ''; return; }
+    el.hidden = false;
+    const off = localGet('airc.rside') === 'off';
+    el.classList.toggle('off', off);
+    if (state.files[room] === undefined) { state.files[room] = null; loadFiles(room); }
+    if (proj && state.docs[room] === undefined && !state.docsAsked[room]) { state.docsAsked[room] = true; loadDocs(room).then(() => { if (room === state.current) renderRside(); }); }
+    const sec = (key, title, n, body) => `<details data-rs="${key}" ${rsOpen(key) ? 'open' : ''}><summary>${title}${n ? `<span class="n">${n}</span>` : ''}</summary>${body}</details>`;
+    let html = `<div class="rs-top"><span>Room</span><button type="button" data-rs-toggle title="${off ? 'Show' : 'Hide'} this panel">${off ? '⟨' : '⟩'}</button></div>`;
+    if (proj) {
+      const t = state.team[room];
+      const rows = (t?.agents || []).map((n) => ({ n, p: t.panes?.[n], bg: bgTasks(t.panes?.[n]) })).filter((x) => x.bg);
+      const body = !t?.watching ? `<div class="rs-empty">The team isn't running.</div>`
+        : !rows.length ? `<div class="rs-empty">No agent is running a background task.</div>`
+        : rows.map(({ n, p, bg }) => {
+          const a = state.agents.find((x) => x.name.toLowerCase() === n.toLowerCase());
+          const how = p.state === 'working' ? 'working' : p.state === 'approval' ? 'needs approval' : (agoText(p.changed_at) || 'idle').replace('quiet', 'idle');
+          return `<div class="rs-item" data-rs-agent="${esc(n)}" title="Open ${esc(n)}'s terminal in the Team view"><span class="dot ${p.state === 'working' ? 'busy' : p.state === 'approval' ? 'wait' : 'bg'}"></span>
+            <div class="bd"><div class="t"><b>${esc(n)}</b><span class="lab">${esc(bg)}</span></div><div class="s">${esc(how)}${a?.status ? ` · “${esc(a.status)}”` : ''}</div></div><span class="go">▦</span></div>`;
+        }).join('');
+      html += sec('bg', 'Background tasks', rows.length ? `${rows.length} running` : '', body);
+    }
+    const files = state.files[room];
+    html += sec('files', 'Files shared', files?.length || '', files === null ? '<div class="rs-empty">Loading…</div>' : !files?.length ? '<div class="rs-empty">No files shared in this room yet. Drop or paste one into the chat.</div>'
+      : files.slice(0, 60).map((a) => `<a class="rs-item" href="${a.stored ? a.url : '#'}" target="_blank" rel="noopener" title="${esc(a.stored ? `Open ${a.name}` : 'Still uploading')}${a.path && proj ? ` · ${esc(a.path)}` : ''}">
+          <span class="ic">${a.is_image && a.stored ? `<img src="${a.url}" alt="" loading="lazy">` : a.stored ? fileIcon(a.mime) : '⏳'}</span>
+          <div class="bd"><span class="nm">${esc(a.name)}</span><div class="s">${esc([a.uploader, a.created_at ? fmtTime(a.created_at) : '', a.size ? fmtSize(a.size) : ''].filter(Boolean).join(' · '))}</div></div>
+          ${a.message_id ? `<button type="button" class="go" data-jump="${a.message_id}" title="Jump to the message">↪</button>` : ''}</a>`).join(''));
+    if (proj) {
+      const d = state.docs[room], docs = docsMentioned(room);
+      html += sec('docs', 'Docs mentioned', docs.length || '', !d ? '<div class="rs-empty">Loading…</div>'
+        : d.watching === false && !d.tree?.length ? `<div class="rs-empty">The team isn't running, so the docs folder can't be read.</div>`
+        : !docs.length ? `<div class="rs-empty">Files in <code>${esc(d.dir || 'docs')}/</code> mentioned in the chat show up here.</div>`
+        : docs.map((e) => `<div class="rs-item ${e.exists ? '' : 'missing'}" ${e.exists ? `data-rs-doc="${esc(e.path)}" title="Open in Docs"` : `title="Not in ${esc(d.dir || 'docs')}/ yet"`}>
+            <span class="ic">${e.exists ? (DOC_IMG.includes(docExt(e.path)) ? '🖼' : docExt(e.path) === 'pdf' ? '📕' : DOC_MD.includes(docExt(e.path)) ? '📝' : '📄') : '⏳'}</span>
+            <div class="bd"><span class="nm">${esc(e.path)}</span><div class="s">${esc([[...e.who].join(', '), e.count > 1 ? `${e.count} mentions` : '', e.exists ? (e.at ? fmtTime(e.at) : '') : 'not written yet'].filter(Boolean).join(' · '))}</div></div>
+            ${e.exists ? '<span class="go">📄</span>' : ''}</div>`).join(''));
+    }
+    if (html === rsLast) return;
+    rsLast = html;
+    const top = el.scrollTop; el.innerHTML = html; el.scrollTop = top;
+  }
+  $('#rside').addEventListener('toggle', (e) => { const k = e.target.dataset?.rs; if (k) localSet('airc.rs.' + k, e.target.open ? 'open' : 'closed'); }, true);
+  $('#rside').addEventListener('click', async (e) => {
+    if (e.target.closest('[data-rs-toggle]')) { localSet('airc.rside', localGet('airc.rside') === 'off' ? 'on' : 'off'); rsLast = ''; renderRside(); return; }
+    if (e.target.closest('[data-jump]')) { e.preventDefault(); return; }   // the global handler scrolls to the message
+    const a = e.target.closest('a.rs-item'); if (a && a.getAttribute('href') === '#') { e.preventDefault(); return; }
+    const ag = e.target.closest('[data-rs-agent]');
+    if (ag) {
+      const n = ag.dataset.rsAgent; state.graphSel = n; state.view = 'team'; localSet('airc.view', 'team'); await applyView();
+      const c = document.querySelector(`#team [data-card="${CSS.escape(n)}"]`);
+      if (c) { c.scrollIntoView({ block: 'center', behavior: 'smooth' }); c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1600); }
+      return;
+    }
+    const doc = e.target.closest('[data-rs-doc]');
+    if (doc) { const room = state.current; state.docOpen[room] = doc.dataset.rsDoc; localSet('airc.doc.' + room, doc.dataset.rsDoc); state.view = 'docs'; localSet('airc.view', 'docs'); await applyView(); }
+  });
   function openDoc(p) {
     const room = state.current;
     state.docOpen[room] = p; localSet('airc.doc.' + room, p);
