@@ -49,6 +49,18 @@ usage() { sed -n '2,28p' "$TROPA_HOME/tropa" | sed 's/^# \{0,1\}//'; }
 
 abspath() { mkdir -p "$1" && (cd "$1" && pwd -P); }
 health()  { curl -fsS --max-time 3 "http://localhost:$1/health" >/dev/null 2>&1; }
+code_build() {   # fingerprint of files under $TROPA_HOME (same recipe as the server's BUILD)
+    python3 - "$TROPA_HOME" "$@" <<'PY' 2>/dev/null
+import hashlib, os, sys
+h = hashlib.sha256()
+for f in sys.argv[2:]:
+    with open(os.path.join(sys.argv[1], f), "rb") as fh:
+        h.update(fh.read())
+print(h.hexdigest()[:12])
+PY
+}
+server_build() { curl -fsS --max-time 3 "http://localhost:$1/health" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("build",""))' 2>/dev/null; }
+host_build() { code_build host/tropa_host.py host/teams.py; }
 is_tropa_server() { curl -fsS --max-time 3 "http://localhost:$1/health" 2>/dev/null | grep -q '"wake-routing"'; }
 old_server_note() {
     echo "⚠️  Port $1 is served by an older AI-IRC (not tropa's): no Team view, wake routing or project delete."
@@ -251,8 +263,13 @@ host_start() {   # $1 port, $2 projects dir (optional)
     local port="$1" dir="${2:-${TROPA_PROJECTS_DIR:-$HOME/projects}}" s
     command -v tmux >/dev/null || { info "⚠️  tmux not installed ($(install_hint tmux)) — the host helper (create projects from chat) can't run"; return 0; }
     s=$(host_session "$port")
-    if host_running "$port"; then info "✅ Host helper running (tmux '$s', projects in $dir)"; return 0; fi
+    if host_running "$port"; then
+        if [ "$(cat "$STATE_DIR/host-$port.build" 2>/dev/null)" = "$(host_build)" ]; then info "✅ Host helper running (tmux '$s', projects in $dir)"; return 0; fi
+        info "↻ The host helper runs an older version of tropa; restarting it on the new one"
+        tmux kill-session -t "$s" 2>/dev/null; sleep 1
+    fi
     mkdir -p "$STATE_DIR"
+    host_build >"$STATE_DIR/host-$port.build"
     tmux new-session -d -s "$s" -n host \
         "python3 -u \"$TROPA_HOME/host/tropa_host.py\" --server http://localhost:$port --projects-dir \"$dir\" 2>&1 | tee -a \"$STATE_DIR/host-$port.log\"" \
         && info "🤝 Host helper started (tmux '$s') — the chat can now create projects in $dir"
@@ -282,6 +299,12 @@ cmd_host() {
 server_up() {
     local port="$1" human="$2" tts="$3" mode="$4" name i
     valid_port "$port" || die "invalid port '$port'"
+    if health "$port" && is_tropa_server "$port" && [ "$(server_build "$port")" != "$(code_build server/server.js server/public/index.html)" ]; then
+        # e.g. a Docker image built before `git pull` / self-update: it would keep serving the old code
+        info "↻ TropaAI on port $port runs an older version than this tropa; restarting it on the new one..."
+        server_down "$port" >/dev/null
+        i=0; while health "$port" && [ $i -lt 15 ]; do sleep 1; i=$((i+1)); done
+    fi
     if health "$port"; then
         if is_tropa_server "$port"; then
             info "✅ TropaAI already running on http://localhost:$port (human: @$(server_human "$port"))"

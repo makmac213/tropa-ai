@@ -19,6 +19,13 @@ const PORT = Number(process.env.PORT || 8888);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const TZ = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 const PKG_VERSION = (() => { try { return require('./package.json').version; } catch { return ''; } })();
+// a fingerprint of the code this server runs (itself and the chat page): `tropa start` compares it with the code on
+// disk and restarts a server that is older (e.g. a Docker image built before a git pull)
+const BUILD = (() => { try {
+  const h = require('node:crypto').createHash('sha256');
+  for (const f of ['server.js', 'public/index.html']) h.update(fs.readFileSync(path.join(__dirname, f)));
+  return h.digest('hex').slice(0, 12);
+} catch { return ''; } })();
 let HUMAN_NAME = process.env.HUMAN_NAME || 'human';   // replaced by the name you chose in the chat (app_settings), once there is one
 const KOKORO_URL = (process.env.KOKORO_URL || 'http://127.0.0.1:8880').replace(/\/+$/, '');
 const ONLINE_WINDOW_MS = 10 * 60 * 1000;
@@ -3170,7 +3177,7 @@ api.delete('/projects/:slug', wrap((req) => {
 
 app.use('/api', api);
 
-app.get('/health', (req, res) => res.json({ ok: true, app: 'tropa-ai', version: PKG_VERSION, features: ['team', 'wake-routing', 'project-delete', 'files', 'host', 'shares', 'usage', 'docs'] }));
+app.get('/health', (req, res) => res.json({ ok: true, app: 'tropa-ai', version: PKG_VERSION, build: BUILD, features: ['team', 'wake-routing', 'project-delete', 'files', 'host', 'shares', 'usage', 'docs'] }));
 // Markdown rendering for the docs viewer, served from node_modules (no CDN needed)
 const VENDOR = { 'marked.js': 'marked/lib/marked.umd.js', 'purify.js': 'dompurify/dist/purify.min.js' };
 app.get('/vendor/:file', (req, res) => {

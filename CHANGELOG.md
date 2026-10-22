@@ -16,6 +16,7 @@
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
 ### Updating
+- **`tropa start` restarts a chat server or host helper that runs older code than the tropa folder.** Before, after a `git pull` it said *already running* and kept the old one; with Docker, that meant the old image kept serving the old chat page. The server now reports a fingerprint of its code (`build` in `/health`), and a Docker image is rebuilt when it restarts.
 - **`tropa self-update` now restarts TropaAI on the new version.** Before, the chat server and host helper kept running the old code until they were restarted by hand, so new features (such as new ready-made teams) didn't show up. Chats, projects and running teams are kept; reload the page afterwards.
 - **`tropa restart`** restarts the chat server and host helper by hand.
 
