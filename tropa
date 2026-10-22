@@ -629,6 +629,8 @@ cmd_init() {
     [ -n "$human" ] && C set human "\"$human\""
     [ "${NEW_SETTINGS:-0}" = 1 ] && C set tmux_session "\"ai-$(C get project)\""
     if [ -n "$port" ]; then C set server "\"http://localhost:$port\""
+    elif [ "${NEW_SETTINGS:-0}" = 1 ]; then   # a new kit: the TropaAI you use (not the template's 8888)
+        port=$(default_port); C set server "\"http://localhost:$port\""
     else port=$(port_of "$dir"); port="${port:-$(default_port)}"; fi
     mkdir -p "$dir/$(C get docs_dir)"
 
@@ -674,6 +676,12 @@ if reg.get(slug) != root:
     with open(path, "w") as f:
         json.dump(reg, f, indent=1)
 PYREG
+    info "  🔗 linked to room $(C get room) on http://localhost:$port"
+    if ! health "$port"; then   # linked to a TropaAI that isn't running: probably the wrong port
+        local p up=""
+        for p in $(known_ports); do [ "$p" != "$port" ] && health "$p" && { up=$p; break; }; done
+        [ -n "$up" ] && info "  ⚠️  TropaAI isn't running on port $port, but it is on $up. To link this folder there: tropa update -p $up"
+    fi
     # a watcher that is already running keeps the old scripts in memory: restart it on the new ones
     local ts; ts=$(C get tmux_session)
     if command -v tmux >/dev/null 2>&1 && tmux list-windows -t "$ts" -F '#{window_name}' 2>/dev/null | grep -qx watcher; then

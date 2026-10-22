@@ -985,9 +985,19 @@ class Host:
     # ---------- add_agent: a new teammate for a running project ----------
     def project_root(self, slug):
         """The folder of the project whose room is project:<slug> (projects this helper set up, then the projects folder)."""
+        kit = lambda r: bool(r) and os.path.isfile(os.path.join(r, ".agent_sync", "settings.json"))
         r = self.registry().get(slug)
-        if r and os.path.isfile(os.path.join(r, ".agent_sync", "settings.json")):
+        if kit(r):
             return r
+        # registered by `tropa update` for another port (the folder's settings may name another server)
+        for f in sorted(glob.glob(os.path.expanduser("~/.tropa/projects-*.json"))):
+            try:
+                r = json.load(open(f)).get(slug)
+            except (OSError, ValueError, AttributeError):
+                continue
+            if kit(r):
+                self.remember(slug, r)
+                return r
         for d in sorted(glob.glob(os.path.join(self.projects_dir, "*", ".agent_sync", "settings.json"))):
             root = os.path.dirname(os.path.dirname(d))
             try:
@@ -996,7 +1006,21 @@ class Host:
                 continue
             if slugify(st.get("project") or os.path.basename(root)) == slug:
                 return root
+        self._elsewhere_at = 0   # a team folder anywhere in your home (fresh scan: it may have just been set up)
+        for f in self.elsewhere():
+            if f["kit"] and f["slug"] == slug:
+                self.remember(slug, f["path"])
+                return f["path"]
         return None
+
+    def no_root(self, slug):
+        """What to tell the human when a room has no team folder on this machine."""
+        near = os.path.join(self.projects_dir, slug)
+        where = f"`{near}` exists but has no team kit" if os.path.isdir(near) and not os.path.isdir(os.path.join(near, ".agent_sync")) \
+            else "no folder on this computer is linked to it yet"
+        return (f"This room has no team folder: {where}. To use a folder you already have, run this in it: "
+                f"`tropa update --project {slug} -p {self.port}` (it links the folder to this room), then try again. "
+                f"Or set up a team from the chat: ＋ New project → *A folder I already have*.")
 
     def add_agent(self, job):
         slug, a = job["slug"], job["agent"]
@@ -1288,7 +1312,7 @@ class Host:
         slug = job["slug"]
         root = self.project_root(slug)
         if not root:
-            raise RuntimeError(f"I can't find the folder for `{slug}`. Run `tropa update` in that folder once (it registers it), then try again.")
+            raise RuntimeError(self.no_root(slug))
         res = self.heal(slug, root, force=True)
         if res is None:
             self.report(job, "🩺 The team wasn't running, so I'm starting it.", status="running")
@@ -1301,8 +1325,12 @@ class Host:
         slug = job["slug"]
         root = self.project_root(slug)
         if not root:
-            raise RuntimeError(f"I can't find the folder for `{slug}`. Run `tropa update` in that folder once (it registers it), then try again.")
+            raise RuntimeError(self.no_root(slug))
         session = self.cfg(root, "tmux_session")
+        cur = self.cfg(root, "server").rstrip("/")
+        if cur != self.server:   # e.g. set up with the template's port 8888: the team belongs to the TropaAI that starts it
+            self.setc(root, "server", self.server)
+            self.report(job, f"🔗 This folder was linked to {cur or 'no server'}; it now talks to this TropaAI ({self.server}).")
         self.report(job, f"▶ Starting the team in `{root}`…")
         self.run([os.path.join(root, ".agent_sync", "start_agent.sh"), "--all"])
         w = self.ensure_watcher(root, session)

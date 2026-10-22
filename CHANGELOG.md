@@ -15,6 +15,13 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Rooms and their folders
+- **"Couldn't start the team: I can't find the folder" is fixed for folders outside `~/projects`.**
+  - **Where the host helper now looks:** the project lists of every port (`~/.tropa/projects-*.json`) and team folders anywhere in your home, not only its own port's list and `~/projects`.
+  - **When nothing is found**, the message names the exact command to link a folder to the room: `tropa update --project <room> -p <port>`. It also points to ＋ New project → *A folder I already have*.
+- **`tropa update` in a folder without a team kit** links it to the TropaAI you use, not the template's port 8888. It prints the room and server it linked to, and warns when that port isn't running but another one is.
+- **Pressing Start in a room** re-points a folder linked to another port at this TropaAI, so the room sees the team.
+
 ### Skills in the chat
 - **🧩 Skills** in every project room, in Simple and Advanced mode. It lists the team's skills, who gets each one and which come with tropa.
 - **Add, edit, import or remove skills there:** a name, when to use it, who gets it (everyone or picked agents) and the instructions. **Import SKILL.md** fills the form from a file you already have.
