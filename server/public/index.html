@@ -204,7 +204,13 @@
   .rs-ask { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .rs-ask .s { white-space: normal; }
   /* chat side panel: background tasks, files shared, docs mentioned (4/5 chat, 1/5 panel) */
-  .chatrow { flex: 1; min-height: 0; display: flex; }
+  .chatrow { flex: 1; min-height: 0; display: flex; position: relative; }
+  .newmsgs { position: absolute; bottom: 12px; transform: translateX(-50%); z-index: 5; border: 0; border-radius: 999px; padding: 5px 14px; font-size: 12.5px; font-weight: 600;
+    background: var(--fill-accent); color: var(--on-accent); box-shadow: 0 4px 14px var(--shadow); cursor: pointer; }
+  .newmsgs[hidden] { display: none; }
+  .hint-row { display: flex; align-items: baseline; gap: 10px; } .hint-row .hint { flex: 1; min-width: 0; }
+  .as-btn { background: none; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; padding: 1px 9px; cursor: pointer; white-space: nowrap; margin-top: 6px; }
+  .as-btn:hover { color: var(--text); } .as-btn.off { color: var(--human); border-color: var(--human); }
   .chatrow:has(> .msgs[hidden]) { display: none; }
   .chatrow > .msgs { flex: 4 1 0; min-width: 0; }
   .rside { flex: 1 1 0; min-width: 230px; max-width: 360px; border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 4px 0 14px; font-size: 13px; }
@@ -332,6 +338,25 @@
   dialog .btns .primary { background: var(--fill-accent); border-color: var(--fill-accent); color: var(--on-accent); }
   #settingsDlg { width: min(460px, 94vw); }
   #shareDlg { width: min(480px, 94vw); }
+  #skillsDlg { width: min(760px, 95vw); max-height: 90vh; padding: 0; }
+  #skillsDlg .sk-wrap { padding: 20px 22px; overflow: auto; max-height: 90vh; }
+  #skillsDlg .sk-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; } #skillsDlg .sk-top h3 { margin: 0; flex: 1; }
+  #skillsDlg .sk-lead { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  #skillsDlg .sk-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+  #skillsDlg .sk-row .sk-main { flex: 1; min-width: 0; }
+  #skillsDlg .sk-row b { font-family: ui-monospace, monospace; font-size: 13px; }
+  #skillsDlg .sk-row .sk-for { font-size: 12px; color: var(--muted); margin-left: 6px; }
+  #skillsDlg .sk-row .sk-d { font-size: 13px; color: var(--muted); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #skillsDlg .sk-tag { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px; color: var(--muted); }
+  #skillsDlg .sk-acts { display: flex; gap: 6px; flex-shrink: 0; }
+  #skillsDlg label.f { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 4px; } #skillsDlg label.f small { font-weight: 400; }
+  #skillsDlg textarea, #skillsDlg input[type=text] { width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin: 0; color: var(--text); font: inherit; }
+  #skillsDlg textarea.sk-body { font-family: ui-monospace, monospace; font-size: 12.5px; min-height: 240px; resize: vertical; }
+  #skillsDlg .sk-who { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+  #skillsDlg .sk-who label { display: inline-flex; gap: 6px; align-items: center; }
+  #skillsDlg .sk-who input { width: auto; margin: 0; }
+  #skillsDlg .sk-foot { display: flex; align-items: center; gap: 8px; margin-top: 16px; } #skillsDlg .sk-foot .err { flex: 1; color: var(--danger); font-size: 12.5px; }
+  #skillsDlg .sk-note { background: var(--mention); border-left: 3px solid var(--human); padding: 8px 10px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
   #shareDlg .sh-row { display: flex; gap: 8px; align-items: flex-start; }
   #shareDlg .sh-row input, #shareDlg .sh-row select { height: 36px; }
   #shareDlg .sh-row > div { flex: 1; }
@@ -888,11 +913,12 @@
       <button class="dl-btn a-btn" id="attnBtn" hidden title="Work that looks stuck">⚠ Attention</button>
       <button class="dl-btn" id="docsBtn" hidden title="Browse the project's docs folder">📄 Docs</button>
       <button class="dl-btn" id="tasksBtn" hidden title="The team's task board">✓ Tasks</button>
+      <button class="dl-btn" id="skillsBtn" hidden title="How-tos your agents load when a task matches: add, edit or remove them">🧩 Skills</button>
       <button class="dl-btn" id="usageBtn" hidden title="Tokens and API-equivalent cost for this project">📊 Usage</button>
       <button class="dl-btn" id="teamBtn" hidden title="See every agent's screen live">▦ Team</button>
       <input class="search" id="search" placeholder="Search…">
     </header>
-    <div class="chatrow" id="chatRow"><div class="msgs" id="msgs"></div><aside class="rside" id="rside" hidden aria-label="Background tasks, files and docs"></aside></div>
+    <div class="chatrow" id="chatRow"><div class="msgs" id="msgs"></div><button type="button" class="newmsgs" id="newMsgs" hidden>↓ New messages</button><aside class="rside" id="rside" hidden aria-label="Background tasks, files and docs"></aside></div>
     <div class="team" id="team" hidden></div>
     <div class="usage" id="usage" hidden></div>
     <div class="tasks" id="tasks" hidden></div>
@@ -910,7 +936,8 @@
         <textarea id="input" rows="1" placeholder="Message #general  —  @agent to mention"></textarea>
         <button class="send" id="sendBtn">Send</button>
       </div>
-      <div class="hint">Enter to send · Shift+Enter for new line · @name mentions an agent · 📎 drop or paste files · /help for commands</div>
+      <div class="hint-row"><div class="hint">Enter to send · Shift+Enter for new line · @name mentions an agent · 📎 drop or paste files · /help for commands</div>
+        <button type="button" class="as-btn" id="asBtn" title="Follow new messages when you're at the bottom of the chat"></button></div>
     </div>
   </main>
 </div>
@@ -1022,6 +1049,8 @@
     <div class="btns"><button value="close" class="primary">Done</button></div>
   </form>
 </dialog>
+
+<dialog id="skillsDlg" aria-label="Skills"><div class="sk-wrap" id="skillsBody"></div><input type="file" id="skillFile" accept=".md,text/markdown,text/plain" hidden></dialog>
 
 <dialog id="shareDlg">
   <form method="dialog" id="shareForm">
@@ -1339,6 +1368,7 @@
     $('#usageBtn').hidden = !proj || !!state.searching;
     $('#tasksBtn').hidden = !proj || !!state.searching;
     $('#docsBtn').hidden = !proj || !!state.searching;
+    $('#skillsBtn').hidden = !proj || !!state.searching;
     const oq = openQs(state.current).length, dq = state.questions.filter((q) => q.room_id === state.current && q.status !== 'open').length;
     $('#askBtn').hidden = !proj || !!state.searching || (!oq && !dq && !state.qOpen);
     $('#askBtn').textContent = oq ? `❓ Questions · ${oq}` : '❓ Questions';
@@ -1429,11 +1459,32 @@
     for (const arr of state.messages.values()) { const f = arr.find((m) => m.id === id); if (f) return f; }
     return null;
   }
-  function renderMessages({ keepScroll = false, stick = true } = {}) {
+  // Auto-scroll: follow new messages, but only while you're at the bottom. Turned off, the chat never moves by
+  // itself; either way a "↓ New messages" button says when something arrived below where you're reading.
+  let autoScroll = localGet('airc.autoscroll') !== 'off', unseenBelow = 0;
+  const atBottomOf = (box) => box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  function renderAutoScroll() {
+    const b = $('#asBtn'); b.textContent = autoScroll ? '⇣ Auto-scroll on' : '⏸ Auto-scroll off'; b.classList.toggle('off', !autoScroll);
+    b.setAttribute('aria-pressed', String(autoScroll));
+    b.title = autoScroll ? 'New messages scroll the chat down while you are at the bottom. Click to keep the chat still.' : 'The chat stays where you are; new messages show a button instead. Click to follow new messages again.';
+  }
+  function showNewMsgs() {
+    const b = $('#newMsgs'), box = $('#msgs');
+    if (!unseenBelow || box.hidden || atBottomOf(box)) { unseenBelow = 0; b.hidden = true; return; }
+    b.textContent = `↓ ${unseenBelow} new message${unseenBelow === 1 ? '' : 's'}`;
+    b.style.left = `${box.offsetLeft + box.clientWidth / 2}px`; b.hidden = false;
+  }
+  function toBottom() { const box = $('#msgs'); box.scrollTop = box.scrollHeight; unseenBelow = 0; showNewMsgs(); }
+  $('#asBtn').addEventListener('click', () => { autoScroll = !autoScroll; localSet('airc.autoscroll', autoScroll ? 'on' : 'off'); renderAutoScroll(); if (autoScroll && unseenBelow) toBottom(); });
+  $('#newMsgs').addEventListener('click', toBottom);
+  $('#msgs').addEventListener('scroll', () => { if (unseenBelow && atBottomOf($('#msgs'))) { unseenBelow = 0; showNewMsgs(); } });
+  renderAutoScroll();
+  // stick: follow to the bottom if you were there (and auto-scroll is on); bottom: go to the bottom regardless
+  function renderMessages({ keepScroll = false, stick = true, bottom = false } = {}) {
     renderRside();   // new messages can mention docs; search hides the panel
     if (state.searching) { $('#msgs').hidden = false; $('#team').hidden = true; $('#usage').hidden = true; $('#tasks').hidden = true; $('#composer').hidden = false; }
     const box = $('#msgs');
-    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    const atBottom = atBottomOf(box), prevTop = box.scrollTop;
     const prevHeight = box.scrollHeight;
     const list = state.searching ? (state.messages.get('__search__') || []) : (state.messages.get(state.current) || []);
     const showRoom = state.current === ALL || !!state.searching;
@@ -1452,7 +1503,8 @@
     box.innerHTML = html;
     if (tts.current) document.getElementById('m' + tts.current)?.classList.add('speaking');
     if (keepScroll) box.scrollTop = box.scrollHeight - prevHeight;
-    else if (stick && (atBottom || !keepScroll)) box.scrollTop = box.scrollHeight;
+    else if (bottom || (stick && autoScroll && atBottom)) toBottom();
+    else box.scrollTop = prevTop;   // stay where you're reading
   }
 
   async function loadRoom(id, { older = false } = {}) {
@@ -1479,7 +1531,8 @@
     $('#msgs').innerHTML = '';
     try { await loadRoom(id); } catch (e) { $('#msgs').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
     markSeen(id);
-    renderMessages();
+    unseenBelow = 0;
+    renderMessages({ bottom: true });
     applyView();
     $('#app').classList.remove('nav');
     if (id !== ALL) $('#input').focus();
@@ -1527,7 +1580,7 @@
     ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
     ws.onopen = async () => {
       retry = 0; $('#conn').classList.add('on'); $('#conn').title = 'live';
-      await refreshState(); await loadRoom(state.current).catch(() => {}); renderMessages(); applyView();
+      await refreshState(); await loadRoom(state.current).catch(() => {}); renderMessages({ bottom: true }); applyView();
     };
     ws.onclose = () => { $('#conn').classList.remove('on'); $('#conn').title = 'reconnecting…'; setTimeout(connect, Math.min(10000, 500 * 2 ** retry++)); };
     ws.onmessage = (ev) => {
@@ -1583,6 +1636,10 @@
         if (i >= 0) state.questions[i] = e.question; else state.questions.push(e.question);
         renderSidebar(); renderHeader(); renderQPanel();
         if (e.question.room_id === state.current) renderMessages({ stick: false });
+      }
+      else if (e.type === 'skills') {
+        state.skills[e.skills.room_id] = e.skills;
+        if (e.skills.room_id === state.current && $('#skillsDlg').open && sk.mode === 'list') renderSkills();
       }
       else if (e.type === 'attention') {
         state.attention[e.attention.room_id] = e.attention;
@@ -1651,7 +1708,10 @@
     if (visible && document.visibilityState === 'visible') { markSeen(m.room_id); }
     else if (r && m.sender.toLowerCase() !== myName().toLowerCase()) { r.unread_live = (r.unread_live || 0) + 1; renderSidebar(); }
     if (visible) {
-      renderMessages();
+      const box = $('#msgs'), mine = m.sender_kind === 'human' && m.sender.toLowerCase() === myName().toLowerCase();
+      const follow = mine || (autoScroll && atBottomOf(box));
+      renderMessages({ bottom: mine });
+      if (!follow) { unseenBelow++; showNewMsgs(); }
       const el = document.getElementById('m' + m.id); if (el) el.classList.add('flash');
     }
     const me = myName().toLowerCase();
@@ -2810,7 +2870,7 @@
   }
   function openQPanel(id) {
     state.qOpen = true; renderHeader();
-    if (state.view !== 'chat') { state.view = 'chat'; localSet('airc.view', 'chat'); applyView(); renderMessages(); }
+    if (state.view !== 'chat') { state.view = 'chat'; localSet('airc.view', 'chat'); applyView(); renderMessages({ bottom: true }); }
     renderQPanel();
     if (id) $(`#qPanel [data-qform="${id}"]`)?.scrollIntoView({ block: 'nearest' });
   }
@@ -2931,6 +2991,122 @@
       infoInline('Commands: ' + COMMANDS.map((c) => '/' + c.name).join('  ·  ') + (ag.length ? '   ·   the team\'s: ' + ag.slice(0, 12).join(' ') + (ag.length > 12 ? ' …' : '') : '') + '   (start with // to post a message beginning with /)');
     } },
   ];
+  // ---------- the team's skills: how-tos in .agents/skills that agents load when a task matches ----------
+  // The project folder is on the human's machine, so the watcher lists them and makes the changes.
+  state.skills = {};
+  const sk = { mode: 'list', edit: null };   // edit: { name, description, roles, body, create }
+  const SKILL_TEMPLATE = '# What this skill is for\n\nOne or two sentences.\n\n## Steps\n1. …\n2. …\n\n## Done means\n- …\n\n## Never\n- …';
+  const skillBody = (text) => String(text || '').replace(/^---[ \t]*\n[\s\S]*?\n---[ \t]*\n?/, '').trim();
+  function skillFront(text) {   // { name, description, roles } from a SKILL.md's front matter (simple keys only)
+    const m = String(text || '').match(/^---[ \t]*\n([\s\S]*?)\n---/); const fm = m ? m[1] : '';
+    const get = (k) => { const x = fm.match(new RegExp(`^\\s*${k}:\\s*(.*)$`, 'm')); if (!x) return '';
+      let v = x[1].trim(); if (/^[>|][+-]?$/.test(v)) { const after = fm.slice(fm.indexOf(x[0]) + x[0].length).split('\n').slice(1); const lines = []; for (const l of after) { if (l.trim() && !/^\s/.test(l)) break; lines.push(l.trim()); } return lines.filter(Boolean).join(' '); }
+      try { return v.startsWith('"') ? JSON.parse(v) : v.replace(/^'|'$/g, ''); } catch { return v.replace(/^"|"$/g, ''); } };
+    return { name: get('name'), description: get('description'), roles: get('tropa-roles').split(',').map((r) => r.trim()).filter(Boolean) };
+  }
+  const skillSlug = (v) => String(v || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+  function skillWho(roles, agents) {
+    if (!roles?.length || roles.includes('all')) return 'everyone';
+    const named = { lead: 'the lead', dev: 'developers', qa: 'QA' };
+    return roles.map((r) => agents.find((a) => a.toLowerCase() === r.toLowerCase()) ? '@' + r : named[r] || r).join(', ');
+  }
+  async function openSkills() {
+    sk.mode = 'list'; sk.edit = null;
+    try { state.skills[state.current] = await api(`/rooms/${encodeURIComponent(state.current)}/skills`); } catch {}
+    renderSkills(); if (!$('#skillsDlg').open) $('#skillsDlg').showModal();
+  }
+  function renderSkills() {
+    const v = state.skills[state.current] || { skills: [], agents: [], watching: false }, el = $('#skillsBody');
+    if (sk.mode === 'edit') return renderSkillEdit(v);
+    const list = [...v.skills].sort((a, b) => a.managed - b.managed || a.name.localeCompare(b.name));
+    el.innerHTML = `<div class="sk-top"><h3>🧩 Skills · ${esc(roomLabel(state.current))}</h3>
+        ${v.editable ? '<button type="button" class="tbtn" data-sk="import" title="Use a SKILL.md file you already have">Import SKILL.md</button><button type="button" class="tbtn pri" data-sk="new">＋ New skill</button>' : ''}
+        <button type="button" class="tbtn" data-sk="close" aria-label="Close">✕</button></div>
+      <p class="sk-lead">A skill is a how-to your agents load when a task matches its description: a checklist, a house style, the steps for a recurring job. Keep each one short and specific. They live in the project's <code>.agents/skills/</code> folder.</p>
+      ${!v.watching ? '<div class="sk-note">The team isn\'t running. Start it to see and change its skills.</div>' : !v.editable ? '<div class="sk-note">This project\'s watcher is older than the Skills panel. Run <code>tropa update</code> in the project folder (or restart the team) to edit skills here.</div>' : ''}
+      ${list.length ? list.map((x) => `<div class="sk-row"><div class="sk-main"><b>${esc(x.name)}</b><span class="sk-for">for ${esc(skillWho(x.roles, v.agents))}</span>${x.managed ? '<span class="sk-tag" title="Comes with tropa">built-in</span>' : ''}
+          <div class="sk-d">${esc(x.description || '')}</div></div>
+          <div class="sk-acts">${v.editable ? `<button type="button" class="tbtn" data-sk-edit="${esc(x.dir)}">Edit</button><button type="button" class="tbtn" data-sk-rm="${esc(x.dir)}">Remove</button>` : ''}</div></div>`).join('')
+        : v.watching ? '<p class="mut">No skills yet. Add one for anything you find yourself explaining twice.</p>' : ''}`;
+  }
+  function renderSkillEdit(v) {
+    const e = sk.edit, agents = v.agents || [];
+    const extra = (e.roles || []).filter((r) => r !== 'all' && !agents.some((a) => a.toLowerCase() === r.toLowerCase()));
+    const everyone = (e.roles || []).includes('all');   // unticking Everyone leaves none picked yet, not everyone
+    const on = (r) => (e.roles || []).some((x) => x.toLowerCase() === r.toLowerCase());
+    const named = { lead: 'the lead', dev: 'all developers', qa: 'all QA' };
+    $('#skillsBody').innerHTML = `<div class="sk-top"><h3>${e.create ? 'New skill' : `Edit <code>${esc(e.name)}</code>`}</h3><button type="button" class="tbtn" data-sk="back">← All skills</button></div>
+      ${e.create ? `<label class="f" for="skName">Name <small>lowercase words joined by hyphens; it's also its /command</small></label><input type="text" id="skName" value="${esc(e.name)}" placeholder="weekly-report" spellcheck="false" autocomplete="off">` : ''}
+      <label class="f" for="skDesc">When should they use it? <small>agents read this to decide; say what it does and when</small></label>
+      <textarea id="skDesc" rows="2" placeholder="Writes the Friday status report for the client. Use when asked for a weekly report or a status update.">${esc(e.description)}</textarea>
+      <label class="f">Who gets it</label>
+      <div class="sk-who"><label><input type="checkbox" data-sk-who="all" ${everyone ? 'checked' : ''}> Everyone</label>
+        ${agents.map((a) => `<label><input type="checkbox" data-sk-who="${esc(a)}" ${!everyone && on(a) ? 'checked' : ''} ${everyone ? 'disabled' : ''}> @${esc(a)}</label>`).join('')}
+        ${extra.map((r) => `<label><input type="checkbox" data-sk-who="${esc(r)}" ${!everyone ? 'checked' : ''} ${everyone ? 'disabled' : ''}> ${esc(named[r] || r)}</label>`).join('')}</div>
+      <label class="f" for="skBody">Instructions <small>Markdown: the steps, the rules, what “done” looks like</small></label>
+      <textarea id="skBody" class="sk-body" spellcheck="false" placeholder="${esc(SKILL_TEMPLATE)}">${esc(e.body)}</textarea>
+      <div class="sk-foot"><span class="err" id="skErr" role="alert"></span><button type="button" class="tbtn" data-sk="back">Cancel</button><button type="button" class="tbtn pri" data-sk="save">${e.create ? 'Add skill' : 'Save'}</button></div>`;
+    (e.create ? $('#skName') : $('#skDesc')).focus();
+  }
+  function skillEdit(x) {
+    sk.mode = 'edit';
+    sk.edit = x ? { name: x.dir, description: x.description, roles: x.roles, body: skillBody(x.text), create: false }
+      : { name: '', description: '', roles: ['all'], body: '', create: true };
+    renderSkills();
+  }
+  $('#skillsBtn').addEventListener('click', openSkills);
+  $('#skillsDlg').addEventListener('input', (e) => {
+    if (!sk.edit) return;
+    if (e.target.id === 'skName') sk.edit.name = e.target.value; else if (e.target.id === 'skDesc') sk.edit.description = e.target.value; else if (e.target.id === 'skBody') sk.edit.body = e.target.value;
+  });
+  $('#skillsDlg').addEventListener('change', (e) => {
+    const w = e.target.dataset?.skWho; if (w == null || !sk.edit) return;
+    if (w === 'all') sk.edit.roles = e.target.checked ? ['all'] : [];
+    else { const r = (sk.edit.roles || []).filter((x) => x !== 'all' && x.toLowerCase() !== w.toLowerCase()); if (e.target.checked) r.push(w); sk.edit.roles = r; }
+    renderSkills();
+  });
+  $('#skillFile').addEventListener('change', async (e) => {
+    const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
+    if (f.size > 60000) { alertInline('That file is too big for a skill.'); return; }
+    const text = await f.text(), fm = skillFront(text);
+    sk.mode = 'edit';
+    sk.edit = { name: skillSlug(fm.name || f.name.replace(/\.md$/i, '').replace(/^SKILL$/i, '')), description: fm.description, roles: fm.roles.length ? fm.roles : ['all'], body: skillBody(text), create: true };
+    renderSkills();
+  });
+  $('#skillsDlg').addEventListener('click', async (e) => {
+    const room = state.current, v = state.skills[room] || { skills: [] };
+    const ed = e.target.closest('[data-sk-edit]'); if (ed) { skillEdit(v.skills.find((x) => x.dir === ed.dataset.skEdit)); return; }
+    const rm = e.target.closest('[data-sk-rm]');
+    if (rm) {
+      const x = v.skills.find((y) => y.dir === rm.dataset.skRm);
+      if (!confirm(`Remove the skill "${x?.name || rm.dataset.skRm}"? Its folder is deleted from the project.${x?.managed ? ' (It comes with tropa; it stays removed when you update.)' : ''}`)) return;
+      try { await api(`/rooms/${encodeURIComponent(room)}/skills/${encodeURIComponent(rm.dataset.skRm)}?by=${encodeURIComponent(myName())}`, { method: 'DELETE' }); infoInline('Removing the skill…'); }
+      catch (err) { alertInline(err.message); }
+      return;
+    }
+    const b = e.target.closest('[data-sk]'); if (!b) return;
+    switch (b.dataset.sk) {
+      case 'close': $('#skillsDlg').close(); return;
+      case 'new': skillEdit(null); return;
+      case 'import': $('#skillFile').click(); return;
+      case 'back': sk.mode = 'list'; sk.edit = null; renderSkills(); return;
+      case 'save': {
+        const ed2 = sk.edit, err = (t) => { $('#skErr').textContent = t; };
+        const name = ed2.create ? skillSlug(ed2.name) : ed2.name;
+        if (!name) return err('Give the skill a name, e.g. weekly-report.');
+        if (ed2.create && v.skills.some((x) => x.dir === name)) return err(`There's already a skill named ${name}.`);
+        if (!ed2.description.trim()) return err('Say when the agents should use it.');
+        if (!ed2.body.trim()) return err('Write the instructions.');
+        if (!ed2.roles?.length) return err('Pick who gets it, or Everyone.');
+        b.disabled = true;
+        try {
+          await api(`/rooms/${encodeURIComponent(room)}/skills`, { method: 'POST', body: { name, description: ed2.description, roles: ed2.roles, body: ed2.body, create: ed2.create, by: myName() } });
+          sk.mode = 'list'; sk.edit = null; renderSkills(); infoInline(`Saving ${name}… the team's note in the chat confirms it.`);
+        } catch (x) { err(x.message); b.disabled = false; }
+        return;
+      }
+    }
+  });
   // ---------- the agents' own slash commands (/btw, /compact, skills...), run in their terminals ----------
   function agentCmds() {   // name(lower) -> { name, desc, kind, agents }
     const t = state.team[state.current];
@@ -3130,11 +3306,11 @@
     if (e.target.closest('[data-hideinactive]')) { state.hideInactive = !state.hideInactive; localSet('airc.hideInactive', state.hideInactive ? 'on' : 'off'); renderTeam(); return; }
     const mdb = e.target.closest('[data-model]');
     if (mdb) { openModelSwitch(mdb.dataset.model); return; }
-    if (e.target.closest('#docsBtn')) { state.view = state.view === 'docs' ? 'chat' : 'docs'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages(); return; }
-    if (e.target.closest('#tasksBtn')) { state.view = state.view === 'tasks' ? 'chat' : 'tasks'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages(); return; }
+    if (e.target.closest('#docsBtn')) { state.view = state.view === 'docs' ? 'chat' : 'docs'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages({ bottom: true }); return; }
+    if (e.target.closest('#tasksBtn')) { state.view = state.view === 'tasks' ? 'chat' : 'tasks'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages({ bottom: true }); return; }
     const td = e.target.closest('[data-tkdel]');
     if (td) { if (confirm('Delete this task from the board?')) api(`/tasks/${td.dataset.tkdel}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); return; }
-    if (e.target.closest('#usageBtn')) { state.view = state.view === 'usage' ? 'chat' : 'usage'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages(); return; }
+    if (e.target.closest('#usageBtn')) { state.view = state.view === 'usage' ? 'chat' : 'usage'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages({ bottom: true }); return; }
     const ur = e.target.closest('[data-urange]');
     if (ur) { state.usage.range = Number(ur.dataset.urange); localSet('airc.usageRange', state.usage.range); loadUsage(true); return; }
     const um = e.target.closest('[data-umetric]');
@@ -3168,7 +3344,7 @@
     }
     const cp = e.target.closest('[data-copy-url]');
     if (cp) { navigator.clipboard?.writeText(cp.dataset.copyUrl).then(() => { cp.textContent = 'Copied'; setTimeout(() => { cp.textContent = 'Copy'; }, 1400); }).catch(() => {}); return; }
-    if (e.target.closest('#teamBtn')) { state.view = state.view === 'team' ? 'chat' : 'team'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages(); return; }
+    if (e.target.closest('#teamBtn')) { state.view = state.view === 'team' ? 'chat' : 'team'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages({ bottom: true }); return; }
     if (e.target.closest('#agentScope')) { state.agentScope = state.agentScope === 'project' ? 'all' : 'project'; localSet('airc.agentScope', state.agentScope); renderSidebar(); return; }
     const dp = e.target.closest('[data-del-project]');
     if (dp) { e.stopPropagation(); deleteProjectDialog(dp.dataset.delProject); return; }
@@ -4043,7 +4219,7 @@
   });
   $('#tdMsgs').addEventListener('click', async (e) => {
     const m = e.target.closest('[data-gomsg]'); if (!m) return;
-    $('#taskDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); await applyView(); renderMessages();
+    $('#taskDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); await applyView(); renderMessages({ bottom: true });
     const el = document.getElementById('m' + m.dataset.gomsg);
     if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); } else infoInline(`Message #${m.dataset.gomsg} is further back: scroll up or search for it.`);
   });
@@ -4643,11 +4819,11 @@
     clearTimeout(searchTimer);
     searchTimer = setTimeout(async () => {
       const term = $('#search').value.trim();
-      if (!term) { state.searching = null; renderHeader(); renderMessages(); return; }
+      if (!term) { state.searching = null; renderHeader(); renderMessages({ bottom: true }); return; }
       state.searching = term;
       const res = await api('/search?q=' + encodeURIComponent(term));
       state.messages.set('__search__', res.reverse());
-      renderHeader(); renderMessages();
+      renderHeader(); renderMessages({ bottom: true });
     }, 250);
   });
   $('#search').addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#search').value = ''; $('#search').dispatchEvent(new Event('input')); } });

@@ -13,7 +13,13 @@ src, dst = sys.argv[1], sys.argv[2]
 digest = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()
 added, updated, kept = [], [], []
 os.makedirs(dst, exist_ok=True)
+try:   # default skills the human deleted in the chat's Skills panel: don't bring them back
+    removed = {x.strip() for x in open(os.path.join(dst, ".tropa-removed")) if x.strip()}
+except OSError:
+    removed = set()
 for name in sorted(os.listdir(src)):
+    if name in removed:
+        continue
     s = os.path.join(src, name)
     if not os.path.isfile(os.path.join(s, "SKILL.md")):
         continue

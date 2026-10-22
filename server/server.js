@@ -1605,6 +1605,54 @@ api.post('/rooms/:id/slash', wrap((req) => {
   if (asMessage.length) postMessage({ room: roomId, sender: human, kind: 'human', content: `${asMessage.map((a) => '@' + a).join(' ')} ${text}`, reply_to: req.body.reply_to });
   return { ok: true, sent, as_message: asMessage, skipped: busy };
 }));
+// the team's skills (.agents/skills in the project): the watcher lists them, the Skills panel edits them through it
+const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+function skillsView(roomId) {
+  const w = watcherFor(roomId);
+  return { room_id: roomId, watching: !!w, editable: !!w && (w.caps || []).includes('skills'), skills: w?.skills || [], agents: w?.agents || [],
+    lead: String(wakeSettings(roomId).lead || '') };
+}
+api.get('/rooms/:id/skills', wrap((req) => skillsView(roomOf(req))));
+function skillsWatcher(roomId) {
+  const w = watcherFor(roomId);
+  if (!w) throw new UserError("the team isn't running, so its skills can't be changed right now (start the team first)");
+  if (!(w.caps || []).includes('skills')) throw new UserError("this project's watcher is older than the Skills panel: run tropa update in the project folder");
+  return w;
+}
+api.post('/rooms/:id/skills', wrap((req) => {
+  const roomId = roomOf(req), w = skillsWatcher(roomId), b = req.body || {};
+  const name = String(b.name || '').trim();
+  if (!SKILL_NAME.test(name) || name.length > 64) throw new UserError('a skill name is lowercase letters, digits and hyphens, e.g. weekly-report');
+  const description = String(b.description || '').replace(/\s+/g, ' ').trim();
+  if (!description) throw new UserError('say when the skill should be used');
+  if (description.length > 1024) throw new UserError('the description is too long (1024 characters at most)');
+  const body = String(b.body || '');
+  if (!body.trim()) throw new UserError('write the instructions the agents should follow');
+  if (body.length > 60000) throw new UserError('the instructions are too long');
+  const roles = (Array.isArray(b.roles) ? b.roles : []).map(String).filter((r) => /^[A-Za-z0-9._-]{1,40}$/.test(r)).slice(0, 40);
+  const exists = (w.skills || []).some((s) => s.dir === name || s.name === name);
+  if (b.create && exists) throw new UserError(`there's already a skill named ${name}`);
+  pushEvent(roomId, { type: 'skill_save', name, description, roles: roles.length ? roles : ['all'], body, created: !exists, by: cleanName(b.by) || HUMAN_NAME });
+  return { ok: true };
+}));
+api.delete('/rooms/:id/skills/:name', wrap((req) => {
+  const roomId = roomOf(req); skillsWatcher(roomId);
+  const name = String(req.params.name || '');
+  if (!SKILL_NAME.test(name)) throw new UserError('no such skill');
+  pushEvent(roomId, { type: 'skill_delete', name, by: cleanName(req.query.by) || HUMAN_NAME });
+  return { ok: true };
+}));
+api.post('/watch/skills', wrap((req) => {
+  const roomId = normalizeRoomId(req.body.room);
+  const w = watcherRecord(roomId);
+  w.seen = Date.now();
+  w.skills = (Array.isArray(req.body.skills) ? req.body.skills : []).slice(0, 100).map((s) => ({
+    name: String(s?.name || '').slice(0, 64), dir: String(s?.dir || '').slice(0, 64), description: String(s?.description || '').slice(0, 1024),
+    roles: (Array.isArray(s?.roles) ? s.roles : ['all']).map(String).slice(0, 40), managed: !!s?.managed, text: String(s?.text || '').slice(0, 60000) }))
+    .filter((s) => s.dir);
+  broadcast({ type: 'skills', skills: skillsView(roomId) });
+  return { ok: true };
+}));
 api.post('/watch/commands', wrap((req) => {
   const roomId = normalizeRoomId(req.body.room);
   const w = watcherRecord(roomId);

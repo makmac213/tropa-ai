@@ -23,7 +23,8 @@ Default [Agent Skills](https://agentskills.io) that `tropa init` adds to every p
 
 ## Your own skills
 
-- **For a project:** add a folder to its `.agents/skills/`. Every agent gets it the next time it starts.
+- **For a project:** use **🧩 Skills** in the project's chat room (add, edit, import a `SKILL.md`, remove), or add a folder to its `.agents/skills/`. Every agent it's for gets it the next time it starts.
+- **Who gets it:** `metadata.tropa-roles` takes roles (`lead`, `dev`, `qa`) and also agent names (`writer`).
 - **For every project:** add the folder here in tropa's `skills/`.
 - **Changing a default skill:** edit it in the project. `tropa update` only refreshes skills that still have their `.tropa-managed` file, so delete that file to keep your edits.
 

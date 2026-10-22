@@ -286,15 +286,24 @@ def read_skills(cfg):
         fm = m.group(1) if m else ""
         def field(key):
             mm = re.search(rf"^\s*{key}:\s*(.+)$", fm, re.M)
-            return mm.group(1).strip().strip('"\'') if mm else ""
+            if not mm:
+                return ""
+            v = mm.group(1).strip()
+            if v.startswith('"'):
+                try:
+                    return json.loads(v)   # written by the Skills panel as a JSON-style quoted string
+                except ValueError:
+                    pass
+            return v.strip('"\'')
         roles = [r.strip() for r in field("tropa-roles").split(",") if r.strip()]
         out.append({"name": field("name") or name, "dir": name, "description": field("description"), "roles": roles or ["all"]})
     return out
 
 
 def skills_for(cfg, a):
-    me = duty(cfg, a)
-    return [s for s in read_skills(cfg) if "all" in s["roles"] or me in s["roles"]]
+    """Skills for everyone, for this agent's duty (lead, dev, qa), or for this agent by name."""
+    me, name = duty(cfg, a), a["name"].lower()
+    return [s for s in read_skills(cfg) if "all" in s["roles"] or me in s["roles"] or name in [r.lower() for r in s["roles"]]]
 
 
 def link_skills(cfg, a, ws):
