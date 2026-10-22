@@ -1576,7 +1576,7 @@
         const a = e.attachment; let hit = false;
         for (const arr of state.messages.values()) for (const m of arr) if (m.id === a.message_id) { m.attachments = (m.attachments || []).map((x) => (x.id === a.id ? a : x)); hit = true; }
         if (hit) renderMessages({ stick: false });
-        if (a.room_id) { addFiles(a.room_id, [a]); if (a.room_id === state.current) renderRside(); }
+        if (a.room_id) { noteRoomFiles(a.room_id, [a]); if (a.room_id === state.current) renderRside(); }
       }
       else if (e.type === 'question') {
         const i = state.questions.findIndex((x) => x.id === e.question.id);
@@ -1644,7 +1644,7 @@
       const arr = state.messages.get(key);
       if (arr && !arr.some((x) => x.id === m.id)) arr.push(m);
     }
-    if (m.attachments?.length) addFiles(m.room_id, m.attachments.map((a) => ({ ...a, message_id: m.id, created_at: a.created_at || m.created_at })));
+    if (m.attachments?.length) noteRoomFiles(m.room_id, m.attachments.map((a) => ({ ...a, message_id: m.id, created_at: a.created_at || m.created_at })));
     const r = state.rooms.find((x) => x.id === m.room_id);
     if (r) { r.last_message_id = m.id; r.message_count = (r.message_count || 0) + 1; }
     const visible = !state.searching && (state.current === m.room_id || state.current === ALL);
@@ -2518,7 +2518,7 @@
     try { state.files[room] = await api(`/rooms/${encodeURIComponent(room)}/files?limit=300`); } catch { state.files[room] = []; }
     if (room === state.current) renderRside();
   }
-  function addFiles(room, atts) {
+  function noteRoomFiles(room, atts) {   // keep the side panel's file list current (not the composer's attachFiles)
     const list = state.files[room]; if (!list || !atts?.length) return;
     for (const a of atts) { const i = list.findIndex((x) => x.id === a.id); if (i >= 0) list[i] = { ...list[i], ...a }; else list.unshift(a); }
   }
@@ -3345,10 +3345,11 @@
     el.hidden = !state.pending.length;
     el.innerHTML = state.pending.map((p) => `<span class="pchip ${p.error ? 'bad' : p.att ? '' : 'up'}" title="${esc(p.error || '')}">${p.att ? (p.att.is_image ? '🖼' : fileIcon(p.att.mime)) : p.error ? '⚠️' : '⏳'} ${esc(p.name)} <small>${fmtSize(p.size)}</small><button type="button" data-unpend="${p.key}" title="Remove">×</button></span>`).join('');
   }
-  function addFiles(files) {
+  function attachFiles(files) {   // files the human pasted, dropped or picked for the message being written
     if (state.current === ALL || state.searching) { alertInline('Pick a room in the sidebar to attach files.'); return; }
     const room = state.current;
     for (const f of files) {
+      if (!(f instanceof Blob)) continue;   // only real files: never upload anything else by mistake
       const p = { key: Math.random().toString(36).slice(2), name: f.name || 'pasted.png', size: f.size, att: null, error: '' };
       state.pending.push(p);
       uploadFile(f, room).then((a) => { p.att = a; }).catch((e) => { p.error = e.message; }).finally(renderPending);
@@ -3356,13 +3357,13 @@
     renderPending();
   }
   $('#attachBtn').addEventListener('click', () => $('#fileInput').click());
-  $('#fileInput').addEventListener('change', (e) => { addFiles([...e.target.files]); e.target.value = ''; });
-  $('#input').addEventListener('paste', (e) => { const files = [...(e.clipboardData?.files || [])]; if (files.length) { e.preventDefault(); addFiles(files); } });
+  $('#fileInput').addEventListener('change', (e) => { attachFiles([...e.target.files]); e.target.value = ''; });
+  $('#input').addEventListener('paste', (e) => { const files = [...(e.clipboardData?.files || [])]; if (files.length) { e.preventDefault(); attachFiles(files); } });
   for (const sel of ['#composer', '#msgs']) {
     const el = $(sel);
     el.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); el.classList.add('drop'); } });
     el.addEventListener('dragleave', () => el.classList.remove('drop'));
-    el.addEventListener('drop', (e) => { el.classList.remove('drop'); if (e.dataTransfer?.files?.length) { e.preventDefault(); addFiles([...e.dataTransfer.files]); } });
+    el.addEventListener('drop', (e) => { el.classList.remove('drop'); if (e.dataTransfer?.files?.length) { e.preventDefault(); attachFiles([...e.dataTransfer.files]); } });
   }
 
   // ---------- new project (from the chat) ----------

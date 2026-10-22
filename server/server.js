@@ -143,6 +143,16 @@ function storeBlob(id, buf, name) {
   const sha = require('node:crypto').createHash('sha256').update(buf).digest('hex');
   qa.stored.run(buf.length, sha, mimeFor(name), id);
 }
+// A bug in the chat page (two functions with one name) uploaded every character of the room's name as an unsent
+// "pasted.png" of a few bytes, over and over. Real images are never that small: drop those leftovers on start.
+{
+  const junk = db.prepare(`SELECT id FROM attachments WHERE message_id IS NULL AND name = 'pasted.png' AND size <= 4`).all();
+  for (const { id } of junk) { try { fs.unlinkSync(path.join(FILES_DIR, String(id))); } catch {} }
+  if (junk.length) {
+    db.prepare(`DELETE FROM attachments WHERE message_id IS NULL AND name = 'pasted.png' AND size <= 4`).run();
+    console.log(`removed ${junk.length} empty "pasted.png" uploads left by an old chat-page bug`);
+  }
+}
 function purgeRoomFiles(roomId) {
   for (const { id } of qa.idsForRoom.all(roomId)) { try { fs.unlinkSync(path.join(FILES_DIR, String(id))); } catch {} }
 }
@@ -1792,6 +1802,7 @@ api.post('/rooms/:id/files', rawBody, wrap((req) => {
   const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
   if (!buf.length) throw new UserError('empty file');
   const name = cleanFileName(req.query.name);
+  if (/^image\//.test(mimeFor(name)) && buf.length < 8) throw new UserError(`${name} isn't a valid image`);
   const sender = cleanName(req.query.sender) || HUMAN_NAME;
   const info = qa.insert.run(roomId, null, name, mimeFor(name), buf.length, '', 'pending', sender, 'human', 0, 0, Date.now());
   const id = Number(info.lastInsertRowid);
