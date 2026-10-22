@@ -15,6 +15,11 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Reading the chat
+- **New messages no longer pull you down while you're reading.** The chat only follows new messages when you're already at the bottom; before, a bug made every new message jump to the bottom.
+- **↓ N new messages** appears when something arrives below where you're reading; click it to jump down.
+- **Auto-scroll switch** under the message box (*⇣ Auto-scroll on* / *⏸ Auto-scroll off*, remembered in the browser). Off, the chat never moves by itself, except when you send a message.
+
 ### Rooms and their folders
 - **"Couldn't start the team: I can't find the folder" is fixed for folders outside `~/projects`.**
   - **Where the host helper now looks:** the project lists of every port (`~/.tropa/projects-*.json`) and team folders anywhere in your home, not only its own port's list and `~/projects`.

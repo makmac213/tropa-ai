@@ -204,7 +204,13 @@
   .rs-ask { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .rs-ask .s { white-space: normal; }
   /* chat side panel: background tasks, files shared, docs mentioned (4/5 chat, 1/5 panel) */
-  .chatrow { flex: 1; min-height: 0; display: flex; }
+  .chatrow { flex: 1; min-height: 0; display: flex; position: relative; }
+  .newmsgs { position: absolute; bottom: 12px; transform: translateX(-50%); z-index: 5; border: 0; border-radius: 999px; padding: 5px 14px; font-size: 12.5px; font-weight: 600;
+    background: var(--fill-accent); color: var(--on-accent); box-shadow: 0 4px 14px var(--shadow); cursor: pointer; }
+  .newmsgs[hidden] { display: none; }
+  .hint-row { display: flex; align-items: baseline; gap: 10px; } .hint-row .hint { flex: 1; min-width: 0; }
+  .as-btn { background: none; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; padding: 1px 9px; cursor: pointer; white-space: nowrap; margin-top: 6px; }
+  .as-btn:hover { color: var(--text); } .as-btn.off { color: var(--human); border-color: var(--human); }
   .chatrow:has(> .msgs[hidden]) { display: none; }
   .chatrow > .msgs { flex: 4 1 0; min-width: 0; }
   .rside { flex: 1 1 0; min-width: 230px; max-width: 360px; border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 4px 0 14px; font-size: 13px; }
@@ -912,7 +918,7 @@
       <button class="dl-btn" id="teamBtn" hidden title="See every agent's screen live">▦ Team</button>
       <input class="search" id="search" placeholder="Search…">
     </header>
-    <div class="chatrow" id="chatRow"><div class="msgs" id="msgs"></div><aside class="rside" id="rside" hidden aria-label="Background tasks, files and docs"></aside></div>
+    <div class="chatrow" id="chatRow"><div class="msgs" id="msgs"></div><button type="button" class="newmsgs" id="newMsgs" hidden>↓ New messages</button><aside class="rside" id="rside" hidden aria-label="Background tasks, files and docs"></aside></div>
     <div class="team" id="team" hidden></div>
     <div class="usage" id="usage" hidden></div>
     <div class="tasks" id="tasks" hidden></div>
@@ -930,7 +936,8 @@
         <textarea id="input" rows="1" placeholder="Message #general  —  @agent to mention"></textarea>
         <button class="send" id="sendBtn">Send</button>
       </div>
-      <div class="hint">Enter to send · Shift+Enter for new line · @name mentions an agent · 📎 drop or paste files · /help for commands</div>
+      <div class="hint-row"><div class="hint">Enter to send · Shift+Enter for new line · @name mentions an agent · 📎 drop or paste files · /help for commands</div>
+        <button type="button" class="as-btn" id="asBtn" title="Follow new messages when you're at the bottom of the chat"></button></div>
     </div>
   </main>
 </div>
@@ -1452,11 +1459,32 @@
     for (const arr of state.messages.values()) { const f = arr.find((m) => m.id === id); if (f) return f; }
     return null;
   }
-  function renderMessages({ keepScroll = false, stick = true } = {}) {
+  // Auto-scroll: follow new messages, but only while you're at the bottom. Turned off, the chat never moves by
+  // itself; either way a "↓ New messages" button says when something arrived below where you're reading.
+  let autoScroll = localGet('airc.autoscroll') !== 'off', unseenBelow = 0;
+  const atBottomOf = (box) => box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  function renderAutoScroll() {
+    const b = $('#asBtn'); b.textContent = autoScroll ? '⇣ Auto-scroll on' : '⏸ Auto-scroll off'; b.classList.toggle('off', !autoScroll);
+    b.setAttribute('aria-pressed', String(autoScroll));
+    b.title = autoScroll ? 'New messages scroll the chat down while you are at the bottom. Click to keep the chat still.' : 'The chat stays where you are; new messages show a button instead. Click to follow new messages again.';
+  }
+  function showNewMsgs() {
+    const b = $('#newMsgs'), box = $('#msgs');
+    if (!unseenBelow || box.hidden || atBottomOf(box)) { unseenBelow = 0; b.hidden = true; return; }
+    b.textContent = `↓ ${unseenBelow} new message${unseenBelow === 1 ? '' : 's'}`;
+    b.style.left = `${box.offsetLeft + box.clientWidth / 2}px`; b.hidden = false;
+  }
+  function toBottom() { const box = $('#msgs'); box.scrollTop = box.scrollHeight; unseenBelow = 0; showNewMsgs(); }
+  $('#asBtn').addEventListener('click', () => { autoScroll = !autoScroll; localSet('airc.autoscroll', autoScroll ? 'on' : 'off'); renderAutoScroll(); if (autoScroll && unseenBelow) toBottom(); });
+  $('#newMsgs').addEventListener('click', toBottom);
+  $('#msgs').addEventListener('scroll', () => { if (unseenBelow && atBottomOf($('#msgs'))) { unseenBelow = 0; showNewMsgs(); } });
+  renderAutoScroll();
+  // stick: follow to the bottom if you were there (and auto-scroll is on); bottom: go to the bottom regardless
+  function renderMessages({ keepScroll = false, stick = true, bottom = false } = {}) {
     renderRside();   // new messages can mention docs; search hides the panel
     if (state.searching) { $('#msgs').hidden = false; $('#team').hidden = true; $('#usage').hidden = true; $('#tasks').hidden = true; $('#composer').hidden = false; }
     const box = $('#msgs');
-    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    const atBottom = atBottomOf(box), prevTop = box.scrollTop;
     const prevHeight = box.scrollHeight;
     const list = state.searching ? (state.messages.get('__search__') || []) : (state.messages.get(state.current) || []);
     const showRoom = state.current === ALL || !!state.searching;
@@ -1475,7 +1503,8 @@
     box.innerHTML = html;
     if (tts.current) document.getElementById('m' + tts.current)?.classList.add('speaking');
     if (keepScroll) box.scrollTop = box.scrollHeight - prevHeight;
-    else if (stick && (atBottom || !keepScroll)) box.scrollTop = box.scrollHeight;
+    else if (bottom || (stick && autoScroll && atBottom)) toBottom();
+    else box.scrollTop = prevTop;   // stay where you're reading
   }
 
   async function loadRoom(id, { older = false } = {}) {
@@ -1502,7 +1531,8 @@
     $('#msgs').innerHTML = '';
     try { await loadRoom(id); } catch (e) { $('#msgs').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
     markSeen(id);
-    renderMessages();
+    unseenBelow = 0;
+    renderMessages({ bottom: true });
     applyView();
     $('#app').classList.remove('nav');
     if (id !== ALL) $('#input').focus();
@@ -1550,7 +1580,7 @@
     ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
     ws.onopen = async () => {
       retry = 0; $('#conn').classList.add('on'); $('#conn').title = 'live';
-      await refreshState(); await loadRoom(state.current).catch(() => {}); renderMessages(); applyView();
+      await refreshState(); await loadRoom(state.current).catch(() => {}); renderMessages({ bottom: true }); applyView();
     };
     ws.onclose = () => { $('#conn').classList.remove('on'); $('#conn').title = 'reconnecting…'; setTimeout(connect, Math.min(10000, 500 * 2 ** retry++)); };
     ws.onmessage = (ev) => {
@@ -1678,7 +1708,10 @@
     if (visible && document.visibilityState === 'visible') { markSeen(m.room_id); }
     else if (r && m.sender.toLowerCase() !== myName().toLowerCase()) { r.unread_live = (r.unread_live || 0) + 1; renderSidebar(); }
     if (visible) {
-      renderMessages();
+      const box = $('#msgs'), mine = m.sender_kind === 'human' && m.sender.toLowerCase() === myName().toLowerCase();
+      const follow = mine || (autoScroll && atBottomOf(box));
+      renderMessages({ bottom: mine });
+      if (!follow) { unseenBelow++; showNewMsgs(); }
       const el = document.getElementById('m' + m.id); if (el) el.classList.add('flash');
     }
     const me = myName().toLowerCase();
@@ -2837,7 +2870,7 @@
   }
   function openQPanel(id) {
     state.qOpen = true; renderHeader();
-    if (state.view !== 'chat') { state.view = 'chat'; localSet('airc.view', 'chat'); applyView(); renderMessages(); }
+    if (state.view !== 'chat') { state.view = 'chat'; localSet('airc.view', 'chat'); applyView(); renderMessages({ bottom: true }); }
     renderQPanel();
     if (id) $(`#qPanel [data-qform="${id}"]`)?.scrollIntoView({ block: 'nearest' });
   }
@@ -3273,11 +3306,11 @@
     if (e.target.closest('[data-hideinactive]')) { state.hideInactive = !state.hideInactive; localSet('airc.hideInactive', state.hideInactive ? 'on' : 'off'); renderTeam(); return; }
     const mdb = e.target.closest('[data-model]');
     if (mdb) { openModelSwitch(mdb.dataset.model); return; }
-    if (e.target.closest('#docsBtn')) { state.view = state.view === 'docs' ? 'chat' : 'docs'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages(); return; }
-    if (e.target.closest('#tasksBtn')) { state.view = state.view === 'tasks' ? 'chat' : 'tasks'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages(); return; }
+    if (e.target.closest('#docsBtn')) { state.view = state.view === 'docs' ? 'chat' : 'docs'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages({ bottom: true }); return; }
+    if (e.target.closest('#tasksBtn')) { state.view = state.view === 'tasks' ? 'chat' : 'tasks'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages({ bottom: true }); return; }
     const td = e.target.closest('[data-tkdel]');
     if (td) { if (confirm('Delete this task from the board?')) api(`/tasks/${td.dataset.tkdel}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); return; }
-    if (e.target.closest('#usageBtn')) { state.view = state.view === 'usage' ? 'chat' : 'usage'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages(); return; }
+    if (e.target.closest('#usageBtn')) { state.view = state.view === 'usage' ? 'chat' : 'usage'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages({ bottom: true }); return; }
     const ur = e.target.closest('[data-urange]');
     if (ur) { state.usage.range = Number(ur.dataset.urange); localSet('airc.usageRange', state.usage.range); loadUsage(true); return; }
     const um = e.target.closest('[data-umetric]');
@@ -3311,7 +3344,7 @@
     }
     const cp = e.target.closest('[data-copy-url]');
     if (cp) { navigator.clipboard?.writeText(cp.dataset.copyUrl).then(() => { cp.textContent = 'Copied'; setTimeout(() => { cp.textContent = 'Copy'; }, 1400); }).catch(() => {}); return; }
-    if (e.target.closest('#teamBtn')) { state.view = state.view === 'team' ? 'chat' : 'team'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages(); return; }
+    if (e.target.closest('#teamBtn')) { state.view = state.view === 'team' ? 'chat' : 'team'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages({ bottom: true }); return; }
     if (e.target.closest('#agentScope')) { state.agentScope = state.agentScope === 'project' ? 'all' : 'project'; localSet('airc.agentScope', state.agentScope); renderSidebar(); return; }
     const dp = e.target.closest('[data-del-project]');
     if (dp) { e.stopPropagation(); deleteProjectDialog(dp.dataset.delProject); return; }
@@ -4186,7 +4219,7 @@
   });
   $('#tdMsgs').addEventListener('click', async (e) => {
     const m = e.target.closest('[data-gomsg]'); if (!m) return;
-    $('#taskDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); await applyView(); renderMessages();
+    $('#taskDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); await applyView(); renderMessages({ bottom: true });
     const el = document.getElementById('m' + m.dataset.gomsg);
     if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); } else infoInline(`Message #${m.dataset.gomsg} is further back: scroll up or search for it.`);
   });
@@ -4786,11 +4819,11 @@
     clearTimeout(searchTimer);
     searchTimer = setTimeout(async () => {
       const term = $('#search').value.trim();
-      if (!term) { state.searching = null; renderHeader(); renderMessages(); return; }
+      if (!term) { state.searching = null; renderHeader(); renderMessages({ bottom: true }); return; }
       state.searching = term;
       const res = await api('/search?q=' + encodeURIComponent(term));
       state.messages.set('__search__', res.reverse());
-      renderHeader(); renderMessages();
+      renderHeader(); renderMessages({ bottom: true });
     }, 250);
   });
   $('#search').addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#search').value = ''; $('#search').dispatchEvent(new Event('input')); } });

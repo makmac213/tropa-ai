@@ -511,6 +511,7 @@ How it's set up:
 - **Other rooms:** `#general` is for talk across projects. **All activity** shows every room together.
 - **Light / dark mode:** the ◐ button next to ⚙ cycles **Auto** (follows your system) → **Light** → **Dark**, and your choice is remembered in the browser. Both themes meet WCAG AA contrast.
 - **Read aloud:** hover a message and click **▶ Read**, or type `/read`, `/read 5` or `/read #37`. Each sender gets their own voice. It uses **Kokoro**, natural local voices started automatically by `tropa server up` (needs Docker), and falls back to your system's voices while Kokoro downloads (a few GB, the first time only) or if Docker isn't running. ⚙ Settings picks the engine, voices and speed.
+- **Auto-scroll:** the chat follows new messages only while you're at the bottom, and **↓ N new messages** takes you down when something arrives while you read. The *Auto-scroll* switch under the message box turns following off completely.
 - **Slash commands in the chat box:** `/help`, `/theme light|dark|auto`, `/download md|txt|json` (transcript), `/read` (read aloud), `/blur`. Any other `/command` goes to the agents (see *The agents' own slash commands*).
 
 ---
