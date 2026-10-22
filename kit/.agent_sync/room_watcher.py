@@ -28,6 +28,10 @@ sys.dont_write_bytecode = True
 import config
 import reap
 try:
+    import team_skills
+except ImportError:   # mid `tropa update`, like slash below
+    team_skills = None
+try:
     import slash
 except ImportError:   # mid `tropa update`: slash.py isn't copied yet; its arrival restarts the watcher
     slash = None
@@ -508,6 +512,8 @@ class Watcher:
         self.last_slash = 0
         self.last_slash_post = 0
         self.slash_agents = None
+        self.skills_sig = None  # last skills list sent to TropaAI
+        self.last_skills_post = 0
         self.slash_busy = {}    # agent -> [lock, commands queued] while slash commands run in its terminal
         self.slash_mu = threading.Lock()
 
@@ -526,7 +532,7 @@ class Watcher:
         r = http(self.cfg, "/watch/poll", {"room": self.cfg["room"], "agents": agents,
                                            "tmux_session": self.cfg["tmux_session"],
                                            "settings": local, "settings_changed": changed,
-                                           "timeout": timeout, "caps": ["rename_agent", "keys"] + (["slash"] if slash else [])}, timeout=timeout + 10)
+                                           "timeout": timeout, "caps": ["rename_agent", "keys"] + (["slash"] if slash else []) + (["skills"] if team_skills else [])}, timeout=timeout + 10)
         server = routing(r.get("settings") or {})
         if changed:
             log(f"pushed settings to TropaAI: {local}")
@@ -611,6 +617,8 @@ class Watcher:
             self.alerted.pop(a, None)   # a question it was stuck on may be answered now
             self.last_capture = 0       # show the new screen right away
             return
+        if ev.get("type") in ("skill_save", "skill_delete"):
+            self.edit_skill(ev); return
         if ev.get("type") == "slash":   # the human ran /cmd for this agent from the chat
             if not slash:
                 return
@@ -695,6 +703,48 @@ class Watcher:
         self.dismissed[a] = (d["pattern"], now, (n if same else 0) + 1)
         log(f"cleared {d.get('label') or d['pattern']} in {a}: sent {' '.join(keys)}")
         return True
+
+    # -- the team's skills, listed in and edited from the chat's Skills panel --
+    def post_skills(self, force=False):
+        if not team_skills:
+            return
+        now = time.time()
+        skills = team_skills.list_skills(self.cfg["root"])
+        sig = json.dumps(skills, sort_keys=True)
+        if not force and sig == self.skills_sig and now - self.last_skills_post < SLASH_REPOST:
+            return
+        http(self.cfg, "/watch/skills", {"room": self.cfg["room"], "skills": skills})
+        self.skills_sig, self.last_skills_post = sig, now
+
+    def edit_skill(self, ev):
+        name, who = str(ev.get("name") or ""), str(ev.get("by") or self.cfg["human"])
+        if not team_skills:
+            return
+        try:
+            if ev["type"] == "skill_delete":
+                team_skills.remove_skill(self.cfg["root"], name)
+            else:
+                team_skills.save_skill(self.cfg["root"], name, ev.get("description"), ev.get("roles"), ev.get("body"))
+        except (ValueError, OSError) as e:
+            say(self.cfg, f"@{who} couldn't {'remove' if ev['type'] == 'skill_delete' else 'save'} the skill `{name}`: {e}")
+            return
+        # relink the skills into each agent's folder and update the skill list in their AGENT.md
+        r = subprocess.run([sys.executable, os.path.join(HERE, "setup_agent.py"), "refresh"], capture_output=True, text=True)
+        if r.returncode != 0:
+            log(f"setup_agent refresh after a skill change: {r.stderr.strip()[-300:]}")
+        roles = [x for x in ev.get("roles") or [] if x != "all"]
+        if ev["type"] == "skill_delete":
+            say(self.cfg, f"🧩 {who} removed the skill `{name}`.")
+        else:
+            say(self.cfg, f"🧩 {who} {'added' if ev.get('created') else 'updated'} the skill `{name}`, for {', '.join(roles) if roles else 'everyone'}"
+                          f" (`.agents/skills/{name}/SKILL.md`). Agents load it the next time they start; ↻ Restart in ▦ Team applies it now.")
+        log(f"skill {ev['type'].split('_')[1]}: {name}")
+        self.skills_sig = None
+        self.slash_sig, self.last_slash = None, 0   # the slash menu lists skills too
+        try:
+            self.post_skills(force=True)
+        except Exception as e:
+            log(f"could not send the skills list: {e}")
 
     # -- slash commands from the chat --
     def post_slash(self, agents):
@@ -1112,7 +1162,7 @@ class Watcher:
         self.nudges[a] = (mid, n + 1)
         log(f"nudged {a}: stopped without reporting on #{mid} ({n + 1}/{MAX_NUDGES})")
 
-    CODE = ("room_watcher.py", "config.py", "slash.py")
+    CODE = ("room_watcher.py", "config.py", "slash.py", "team_skills.py")
 
     @staticmethod
     def code_stamp():
@@ -1177,6 +1227,7 @@ class Watcher:
                     log(f"connected; agents: {', '.join(agents) or 'none yet'}"); ok = True
                     self.docs_sig = None   # (re)connected: send the docs list again
                     self.slash_sig, self.last_slash = None, 0
+                    self.skills_sig = None
                 for ev in events:
                     self.handle(ev, agents)
                 sync_files(self.cfg, getattr(self, "last_resp", {}) or {})
@@ -1203,6 +1254,10 @@ class Watcher:
                     self.post_slash(agents)
                 except Exception as e:
                     log(f"could not send the slash commands: {e}")
+                try:
+                    self.post_skills()
+                except Exception as e:
+                    log(f"could not send the skills list: {e}")
             if time.time() - self.last_docs >= DOCS_EVERY:
                 try:
                     self.post_docs()

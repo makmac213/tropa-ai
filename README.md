@@ -653,6 +653,16 @@ Each agent gets the skills for its role, and its `AGENT.md` lists them. `.agent_
 
 ### Adding your own skill
 
+**From the chat (easiest):** in a project room, click **🧩 Skills** (Simple and Advanced mode). It lists the team's skills, who gets each one, and which come with tropa. **＋ New skill** asks for:
+- a name (it's also the skill's `/command`);
+- *when should they use it?* (the description the agents match tasks against);
+- who gets it: everyone, or picked agents;
+- the instructions, in Markdown.
+
+**Import SKILL.md** fills the form from a file you already have. **Edit** and **Remove** work the same way. The team's watcher writes `.agents/skills/<name>/SKILL.md` in the project folder and links the skill into each agent's folder. It also updates the skill list in their `AGENT.md` and posts a note in the room. Agents load a new skill the next time they start; **↻ Restart** in ▦ Team applies it at once. Removing a built-in skill keeps it removed when you `tropa update`. The team has to be running to change skills, and older projects need `tropa update` first.
+
+**By hand:**
+
 1. **Create the folder and file** in the project. The folder name is the skill's name: lowercase words joined by hyphens.
    ```bash
    mkdir -p .agents/skills/api-conventions
@@ -687,7 +697,7 @@ Each agent gets the skills for its role, and its `AGENT.md` lists them. `.agent_
 
 - **Edit a default skill:** just edit it in `.agents/skills/`. tropa notices the change, and `tropa update` won't overwrite it again.
 - **Get the default back:** delete the folder and run `tropa update`.
-- **Remove a skill:** delete its folder and restart the agents. tropa won't reinstall it unless you run `tropa update` again; to stop that, set `"default_skills": false`.
+- **Remove a skill:** use **Remove** in **🧩 Skills** (a built-in one then stays removed on `tropa update`), or delete its folder and restart the agents. A built-in skill deleted by hand comes back with `tropa update`; to stop that, set `"default_skills": false`.
 - **No default skills at all:** set `"default_skills": false` in `.agent_sync/settings.json` before running `tropa init`.
 
 **Tips for good skills:**

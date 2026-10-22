@@ -15,6 +15,12 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Skills in the chat
+- **🧩 Skills** in every project room, in Simple and Advanced mode. It lists the team's skills, who gets each one and which come with tropa.
+- **Add, edit, import or remove skills there:** a name, when to use it, who gets it (everyone or picked agents) and the instructions. **Import SKILL.md** fills the form from a file you already have.
+- **The watcher applies each change:** it writes `.agents/skills/<name>/SKILL.md` in the project, relinks the skill for the agents it's for, updates their `AGENT.md` and posts a note in the room.
+- A skill can now be for named agents (`tropa-roles: "writer"`), not only roles. Other front-matter fields (license, allowed-tools…) are kept when you edit. A built-in skill you remove stays removed on `tropa update`.
+
 ### Updating
 - **`tropa start` restarts a chat server or host helper that runs older code than the tropa folder.** Before, after a `git pull` it said *already running* and kept the old one; with Docker, that meant the old image kept serving the old chat page. The server now reports a fingerprint of its code (`build` in `/health`), and a Docker image is rebuilt when it restarts.
 - **`tropa self-update` now restarts TropaAI on the new version.** Before, the chat server and host helper kept running the old code until they were restarted by hand, so new features (such as new ready-made teams) didn't show up. Chats, projects and running teams are kept; reload the page afterwards.
