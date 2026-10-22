@@ -343,6 +343,12 @@ def drop_junk_attachments(cfg):
 
 def sync_files(cfg, resp):
     for a in resp.get("files") or []:          # room -> project
+        if a.get("name") == "pasted.png" and int(a.get("size") or 0) <= 4 and not a.get("message_id"):
+            try:   # junk from an old chat-page bug: never write it; marking it failed takes it off the server's list
+                http(cfg, f"/watch/files/{a['id']}/failed", {"error": "empty pasted.png from an old chat-page bug; not saved"})
+            except Exception:
+                pass
+            continue
         try:
             dest = project_file(cfg, a["path"])
             req = urllib.request.Request(cfg["server"] + a["url"])
