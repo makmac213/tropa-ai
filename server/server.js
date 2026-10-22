@@ -2748,6 +2748,7 @@ const qq = {
   get: db.prepare('SELECT * FROM questions WHERE id = ?'),
   byMsg: db.prepare("SELECT * FROM questions WHERE message_id = ? AND status = 'open'"),
   openFrom: db.prepare("SELECT * FROM questions WHERE room_id = ? AND lower(agent) = lower(?) AND status = 'open' ORDER BY id DESC"),
+  openIn: db.prepare("SELECT * FROM questions WHERE room_id = ? AND status = 'open' ORDER BY id"),
   list: db.prepare("SELECT * FROM questions WHERE status = 'open' OR closed_at > ? ORDER BY id"),
   due: db.prepare("SELECT * FROM questions WHERE status = 'open' AND deadline_at > 0 AND deadline_at <= ?"),
   close: db.prepare('UPDATE questions SET status = ?, answer = ?, answered_by = ?, closed_at = ? WHERE id = ?'),
@@ -2823,6 +2824,12 @@ api.post('/questions/:id/dismiss', wrap((req) => {
   if (!q) throw new UserError('no such question');
   if (q.status === 'open') closeQuestion(q, 'dismissed', '', HUMAN_NAME);
   return questionView(qq.get.get(q.id));
+}));
+
+api.post('/rooms/:id/questions/dismiss', wrap((req) => {   // Dismiss all: every open question in this room
+  const qs = qq.openIn.all(roomOf(req));
+  for (const q of qs) closeQuestion(q, 'dismissed', '', HUMAN_NAME);
+  return { dismissed: qs.length };
 }));
 
 // ---------- needs attention: work that looks stuck ----------

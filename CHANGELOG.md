@@ -15,6 +15,9 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Questions
+- **Dismiss all** in the *Waiting on you* panel closes every open question in the project at once, after you confirm. It shows when more than one question is waiting.
+
 ### Reading the chat
 - **New messages no longer pull you down while you're reading.** The chat only follows new messages when you're already at the bottom; before, a bug made every new message jump to the bottom.
 - **↓ N new messages** appears when something arrives below where you're reading; click it to jump down.
