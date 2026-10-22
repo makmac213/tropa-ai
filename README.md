@@ -134,7 +134,7 @@ Claude runs on your computer through the host helper (`claude -p`, with no tools
 
 1. **Start TropaAI** with `tropa start` if it isn't running. It opens http://localhost:8888.
 2. **Create a project:** click **+** next to *Projects* and fill in:
-   - **Name.** The folder is created at `~/projects/<name>`.
+   - **Name.** The folder is created at `~/projects/<name>`; **change where…** picks another place (your computer's own folder window, or type a path such as `~/Documents/Work`). The place you choose is remembered for the next project. Simple mode's *Build your team* has the same **Change where…** button.
    - **Brief / spec**, saved as `docs/SPEC.md`: what to build, must-haves, and what "done" means.
    - **Files** (optional): mockups, docs and images, saved in `docs/attachments/`.
    - **Team:** **Start from** a [ready-made team](#ready-made-teams) (Website studio, SEO team, Recruitment team, Social media team, Sales outreach team, Email marketing team, Paid ads team, Bookkeeping team, Grant writing team, Customer support desk, Market research team, Research & publishing desk, Small dev team, Solo developer) or start empty and build your own. Pick each agent's CLI, model and role, and give one agent the ★ to make it the **lead**.
@@ -219,7 +219,7 @@ tropa panel
 - **`.gitignore`:** entries are appended.
 - **Your code:** untouched.
 
-**Projects outside `~/projects`:** use `tropa host start -p 8888 --projects-dir ~/code`, or set `TROPA_PROJECTS_DIR=~/code`.
+**Projects outside `~/projects`:** pick another place with **Change where…** when you create one (any folder in your home or on an external drive; a missing folder is created). To change the default for good, use `tropa host start -p 8888 --projects-dir ~/code`, or set `TROPA_PROJECTS_DIR=~/code`.
 
 ---
 

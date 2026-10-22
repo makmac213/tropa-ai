@@ -321,8 +321,34 @@ def project_file(cfg, rel):
     return p
 
 
+def drop_junk_attachments(cfg):
+    """An old chat-page bug saved the room's name, one character at a time, as tiny '<id>-pasted.png' files in
+    docs/attachments. A real image is never 4 bytes or less: remove those."""
+    d = os.path.join(cfg["root"], "docs", "attachments")
+    try:
+        names = os.listdir(d)
+    except OSError:
+        return
+    n = 0
+    for f in names:
+        p = os.path.join(d, f)
+        if re.fullmatch(r"\d+-pasted\.png", f) and os.path.isfile(p) and os.path.getsize(p) <= 4:
+            try:
+                os.remove(p); n += 1
+            except OSError:
+                pass
+    if n:
+        log(f"removed {n} empty pasted.png files from docs/attachments (left by an old chat-page bug)")
+
+
 def sync_files(cfg, resp):
     for a in resp.get("files") or []:          # room -> project
+        if a.get("name") == "pasted.png" and int(a.get("size") or 0) <= 4 and not a.get("message_id"):
+            try:   # junk from an old chat-page bug: never write it; marking it failed takes it off the server's list
+                http(cfg, f"/watch/files/{a['id']}/failed", {"error": "empty pasted.png from an old chat-page bug; not saved"})
+            except Exception:
+                pass
+            continue
         try:
             dest = project_file(cfg, a["path"])
             req = urllib.request.Request(cfg["server"] + a["url"])
@@ -1137,6 +1163,7 @@ class Watcher:
         os.makedirs(CHATROOM, exist_ok=True)
         open(BROADCAST, "a").close()
         log(f"watching {self.cfg['room']} on {self.cfg['server']}; tmux '{self.cfg['tmux_session']}'")
+        drop_junk_attachments(self.cfg)
         ok = None
         while True:
             if self.code_changed(stamp) and not self.slash_busy:   # updated on disk (tropa update): restart on the new code

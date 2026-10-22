@@ -17,6 +17,8 @@
     --fill-accent: #4566f7; --on-accent: #ffffff;   /* buttons, badges, selected segments */
     --fill-ok: #1a8359; --on-ok: #ffffff;           /* "auto-wake on", working */
     --fill-warn: #f0b35a; --on-warn: #1d1300;       /* approval pills, lead star, paused */
+    --fill-danger: #ff7a7a; --on-danger: #210404;   /* "needs attention" badges */
+    --review: #b9a0f5;                              /* tasks waiting for review */
     --run: #3cc4d9; --fill-run: #0f7f91; --on-run: #ffffff;   /* idle at the prompt with a background shell running */
     --lim: #c4a1ff; --fill-lim: #7c4dcc; --on-lim: #ffffff;   /* out of credits, usage limit or rate-limited */
     --shadow: rgba(0,0,0,.35);
@@ -25,11 +27,13 @@
   :root[data-theme="light"] { color-scheme: light;
     --bg: #f6f7f9; --panel: #ffffff; --panel2: #f0f2f5; --line: #dfe3e9;
     --text: #1b1f27; --muted: #5d6576; --accent: #3651d1; --accent-weak: rgba(54,81,209,.10);
-    --human: #9a5800; --system: #5f6778; --ok: #0d7a4f; --danger: #c22a2a; --mention: rgba(154,88,0,.09);
+    --human: #9a5800; --system: #5f6778; --ok: #0a6e47; --danger: #c22a2a; --mention: rgba(154,88,0,.09);
     --code: #f1f3f6; --idle: #6b7280;
     --fill-accent: #3651d1; --on-accent: #ffffff;
     --fill-ok: #0d7a4f; --on-ok: #ffffff;
     --fill-warn: #a96500; --on-warn: #ffffff;
+    --fill-danger: #c22a2a; --on-danger: #ffffff;
+    --review: #6d3fc0;
     --run: #0b7285; --fill-run: #0b7285; --on-run: #ffffff;
     --lim: #6d3fc0; --fill-lim: #6d3fc0; --on-lim: #ffffff;
     --shadow: rgba(16,24,40,.14);
@@ -39,11 +43,13 @@
     :root:not([data-theme="dark"]) { color-scheme: light;
     --bg: #f6f7f9; --panel: #ffffff; --panel2: #f0f2f5; --line: #dfe3e9;
     --text: #1b1f27; --muted: #5d6576; --accent: #3651d1; --accent-weak: rgba(54,81,209,.10);
-    --human: #9a5800; --system: #5f6778; --ok: #0d7a4f; --danger: #c22a2a; --mention: rgba(154,88,0,.09);
+    --human: #9a5800; --system: #5f6778; --ok: #0a6e47; --danger: #c22a2a; --mention: rgba(154,88,0,.09);
     --code: #f1f3f6; --idle: #6b7280;
     --fill-accent: #3651d1; --on-accent: #ffffff;
     --fill-ok: #0d7a4f; --on-ok: #ffffff;
     --fill-warn: #a96500; --on-warn: #ffffff;
+    --fill-danger: #c22a2a; --on-danger: #ffffff;
+    --review: #6d3fc0;
     --run: #0b7285; --fill-run: #0b7285; --on-run: #ffffff;
     --lim: #6d3fc0; --fill-lim: #6d3fc0; --on-lim: #ffffff;
     --shadow: rgba(16,24,40,.14);
@@ -57,7 +63,6 @@
   .app { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
   aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
   .brand { padding: 14px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
-  .brand .logo { width: 28px; height: 28px; border-radius: 7px; background: var(--accent); color: #fff; display: grid; place-items: center; font-family: ui-monospace, monospace; font-weight: 700; }
   .brand b { font-size: 15px; }
   .brand .logo-img { width: 30px; height: 30px; flex: none; }
   .conn { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
@@ -106,7 +111,7 @@
   .dl-btn.hot { color: var(--human); border-color: var(--human); } .dl-btn.on { background: var(--accent-weak); color: var(--text); }
   .dl-btn.a-btn { color: var(--danger); border-color: var(--danger); }
   .room .pb, .pb { font-size: 10.5px; font-weight: 700; border-radius: 9px; padding: 0 6px; line-height: 16px; margin-left: 4px; }
-  .pb.q { background: var(--fill-warn); color: var(--on-warn); } .pb.a { background: var(--danger); color: #210404; }
+  .pb.q { background: var(--fill-warn); color: var(--on-warn); } .pb.a { background: var(--fill-danger); color: var(--on-danger); }
   .msg.q-open { background: color-mix(in srgb, var(--human) 9%, transparent); }
   .qbadge { margin-top: 4px; font-size: 11.5px; font-weight: 600; border: 0; border-radius: 9px; padding: 1px 9px; background: var(--fill-warn); color: var(--on-warn); cursor: pointer; }
   .qpanel { position: absolute; top: 57px; right: 0; bottom: 0; width: min(400px, 100%); z-index: 5; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line);
@@ -130,9 +135,10 @@
   .attn-row .at { flex: 1 1 340px; min-width: 0; font-size: 13.5px; } .attn-row .d { font-size: 12.5px; color: var(--muted); }
   .attn-row .aa { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .atag { min-width: 68px; text-align: center; border-radius: 5px; padding: 0 7px; font-size: 11.5px; font-weight: 600; }
-  .atag.k-stalled, .atag.k-blocked { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
-  .atag.k-approval { background: color-mix(in srgb, var(--human) 18%, transparent); color: var(--human); }
-  .atag.k-review { background: rgba(155,123,234,.18); color: #9b7bea; } .atag.k-idle { background: var(--accent-weak); color: var(--accent); }
+  /* text mixed a little toward --text: darker in light mode, lighter in dark, so it stays AA on the tinted pill */
+  .atag.k-stalled, .atag.k-blocked { background: color-mix(in srgb, var(--danger) 12%, transparent); color: color-mix(in srgb, var(--danger) 80%, var(--text)); }
+  .atag.k-approval { background: color-mix(in srgb, var(--human) 12%, transparent); color: color-mix(in srgb, var(--human) 80%, var(--text)); }
+  .atag.k-review { background: color-mix(in srgb, var(--review) 12%, transparent); color: color-mix(in srgb, var(--review) 80%, var(--text)); } .atag.k-idle { background: var(--accent-weak); color: var(--accent); }
   .attn-note { font-size: 12.5px; padding: 7px 0; border-top: 1px solid var(--line); }
   .attn-ok { font-size: 12.5px; margin: -4px 0 10px; }
   .attn-form { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 12.5px; padding: 8px 0; border-top: 1px solid var(--line); }
@@ -187,6 +193,9 @@
   .bd-l { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; } .bd-in + .bd-l { margin-top: 12px; }
   .bd-r { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 14px; }
   .bd-pick { display: flex; gap: 8px; margin-top: 4px; } .bd-pick .tbtn { white-space: nowrap; }
+  .bd-par { align-items: center; flex-wrap: wrap; margin: -2px 0 10px 26px; } .bd-par .linkbtn { margin-left: 0; font-size: 13px; }
+  .bd-par + .bd-pick { margin: -4px 0 10px 26px; }
+  #npWhere { margin-left: 0; font-size: inherit; }
   .bd-warn { background: var(--mention); border-left: 3px solid var(--human); padding: 10px 12px; border-radius: 6px; font-size: 13.5px; }
   .bd-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: flex-end; position: sticky; bottom: 0; background: var(--bg); padding: 14px 0 18px; border-top: 1px solid var(--line); }
   .bd-foot .err { color: var(--danger); margin-right: auto; font-size: 13.5px; }
@@ -222,7 +231,7 @@
   .rs-item .ic img { width: 100%; height: 100%; object-fit: cover; }
   .rs-item .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
   .rs-item .go { color: var(--muted); font-size: 12px; margin-left: auto; padding: 0 2px; opacity: 0; background: none; border: 0; cursor: pointer; } .rs-item:hover .go { opacity: 1; }
-  .rs-item.missing { opacity: .55; cursor: default; }
+  .rs-item.missing { cursor: default; } .rs-item.missing .nm { color: var(--muted); font-style: italic; }   /* no opacity: it would drop the text below AA contrast */
   .msgs.blurred ~ .rside .ic img, .msgs.blurred ~ .rside .bd { filter: blur(6px); }   /* /blur covers the panel too */
   @media (max-width: 1100px) { .rside { display: none; } }
   .empty { color: var(--muted); text-align: center; margin-top: 18vh; padding: 0 20px; }
@@ -1144,7 +1153,7 @@
         <div class="np-hint">Any folder in your home folder or on an external drive (not hidden or system folders). To allow other places, set <code>TROPA_PROJECT_ROOTS</code> before starting the host helper.</div></div></div>
     <div class="np-grid">
       <div><label class="f" for="npName">Name</label><input id="npName" placeholder="e.g. Recipe Finder" autocomplete="off"></div>
-      <div id="npFolderBox"><label class="f" for="npFolder">Folder</label><div class="np-folder"><span id="npBase">~/projects/</span><input id="npFolder" placeholder="recipe-finder" autocomplete="off" spellcheck="false"></div></div>
+      <div id="npFolderBox"><label class="f" for="npFolder">Folder <small>created inside <button type="button" class="linkbtn" id="npWhere" title="Choose where the new folder is created">change where…</button></small></label><div class="np-folder"><span id="npBase">~/projects/</span><input id="npFolder" placeholder="recipe-finder" autocomplete="off" spellcheck="false"></div></div>
     </div>
     <label class="f" for="npBrief">Brief / spec <small id="npBriefHint">saved as docs/SPEC.md · markdown</small></label>
     <textarea id="npBrief" rows="7" placeholder="What are we building and for whom? Must-haves, tech constraints, and what “done” means…"></textarea>
@@ -1567,7 +1576,7 @@
         const a = e.attachment; let hit = false;
         for (const arr of state.messages.values()) for (const m of arr) if (m.id === a.message_id) { m.attachments = (m.attachments || []).map((x) => (x.id === a.id ? a : x)); hit = true; }
         if (hit) renderMessages({ stick: false });
-        if (a.room_id) { addFiles(a.room_id, [a]); if (a.room_id === state.current) renderRside(); }
+        if (a.room_id) { noteRoomFiles(a.room_id, [a]); if (a.room_id === state.current) renderRside(); }
       }
       else if (e.type === 'question') {
         const i = state.questions.findIndex((x) => x.id === e.question.id);
@@ -1635,7 +1644,7 @@
       const arr = state.messages.get(key);
       if (arr && !arr.some((x) => x.id === m.id)) arr.push(m);
     }
-    if (m.attachments?.length) addFiles(m.room_id, m.attachments.map((a) => ({ ...a, message_id: m.id, created_at: a.created_at || m.created_at })));
+    if (m.attachments?.length) noteRoomFiles(m.room_id, m.attachments.map((a) => ({ ...a, message_id: m.id, created_at: a.created_at || m.created_at })));
     const r = state.rooms.find((x) => x.id === m.room_id);
     if (r) { r.last_message_id = m.id; r.message_count = (r.message_count || 0) + 1; }
     const visible = !state.searching && (state.current === m.room_id || state.current === ALL);
@@ -2509,7 +2518,7 @@
     try { state.files[room] = await api(`/rooms/${encodeURIComponent(room)}/files?limit=300`); } catch { state.files[room] = []; }
     if (room === state.current) renderRside();
   }
-  function addFiles(room, atts) {
+  function noteRoomFiles(room, atts) {   // keep the side panel's file list current (not the composer's attachFiles)
     const list = state.files[room]; if (!list || !atts?.length) return;
     for (const a of atts) { const i = list.findIndex((x) => x.id === a.id); if (i >= 0) list[i] = { ...list[i], ...a }; else list.unshift(a); }
   }
@@ -3336,10 +3345,11 @@
     el.hidden = !state.pending.length;
     el.innerHTML = state.pending.map((p) => `<span class="pchip ${p.error ? 'bad' : p.att ? '' : 'up'}" title="${esc(p.error || '')}">${p.att ? (p.att.is_image ? '🖼' : fileIcon(p.att.mime)) : p.error ? '⚠️' : '⏳'} ${esc(p.name)} <small>${fmtSize(p.size)}</small><button type="button" data-unpend="${p.key}" title="Remove">×</button></span>`).join('');
   }
-  function addFiles(files) {
+  function attachFiles(files) {   // files the human pasted, dropped or picked for the message being written
     if (state.current === ALL || state.searching) { alertInline('Pick a room in the sidebar to attach files.'); return; }
     const room = state.current;
     for (const f of files) {
+      if (!(f instanceof Blob)) continue;   // only real files: never upload anything else by mistake
       const p = { key: Math.random().toString(36).slice(2), name: f.name || 'pasted.png', size: f.size, att: null, error: '' };
       state.pending.push(p);
       uploadFile(f, room).then((a) => { p.att = a; }).catch((e) => { p.error = e.message; }).finally(renderPending);
@@ -3347,13 +3357,13 @@
     renderPending();
   }
   $('#attachBtn').addEventListener('click', () => $('#fileInput').click());
-  $('#fileInput').addEventListener('change', (e) => { addFiles([...e.target.files]); e.target.value = ''; });
-  $('#input').addEventListener('paste', (e) => { const files = [...(e.clipboardData?.files || [])]; if (files.length) { e.preventDefault(); addFiles(files); } });
+  $('#fileInput').addEventListener('change', (e) => { attachFiles([...e.target.files]); e.target.value = ''; });
+  $('#input').addEventListener('paste', (e) => { const files = [...(e.clipboardData?.files || [])]; if (files.length) { e.preventDefault(); attachFiles(files); } });
   for (const sel of ['#composer', '#msgs']) {
     const el = $(sel);
     el.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); el.classList.add('drop'); } });
     el.addEventListener('dragleave', () => el.classList.remove('drop'));
-    el.addEventListener('drop', (e) => { el.classList.remove('drop'); if (e.dataTransfer?.files?.length) { e.preventDefault(); addFiles([...e.dataTransfer.files]); } });
+    el.addEventListener('drop', (e) => { el.classList.remove('drop'); if (e.dataTransfer?.files?.length) { e.preventDefault(); attachFiles([...e.dataTransfer.files]); } });
   }
 
   // ---------- new project (from the chat) ----------
@@ -3388,7 +3398,7 @@
   function renderHostNote() {
     const h = state.host || {}; const el = $('#npHost');
     if (h.connected) {
-      $('#npBase').textContent = (h.projects_dir || '~/projects').replace(h.home || '\u0000', '~') + '/';
+      $('#npBase').textContent = parentBase() + '/';
       const where = h.home ? 'this machine' : 'the host';
       el.className = 'np-host ok'; el.innerHTML = npExisting() ? `✓ Host helper connected — the team is added to the folder you choose on ${esc(where)}.`
         : `✓ Host helper connected — the project is created in <code>${esc($('#npBase').textContent)}</code> on ${esc(where)}.`;
@@ -3659,6 +3669,20 @@
     $('#npBlocked').hidden = !bl.length;
     $('#npBlocked').innerHTML = bl.length ? `⚠ macOS didn't let TropaAI look in ${esc(bl.join(', '))}, so projects there aren't listed. Use <b>Browse…</b>, or allow access in <b>System Settings → Privacy &amp; Security → Files &amp; Folders</b> for the app you started TropaAI from (usually Terminal), then restart it.` : '';
   }
+  $('#npWhere').addEventListener('click', async () => {
+    const b = $('#npWhere'), label = b.textContent;
+    $('#npErr').textContent = '';
+    if (!state.host?.picker) {   // no folder window on this machine: type it
+      const p = prompt('Where should the new folder be created? (full path, e.g. ~/Documents)', parentBase());
+      if (p == null) return;
+      if (p.trim() && !/^(~|\/)/.test(p.trim())) { $('#npErr').textContent = 'Type the full path, e.g. ~/Documents'; return; }
+      setNewParent(p); renderHostNote(); return;
+    }
+    b.disabled = true; b.textContent = 'choose in the window that opened…';
+    try { const p = await pickParent(); if (p) { setNewParent(p); renderHostNote(); } }
+    catch (e) { $('#npErr').textContent = e.message; }
+    finally { b.disabled = false; b.textContent = label; }
+  });
   $('#npBrowse').addEventListener('click', async () => {
     const b = $('#npBrowse'), label = b.textContent;
     b.disabled = true; b.textContent = 'Choose in the window that opened…'; $('#npErr').textContent = '';
@@ -3674,6 +3698,19 @@
     finally { b.disabled = false; b.textContent = label; }
   });
   const baseName = (p) => String(p || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
+  // Where new project folders are created: the projects folder (~/projects), unless you chose another place.
+  // The choice is remembered in this browser for the next project.
+  const tildePath = (p) => { const home = state.host?.home; return home && (p === home || p.startsWith(home + '/')) ? '~' + p.slice(home.length) : p; };
+  const defaultParent = () => tildePath(state.host?.projects_dir || '~/projects');
+  const newParent = () => localGet('airc.newParent') || '';
+  const parentBase = () => (newParent() || defaultParent()).replace(/\/+$/, '');
+  function setNewParent(p) { p = String(p || '').trim().replace(/\/+$/, ''); localSet('airc.newParent', p && p !== defaultParent() ? p : ''); }
+  async function pickParent() {   // the computer's own folder window; the chosen place, or null if cancelled
+    const r = await api('/host/pick-folder', { method: 'POST', body: { purpose: 'parent' } });
+    if (r.ok && r.path) return tildePath(r.path);
+    if (!r.cancelled) throw new Error(r.error || "Couldn't open the folder window.");
+    return null;
+  }
   function applyMode() {
     const ex = npExisting();
     $('#npExisting').hidden = !ex; $('#npFolderBox').hidden = ex;
@@ -4230,7 +4267,7 @@
       for (const f of np.files) { btn.textContent = `Uploading ${f.name}…`; files.push((await uploadFile(f, room.id)).id); }
       btn.textContent = 'Creating…';
       const made = await api('/projects', { method: 'POST', body: {
-        name: name || slug, slug, existing: ex, path: path || undefined, folder: ex ? (v.startsWith('f:') ? v.slice(2) : slug) : ($('#npFolder').value.trim() || slugOf(name)), topic: name || slug, brief: $('#npBrief').value,
+        name: name || slug, slug, existing: ex, path: path || undefined, parent: (!ex && newParent()) || undefined, folder: ex ? (v.startsWith('f:') ? v.slice(2) : slug) : ($('#npFolder').value.trim() || slugOf(name)), topic: name || slug, brief: $('#npBrief').value,
         files, agents: np.team.map((a) => ({ name: a.name, tool: a.tool, model: a.model, role: a.role, prompt: jobFor(a) })), lead: np.lead,
         kickoff: $('#npKickoff').value.trim(), tools: selectedTools(), design_system: np.design, git: $('#npGit').checked, auto_approve: $('#npAuto').checked, start: $('#npStart').checked, trust: $('#npTrust').checked, keys } });
       $('#projDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
@@ -4292,7 +4329,7 @@
   }
   function renderBuild() {
     const h = state.host || {}, ts = teamTemplates();
-    const base = (h.projects_dir || '~/projects').replace(h.home || '\u0000', '~');
+    const base = parentBase();
     $('#build').innerHTML = `<div class="bd-wrap">
       <div class="bd-top"><h1>Build your team</h1><button type="button" class="bd-x" data-bd="close" aria-label="Close">×</button></div>
       <p class="bd-lead">Hire the roles you need, the way you'd staff a small office. Each one gets a job you can read and change.</p>
@@ -4318,6 +4355,10 @@
         <textarea id="bdBrief" class="bd-in" rows="4" placeholder="What should the team do, for whom, and what does done look like? They'll ask you if anything is unclear.">${esc(bt.brief)}</textarea></section>
       <section><h2>4. Where it's saved</h2>
         <label class="bd-r"><input type="radio" name="bdWhere" value="new" ${bt.where !== 'existing' ? 'checked' : ''}> A new folder: <code id="bdSlug">${esc(base)}/${esc(slugOf(bt.name) || '…')}</code></label>
+        ${bt.where !== 'existing' ? `<div class="bd-pick bd-par">${h.picker ? '<button type="button" class="tbtn" data-bd="parent">📂 Change where…</button>' : ''}
+          ${bt.ptype || !h.picker ? '' : '<button type="button" class="linkbtn" data-bd="ptype">or type a location</button>'}
+          ${newParent() ? `<span class="mut">·</span><button type="button" class="linkbtn" data-bd="pdefault">back to ${esc(defaultParent())}</button>` : ''}</div>
+          ${bt.ptype || !h.picker ? `<div class="bd-pick"><input id="bdParent" class="bd-in" value="${esc(base)}" placeholder="~/Documents" spellcheck="false" aria-label="Where to create the folder"></div>` : ''}` : ''}
         <label class="bd-r"><input type="radio" name="bdWhere" value="existing" ${bt.where === 'existing' ? 'checked' : ''}> A folder I already have</label>
         ${bt.where === 'existing' ? `<div class="bd-pick"><input id="bdPath" class="bd-in" value="${esc(bt.path)}" placeholder="~/work/my-project" spellcheck="false" aria-label="Folder">${h.picker ? '<button type="button" class="tbtn" data-bd="browse">📂 Browse…</button>' : ''}</div>` : ''}</section>
       <div class="bd-foot"><span class="err" id="bdErr" role="alert"></span><span class="mut">Runs on Claude Code. Other models and CLIs: switch to Advanced.</span>
@@ -4332,6 +4373,7 @@
     else if (t.id === 'bdName') { bt.name = t.value; const sl = $('#bdSlug'); if (sl) sl.textContent = sl.textContent.replace(/[^/]*$/, slugOf(t.value) || '…'); }
     else if (t.id === 'bdBrief') bt.brief = t.value;
     else if (t.id === 'bdPath') bt.path = t.value;
+    else if (t.id === 'bdParent') { setNewParent(t.value); const sl = $('#bdSlug'); if (sl) sl.textContent = `${t.value.trim().replace(/\/+$/, '') || '…'}/${slugOf(bt.name) || '…'}`; }
   });
   $('#build').addEventListener('toggle', (e) => { const card = e.target.closest?.('.bd-mem'); if (card && e.target.tagName === 'DETAILS') bt.members[Number(card.dataset.i)].open = e.target.open; }, true);
   $('#build').addEventListener('change', (e) => { if (e.target.name === 'bdWhere') { bt.where = e.target.value; renderBuild(); } });
@@ -4361,6 +4403,14 @@
         if (!bt.lead) bt.lead = name;
         bt.hiring = false; break;
       }
+      case 'ptype': bt.ptype = true; break;
+      case 'pdefault': setNewParent(''); bt.ptype = false; break;
+      case 'parent': {
+        b.disabled = true; b.textContent = 'Choose in the window that opened…';
+        try { const p = await pickParent(); if (p) setNewParent(p); }
+        catch (err) { renderBuild(); $('#bdErr').textContent = err.message; return; }
+        break;
+      }
       case 'browse': {
         b.disabled = true; b.textContent = 'Choose in the window that opened…';
         try {
@@ -4386,13 +4436,15 @@
     if (!name) { $('#bdName').focus(); return fail('Give the work a name.'); }
     if (!bt.brief.trim()) { $('#bdBrief').focus(); return fail('Say what the team should work on.'); }
     if (existing && !/^(~|\/)/.test(path)) return fail('Choose the folder with Browse…, or type its full path, e.g. ~/work/my-app');
+    const parent = existing ? '' : newParent();
+    if (parent && !/^(~|\/)/.test(parent)) return fail('Type the full path of where to create the folder, e.g. ~/Documents');
     const lead = bt.members.some((m) => m.name === bt.lead) ? bt.lead : bt.members[0].name;
     const how = bt.how ? `## How this team works\n${forHuman(bt.how)}` : '';
     btn.disabled = true; btn.textContent = 'Creating…';
     try {
       const slug = slugOf(name), room = await ensureRoomFor(name);
       const made = await api('/projects', { method: 'POST', body: {
-        name, slug, existing, path: path || undefined, folder: slug, topic: name, brief: bt.brief.trim(), files: [],
+        name, slug, existing, path: path || undefined, parent: parent || undefined, folder: slug, topic: name, brief: bt.brief.trim(), files: [],
         agents: bt.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: m.role, prompt: [m.prompt, how].filter(Boolean).join('\n\n') })),
         lead, kickoff: `@${lead} The work is described in the brief in docs/. Plan it with the team, tell me the plan in a few lines, and ask me anything that's unclear.`,
         tools: [], design_system: '', git: bt.git && !!state.host?.git, auto_approve: false, start: true, trust: true, keys: {} } });

@@ -141,3 +141,7 @@ The server was originally called AI-IRC; some internal names (`ai-irc.db`, the `
 - Busy detection: hold wakes while an agent is mid-turn, not only on approval prompts.
 - Notifications for new "needs attention" items and questions past their deadline.
 - Relay unknown terminal menus to the room (`@watcher answer NAME 2`, `@watcher keys NAME Escape`) instead of only the ones listed in `dismiss_prompts`. Parked: it needs new chat commands, not just settings.
+- **Model choice in Simple mode, for intermediate users** (noted, not built). Today Simple mode runs every agent on Claude Code with the models the team's prompt files set: Sonnet for leads and roles that need judgement or writing, Haiku for routine roles. Changing a model or CLI means switching to Advanced. The idea keeps those defaults (zero decisions for beginners) and adds optional, progressive controls to *Build your team*:
+  1. A closed-by-default **Models** choice: *Budget* (Haiku, Sonnet for the lead), *Balanced* (today's per-role defaults), *Best* (Opus for the lead and key thinkers, Sonnet for the rest), with a rough cost hint. It maps each role's tier to a model, so the team folders don't change.
+  2. A **Change** link on each member card: a short picker with friendly labels (*Haiku: fast, cheap · Sonnet: balanced · Opus: smartest, priciest*), plus other CLIs' models only when that CLI is installed and signed in (from the host helper's `clis`).
+  3. When Claude Code isn't installed but another CLI is, Simple mode uses that CLI's sensible default instead of asking for Claude Code.

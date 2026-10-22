@@ -553,11 +553,41 @@ class Host:
             raise RuntimeError(f"{p} is a hidden or system folder; tropa won't set up a team there")
         return p
 
+    def check_parent(self, path):
+        """Where a new project folder is created, when not in projects_dir: a folder in your home or on an
+        external drive (created if missing), never a hidden or system folder."""
+        raw = str(path or "").strip()
+        if not raw or not os.path.isabs(os.path.expanduser(raw)):
+            raise RuntimeError("give the full path of where to create it, e.g. ~/Documents")
+        p = os.path.realpath(os.path.expanduser(raw))
+        home = os.path.realpath(os.path.expanduser("~"))
+        root = next((r for r in self.allowed_roots() if p == r or p.startswith(r + os.sep)), None)
+        if not root:
+            raise RuntimeError(f"{p} is outside your home folder and external drives; to allow it, add it to TROPA_PROJECT_ROOTS and restart the host helper")
+        rel = [] if p == root else os.path.relpath(p, root).split(os.sep)
+        drive = root in [os.path.realpath(d) for d in self.DRIVES]
+        if any(x.startswith(".") for x in rel) or (root == home and rel and rel[0] in self.SKIP_HOME) \
+                or (drive and os.path.basename(root) == "mnt" and len(rel) > 1 and rel[1].lower() in self.WINDOWS_SYSTEM):
+            raise RuntimeError(f"{p} is a hidden or system folder; pick another place for the project")
+        if drive and p == root:
+            raise RuntimeError(f"{p} holds the drives themselves; pick a drive or a folder on one")
+        if os.path.exists(p) and not os.path.isdir(p):
+            raise RuntimeError(f"{p} is a file, not a folder")
+        try:
+            os.makedirs(p, exist_ok=True)
+            os.listdir(p)
+        except PermissionError:
+            raise RuntimeError(self.denied(p))
+        except OSError as e:
+            raise RuntimeError(f"can't use {p}: {e.strerror or e}")
+        return p
+
     # ---------- the computer's own folder picker: a web page can't learn a folder's path, the host can ----------
     def pick_folder(self, job):
         try:
-            path = self.folder_dialog()
-            res = {"ok": False, "cancelled": True} if not path else {"ok": True, "path": self.check_path(path)}
+            parent = job.get("purpose") == "parent"
+            path = self.folder_dialog("Choose where to create the project folder" if parent else "Choose your project folder", new=parent)
+            res = {"ok": False, "cancelled": True} if not path else {"ok": True, "path": (self.check_parent if parent else self.check_path)(path)}
         except Exception as e:
             res = {"ok": False, "error": str(e)[:400]}
         try:
@@ -565,10 +595,10 @@ class Host:
         except Exception as e:
             log(f"could not send the picked folder: {e}")
 
-    def folder_dialog(self):
-        """Show the system's folder chooser on this machine; the chosen folder, or None if cancelled."""
+    def folder_dialog(self, title="Choose your project folder", new=False):
+        """Show the system's folder chooser on this machine; the chosen folder, or None if cancelled.
+        new: offer a New Folder button where the system's dialog has one (choosing where to create a project)."""
         home = os.path.expanduser("~")
-        title = "Choose your project folder"
         if sys.platform == "darwin":
             loc = home.replace("\\", "\\\\").replace('"', '\\"')
             r = subprocess.run(["osascript", "-e", "activate", "-e",
@@ -584,7 +614,7 @@ class Host:
             ps = ("Add-Type -AssemblyName System.Windows.Forms;"
                   "$f=New-Object System.Windows.Forms.Form -Property @{TopMost=$true};"
                   "$d=New-Object System.Windows.Forms.FolderBrowserDialog;"
-                  f"$d.Description='{title}';$d.ShowNewFolderButton=$false;$d.SelectedPath='{start}';"
+                  f"$d.Description='{title}';$d.ShowNewFolderButton=${'true' if new else 'false'};$d.SelectedPath='{start}';"
                   "if($d.ShowDialog($f) -eq 'OK'){[Console]::Out.Write($d.SelectedPath)}")
             r = subprocess.run(["powershell.exe", "-NoProfile", "-STA", "-Command", ps], capture_output=True, text=True, timeout=900)
             win = r.stdout.strip()
@@ -766,13 +796,14 @@ class Host:
         else:
             if not re.fullmatch(r"[A-Za-z0-9._-]{1,60}", folder) or set(folder) == {"."}:
                 raise RuntimeError("invalid folder name")
-            root = os.path.join(self.projects_dir, folder)
+            root = os.path.join(self.check_parent(job["parent"]) if job.get("parent") else self.projects_dir, folder)
         if existing:
             if not os.path.isdir(root):
                 raise RuntimeError(f"{root} doesn't exist")
         elif os.path.exists(root) and os.listdir(root) and not os.path.exists(os.path.join(root, ".agent_sync")):
             raise RuntimeError(f"{root} already exists and isn't empty — pick another folder name, or choose it as an existing folder")
         os.makedirs(self.projects_dir, exist_ok=True)
+        os.makedirs(root, exist_ok=True)
         self._folders_at = 0; self._elsewhere_at = 0
         self.remember(job["slug"], root)
         self.report(job, f"📁 {'Adding the team kit to' if existing else 'Setting up'} `{root}` …", status="running", folder=root)
