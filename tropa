@@ -584,7 +584,7 @@ PY
 }
 
 cmd_init() {
-    local dir="" port="" slug="" human="" no_server=0 panel=0 tts=1 mode=""
+    local dir="" port="" slug="" human="" no_server=0 panel=0 tts=1 mode="" no_lead=0
     while [ $# -gt 0 ]; do
         case "$1" in
             -p|--port) port="$2"; shift ;;
@@ -595,6 +595,7 @@ cmd_init() {
             --tts) tts=1 ;;
             --no-tts) tts=0 ;;
             --node) mode=node ;;
+            --no-lead) no_lead=1 ;;   # the host helper adds the lead itself, after creating the team it was asked for
             -h|--help) usage; exit 0 ;;
             -*) die "unknown option '$1' (see: tropa help)" ;;
             *) dir="$1" ;;
@@ -662,6 +663,14 @@ cmd_init() {
             "http://localhost:$port/api/rooms" >/dev/null 2>&1 && info "  ✓ room $(C get room) ready"
     fi
     python3 "$S/setup_agent.py" refresh >/dev/null
+    # every project room keeps a lead orchestrator: one is created for an empty team (or picked, if none is set)
+    local el="" did lead_name
+    [ "$no_lead" = 1 ] || el=$(python3 "$S/setup_agent.py" ensure-lead 2>/dev/null | tail -n 1)
+    did=$(printf '%s' "$el" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("did",""))' 2>/dev/null)
+    lead_name=$(printf '%s' "$el" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("lead",""))' 2>/dev/null)
+    [ -n "$did" ] && info "  🧭 $did"
+    [ -n "$lead_name" ] && curl -fsS -X PATCH -H 'Content-Type: application/json' -d "{\"lead\":\"$lead_name\"}" \
+        "http://localhost:$port/api/rooms/$(C get room | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip(), safe=""))')/wake" >/dev/null 2>&1 || true
     # remember where this project lives, so the host helper (the chat's Start / Add agent buttons) finds it anywhere
     python3 - "$HOME/.tropa/projects-$port.json" "$(C get project)" "$dir" <<'PYREG' || true
 import json, os, sys

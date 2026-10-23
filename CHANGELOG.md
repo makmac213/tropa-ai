@@ -15,6 +15,15 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Every room keeps a lead
+- **Every project room has at least one agent, its lead orchestrator.**
+  - **The lead's job** is in `teams/lead.md`: it runs the room, plans and assigns the work, asks for teammates when needed, and does the work itself on a team of one.
+  - **Starting with an empty team** gives you that lead: *Start with a lead* in Build your team, *Just a lead* in the New project form, or a project created with no agents.
+  - **`tropa init`/`tropa update`** in a folder with no agents creates `lead-<project>`. Starting a team whose agents are gone does the same.
+  - **A team with agents but no lead** gets its first agent as lead.
+- **The lead can't be removed while others remain** (make another agent the lead first, ★ in ▦ Team), **and the last agent can't be removed.** This covers the sidebar's ×, the agent dialog, "@tropa remove …" in the chat and the lead's `remove_agents`. Build your team and the New project form don't let you remove the last member either.
+- **A room with no team** shows a banner: **Add a lead** creates its folder with the lead and starts it; **Use a folder I already have…** sets the team up in your folder. The old *New project room* dialog, which made rooms without a team, is gone.
+
 ### Quieter idle teams
 - **Idle agents no longer trade "standing by" messages.** Three rules together made them: the *stopped without reporting* nudge only accepted a reply with a @mention, every @mention woke its agent, and the wake prompt told every agent to finish with a @mention. Now:
   - **Any reply counts:** a short "nothing to do here" is enough for the nudge, and an acknowledgement from another agent ("thanks", "noted", "standing by") isn't treated as an assignment.

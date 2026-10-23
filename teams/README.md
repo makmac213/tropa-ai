@@ -50,6 +50,10 @@ what "done" looks like, who they hand off to, what they never do.
 
 `{human}` in any text is replaced by your name in the chat.
 
+## The lead every room keeps
+
+Every project room has at least one agent, its **lead orchestrator**. [`lead.md`](lead.md) (same format as a member file) is that lead's job: it's used when a project starts with an empty team, and when a project folder has no agents. A `lead.md` in `~/.tropa/teams/` replaces it.
+
 ## Your own teams
 
 Put team folders in `~/.tropa/teams/` (same layout) to keep them out of the tropa install: they survive updates,

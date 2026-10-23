@@ -1252,8 +1252,8 @@ function removeAgentNow(rawName) {
   for (const [rid, w] of watchers) if (w.agents.some((x) => x.toLowerCase() === low)) { roomId = rid; break; }
   const w = roomId ? watchers.get(roomId) : null;
   const slug = roomId.startsWith('project:') ? roomId.slice('project:'.length) : '';
+  keepsLead(roomId, [name]);
   removedAgents.set(low, Date.now() + REMOVED_TTL);
-  if (roomId && String(wakeSettings(roomId).lead || '').toLowerCase() === low) setWakeSettings(roomId, { lead: '' });
   q.deleteAgent.run(name);
   broadcast({ type: 'agent_deleted', name });
   let stopped = 'none';
@@ -1988,6 +1988,8 @@ api.post('/host/poll', wrap(async (req, res) => {
         return { id: String(t.id), name: String(t.name || t.id).slice(0, 60), summary: String(t.summary || '').slice(0, 300),
           lead: members.some((m) => m.name === t.lead) ? String(t.lead) : (members[0]?.name || ''), how: String(t.how || '').slice(0, 6000), git: t.git !== false, members };
       }).filter((t) => t.members.length),
+    lead_template: (() => { const m = req.body.lead_template; return m && typeof m === 'object' && m.prompt
+      ? { role: String(m.role || '').slice(0, 200), model: String(m.model || '').slice(0, 80), prompt: String(m.prompt).slice(0, 6000) } : null; })(),
     keys: sanitizeKeys(req.body.keys, req.body.openrouter_info),
     usage: !!req.body.usage,
     ngrok: { installed: !!req.body.ngrok?.installed, authed: !!req.body.ngrok?.authed, version: String(req.body.ngrok?.version || '').slice(0, 40) },
@@ -2174,6 +2176,15 @@ api.post('/host/jobs/:id', wrap((req) => {
 const jobView = (j) => ({ id: j.id, room_id: j.room_id, slug: j.slug, status: j.status, folder_path: j.folder_path || '', log: j.log });
 api.get('/jobs/:id', wrap((req) => { const j = jobs.get(req.params.id); if (!j) throw new UserError('unknown job'); return jobView(j); }));
 
+function leadOrchestrator() {
+  const t = host.info.lead_template || {};
+  const clis = host.info.clis || [];
+  const tool = clis.includes('claude') || !clis.length ? 'claude' : clis.find((c) => CLI_TOOLS.includes(c)) || 'claude';
+  const human = (s) => String(s || '').replace(/\{human\}/g, HUMAN_NAME);
+  return { name: 'lead', tool, model: tool === 'claude' ? (t.model || 'sonnet') : '', instruction: '',
+    role: human(t.role || 'Lead: runs this room for {human}: plans the work, assigns it, keeps it moving, reports back'),
+    prompt: human(t.prompt || '') };
+}
 api.post('/projects', wrap((req) => {
   const b = req.body || {};
   if (!hostOnline()) throw new UserError('the tropa host helper is not running on your machine — start it with: tropa host start');
@@ -2196,6 +2207,9 @@ api.post('/projects', wrap((req) => {
     role: String(a.role || '').trim().slice(0, 200), instruction: String(a.instruction || '').trim().slice(0, 2000),
     prompt: String(a.prompt || '').trim().slice(0, 12000),
   }));
+  // every project room keeps at least one agent, its lead orchestrator (teams/lead.md). An existing folder may
+  // already have a team: there the host helper adds the lead only if it has none.
+  if (!agents.length && !existing) agents.push(leadOrchestrator());
   const seen = new Set();
   for (const a of agents) {
     if (!a.name) throw new UserError('every agent needs a name');
@@ -2207,7 +2221,7 @@ api.post('/projects', wrap((req) => {
     if (a.tool === 'gemini' && /^(ollama|openrouter)\//.test(a.model)) throw new UserError(`${a.name}: Gemini CLI only runs Google's Gemini models`);
     if (a.model && !/^[A-Za-z0-9._:/@-]{1,80}$/.test(a.model)) throw new UserError(`${a.name}: invalid model id`);
   }
-  const lead = b.lead ? cleanName(b.lead) : '';
+  const lead = (b.lead ? cleanName(b.lead) : '') || agents[0]?.name || '';
   // this project's own API keys (optional): checked and saved by the host helper outside the project folder
   const projectKeys = {};
   for (const [prov, v] of Object.entries(b.keys && typeof b.keys === 'object' ? b.keys : {})) {
@@ -3082,7 +3096,20 @@ function teamMembers(roomId, words) {
   for (const a of q.listAgents.all()) if ((a.project || '').toLowerCase() === slug) team.set(a.name.toLowerCase(), a.name);
   return [...new Set(words.map((w) => team.get(String(w).replace(/^@/, '').toLowerCase())).filter(Boolean))];
 }
+/** Every project room keeps its lead: refuse a removal that would take the lead or leave nobody. */
+function keepsLead(roomId, names) {
+  if (!String(roomId).startsWith('project:')) return;
+  const slug = roomId.slice('project:'.length).toLowerCase();
+  const team = new Set((watcherFor(roomId)?.agents || []).map((n) => n.toLowerCase()));
+  for (const a of q.listAgents.all()) if ((a.project || '').toLowerCase() === slug) team.add(a.name.toLowerCase());
+  const gone = new Set(names.map((n) => String(n).toLowerCase()));
+  const left = [...team].filter((n) => !gone.has(n));
+  const lead = String(wakeSettings(roomId).lead || '').toLowerCase();
+  if (team.size && !left.length) throw new UserError(`every project room keeps at least one agent, its lead: ${names.length === 1 ? `@${names[0]} is` : 'they are'} the last on this team`);
+  if (lead && gone.has(lead) && left.length) throw new UserError(`@${wakeSettings(roomId).lead} leads this room. Make another agent the lead first (★ in ▦ Team), then remove it`);
+}
 function askRemoval(roomId, names, { by, reason }) {
+  keepsLead(roomId, names);
   const dup = [...rmReqs.values()].find((r) => r.room_id === roomId && r.status === 'requested' && r.names.join() === names.join());
   if (dup) return dup;
   const r = { id: ++rmReqSeq, room_id: roomId, names, by, reason: String(reason || '').slice(0, 300), status: 'requested', created_at: Date.now() };
@@ -3144,7 +3171,8 @@ function removalCommand(m) {
   const names = teamMembers(m.room_id, ask[1].split(/[\s,]+|\band\b/i).filter(Boolean));
   if (!names.length) { if (explicit) shareNote(m.room_id, `⚠️ No agent on this team matches "${ask[1].slice(0, 80)}".`); return explicit; }
   if (!explicit && names.length !== ask[1].split(/[\s,]+|\band\b/i).filter((w) => w && !/^(the|agents?|@?all)$/i.test(w)).length) return false;   // "remove the old code" etc.
-  askRemoval(m.room_id, names, { by: HUMAN_NAME, reason: '' });
+  try { askRemoval(m.room_id, names, { by: HUMAN_NAME, reason: '' }); }
+  catch (e) { shareNote(m.room_id, `⚠️ ${e.message}.`); }
   return true;
 }
 

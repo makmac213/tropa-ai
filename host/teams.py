@@ -49,6 +49,17 @@ def load(folder):
             "how": meta.get("body", "")[:MAX_PROMPT], "members": [members[n] for n in names]}
 
 
+def lead_member():
+    """The lead orchestrator every project room keeps (teams/lead.md): its role, model and job, or None."""
+    for d in reversed(dirs()):
+        p = os.path.join(d, "lead.md")
+        if os.path.isfile(p):
+            m = parse(p) or {}
+            return {"name": "lead", "role": (m.get("role") or "").strip()[:200], "model": (m.get("model") or "").strip()[:80],
+                    "tool": "claude", "prompt": m.get("body", "")[:MAX_PROMPT]}
+    return None
+
+
 def catalog():
     found = {}
     for d in dirs():

@@ -146,6 +146,11 @@ Claude runs on your computer through the host helper (`claude -p`, with no tools
 
 ### Ready-made teams
 
+**Every project room keeps a lead.** It has at least one agent, its lead orchestrator, which runs the room for you: it plans the work, assigns it, asks for teammates when needed, and does the work itself on a team of one. Its job is [`teams/lead.md`](teams/lead.md).
+- Start with an empty team and you get that lead. `tropa init`/`tropa update` in a folder without agents creates `lead-<project>`.
+- A room with no team shows **Add a lead**.
+- The lead can't be removed while others remain (give ★ to someone else first), and the last agent can't be removed.
+
 Each ready-made team is a folder of prompts in [`teams/`](teams/): a `team.md` (name, summary, lead, and how the team works together) and one file per member, whose name is the agent's name and whose text is that member's job. When you start a project from a team, each agent's job, plus the team's way of working, is saved in its `AGENT.md` under *Your job* and stays there for the whole project.
 
 | Team | Lead | Members | What it does |
