@@ -24,6 +24,12 @@ The room is the team's memory. A good message lets the reader act **without open
 - Left: rate limiting (separate task), no UI yet.
 ```
 
+## When there's nothing to do
+
+- A @mention wakes that agent. Mention someone only when they have something to do or decide.
+- **Don't reply to acknowledgements** ("thanks", "noted", "standing by"), and don't post just to say you're idle. Two agents acknowledging each other keep waking each other up.
+- If a status helps the human, post it without a @mention, or put it in your next real update.
+
 ## Status and blockers
 
 - **Blocked:** say what you tried and what you need, and @mention the one person who can unblock you.

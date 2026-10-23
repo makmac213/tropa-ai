@@ -2857,7 +2857,7 @@
       <form class="qother" data-qform="${q.id}"><input data-qother="${q.id}" aria-label="Answer ${esc(q.agent)}" placeholder="${q.options.length ? 'Another answer…' : 'Your answer…'}" value="${esc(keep[q.id] || '')}"><button type="submit" class="tbtn">Send</button></form>
       <div class="qf"><span class="mut">${q.fallback ? (q.deadline_at ? `Goes with “${esc(q.fallback)}” in ${untilShort(q.deadline_at)}` : `If no answer: ${esc(q.fallback)}`) : 'Waits for your answer'}</span><span class="sp"></span>
         ${q.message_id ? `<button type="button" class="lnk" data-gomsgq="${q.message_id}">Jump to message</button>` : ''}<button type="button" class="lnk mutl" data-qdismiss="${q.id}">Dismiss</button></div></article>`;
-    box.innerHTML = `<div class="qtop"><h2>Waiting on you</h2>${list.length ? `<span class="pb q">${list.length}</span>` : ''}<span class="sp"></span><button type="button" class="x" id="qClose" aria-label="Close">×</button></div>
+    box.innerHTML = `<div class="qtop"><h2>Waiting on you</h2>${list.length ? `<span class="pb q">${list.length}</span>` : ''}<span class="sp"></span>${list.length > 1 ? '<button type="button" class="lnk mutl" id="qDismissAll" style="font-size:12.5px;margin-right:10px" title="Close every open question in this project without answering">Dismiss all</button>' : ''}<button type="button" class="x" id="qClose" aria-label="Close">×</button></div>
       ${list.map(card).join('') || '<div class="u-empty">Nothing waiting on you in this project.</div>'}
       ${done.length ? `<details class="qdone"><summary>Answered in the last day · ${done.length}</summary>${done.map((q) => `<div><span class="mut">${esc(q.agent)}:</span> ${esc(q.question.slice(0, 120))} <span class="ans">→ ${esc((q.answer || (q.status === 'dismissed' ? 'dismissed' : '')).replace(new RegExp('^@' + q.agent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').slice(0, 120))}</span> <span class="mut">· ${q.status === 'assumed' ? 'went ahead without an answer' : q.status === 'dismissed' ? 'dismissed' : esc(q.answered_by)}, ${fmtTime(q.closed_at)}</span></div>`).join('')}</details>` : ''}
       <div class="mut" style="font-size:12px">Your answer is posted in the chat as a reply and wakes the agent.</div>`;
@@ -2879,6 +2879,15 @@
     const ob = e.target.closest('[data-openq]'); if (ob) { openQPanel(Number(ob.dataset.openq)); return; }
     if (!e.target.closest('#qPanel')) return;
     if (e.target.closest('#qClose')) { state.qOpen = false; renderQPanel(); renderHeader(); return; }
+    const da = e.target.closest('#qDismissAll');
+    if (da) {
+      const n = openQs(state.current).length;
+      if (!confirm(`Dismiss all ${n} open questions in this project? They close without an answer, and the agents aren't told.`)) return;
+      da.disabled = true;
+      api(`/rooms/${encodeURIComponent(state.current)}/questions/dismiss`, { method: 'POST', body: {} })
+        .then((r) => infoInline(`Dismissed ${r.dismissed} question${r.dismissed === 1 ? '' : 's'}.`)).catch((err) => { alertInline(err.message); da.disabled = false; });
+      return;
+    }
     const a = e.target.closest('[data-qans]'); if (a) { answerQ(Number(a.dataset.qans), a.dataset.ans, a); return; }
     const d = e.target.closest('[data-qdismiss]'); if (d) { api(`/questions/${d.dataset.qdismiss}/dismiss`, { method: 'POST', body: {} }).catch((err) => alertInline(err.message)); return; }
     const t = e.target.closest('[data-opentask]'); if (t) { openTask(Number(t.dataset.opentask)); return; }

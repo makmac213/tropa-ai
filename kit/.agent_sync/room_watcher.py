@@ -305,7 +305,19 @@ def auto_on(cfg):
 def wake_text(cfg, name, reason):
     return (f"[tropa] {reason} Read your unread messages in {cfg['room']} "
             f"(tropa read_messages, agent \"{name}\", limit {cfg['history_limit']}). "
-            f"If it assigns you work: post a one-line plan, do it, and finish with a message that @mentions who is next (result, blocker or done). If it doesn't concern you, stay silent.")
+            f"If it assigns you work: post a one-line plan, do it, and finish with a message that @mentions who is next (result, blocker or done). "
+            f"If it doesn't concern you, or it only acknowledges something or says someone is standing by, end your turn without posting: "
+            f"don't reply to acknowledgements, and don't @mention anyone just to say you're idle (a mention wakes them).")
+
+
+# the server's isAck (keep in step): an acknowledgement asks nothing of anyone, so it isn't an assignment
+ACK_RE = re.compile(r"\b(ok(ay)?|ack(nowledged)?|noted|thanks|thank you|thx|got it|will do|sounds good|understood|roger|copy that|standing by|on standby|stand(ing)? down|idle|no action (needed|required)|nothing (needed|to do|more|else|pending)|all (good|set|clear)|no (further )?(changes|updates|action))\b|👍|✅|🙏", re.I)
+ASK_RE = re.compile(r"\?|\b(please|can you|could you|would you|need you|needs? (your|you)|assign|review|test|fix|implement|start|do this|next step|todo|task #?\d|blocked|error|fail)", re.I)
+
+
+def is_ack(text):
+    t = re.sub(r"\s+", " ", re.sub(r"[*_`>#-]", " ", re.sub(r"@[\w.-]+", "", str(text or "")))).strip()
+    return 0 < len(t) <= 160 and bool(ACK_RE.search(t)) and not ASK_RE.search(t)
 
 
 # ---------- files ----------
@@ -1117,8 +1129,9 @@ class Watcher:
 
     # -- silent stops: an agent finished a turn on assigned work without reporting in the room --
     def owed(self, a, msgs):
-        """Id of the latest message that assigned work to `a` and that `a` hasn't answered with a handoff
-        (a post that @mentions someone). Status posts without a mention don't count as an answer."""
+        """Id of the latest message that assigned work to `a` and that `a` hasn't answered since. Any post of
+        its own answers it: "nothing to do here" is a fine answer, and demanding an @mention made idle agents
+        trade "standing by" acks. An acknowledgement from another agent isn't an assignment."""
         me, lead = a.lower(), str(self.cfg.get("lead") or "").lower()
         agents = {x.lower() for x in agent_windows(self.cfg)}
         assigned = answered = 0
@@ -1127,8 +1140,9 @@ class Watcher:
             if kind == "system":
                 continue
             if who == me:
-                if any(x != me for x in ments):
-                    answered = m["id"]
+                answered = m["id"]
+                continue
+            if kind == "agent" and is_ack(m.get("content")):
                 continue
             if me in ments or (me == lead and kind == "human" and not any(x in agents for x in ments)):
                 assigned = m["id"]
@@ -1155,10 +1169,10 @@ class Watcher:
         src = next((m for m in msgs if m["id"] == mid), {})
         type_into(self.cfg, a, (
             f"[tropa] You stopped without reporting in {self.cfg['room']}: message #{mid} from {src.get('sender', '?')} "
-            f"assigned you work and you haven't handed off yet. Do it now with tropa send_message: done (result, "
-            f"and @mention who's next), blocked (what you need, and from whom), or still running (what you're "
-            f"waiting for and when you'll report). If you started a server you still need, leave it running "
-            f"and carry on with the task; stop the ones you're done with."))
+            f"assigned you work and you haven't answered yet. Do it now with tropa send_message: done (result, "
+            f"and @mention who's next), blocked (what you need, and from whom), still running (what you're "
+            f"waiting for and when you'll report), or nothing for you to do (one line, no @mention). If you "
+            f"started a server you still need, leave it running and carry on with the task; stop the ones you're done with."))
         self.nudges[a] = (mid, n + 1)
         log(f"nudged {a}: stopped without reporting on #{mid} ({n + 1}/{MAX_NUDGES})")
 
