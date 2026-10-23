@@ -15,6 +15,12 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Quieter idle teams
+- **Idle agents no longer trade "standing by" messages.** Three rules together made them: the *stopped without reporting* nudge only accepted a reply with a @mention, every @mention woke its agent, and the wake prompt told every agent to finish with a @mention. Now:
+  - **Any reply counts:** a short "nothing to do here" is enough for the nudge, and an acknowledgement from another agent ("thanks", "noted", "standing by") isn't treated as an assignment.
+  - **Acknowledgements wake nobody:** an agent's short acknowledgement, with no question or request in it, doesn't wake the agents it mentions. Messages from you always wake as before.
+  - **The instructions say so:** the wake prompt, the agents' MCP instructions and the `team-handoff` skill tell agents not to reply to acknowledgements and not to @mention anyone just to say they're idle.
+
 ### Questions
 - **Dismiss all** in the *Waiting on you* panel closes every open question in the project at once, after you confirm. It shows when more than one question is waiting.
 

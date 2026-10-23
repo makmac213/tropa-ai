@@ -581,6 +581,7 @@ Workflow:
 2. Call check_inbox when you start a task, before handing off, and whenever you finish a chunk of work.
 3. Use send_message to hand off work, ask another agent a question, or report status. Mention agents with @name and the human with @${HUMAN_NAME}. Keep messages self-contained: include file paths, decisions, and next steps so the reader doesn't need your context. Questions for the human or a teammate always go here, never to your terminal or your CLI's own ask-user dialog (nobody watches it): ask, list the options, then end your turn and wait for the reply.
 4. Use wait_for_messages when you are blocked waiting for a reply.
+Quiet when idle: a @mention wakes that agent, so mention someone only when they have something to do or decide. Don't reply to acknowledgements ("thanks", "noted", "standing by"), and don't post just to say you're idle; a status nobody has to act on goes without a @mention, or not at all.
 5. Files: attachments in messages are shown as "📎 <path>" — that path is inside the project folder, read it there. To show the human or the team a file (mockup, screenshot, PDF, doc), save it in the project and call share_file with its path.
 6. Task board: the lead adds a card per assignment (task_add) with depends_on (task ids it waits for) and contract_from (ids it only needs the contract of); everyone moves their own card as work flows (task_update: doing → review → qa → done, or blocked). When a card's dependencies are met, its owner is woken. The human watches the board and its flowchart.
 8. Questions for ${HUMAN_NAME}: use ask_human (question, numbered options, your recommendation, what you'll do if there's no answer). It posts in the room and lists the question for ${HUMAN_NAME}; you are woken with the answer.
@@ -1404,7 +1405,8 @@ function watcherSay(roomId, content) {
 }
 function wakeText(roomId, agent, reason, s) {
   return `[tropa] ${reason} Read your unread messages in ${roomId} (tropa read_messages, agent "${agent}", limit ${s.history_limit}). ` +
-    'If it assigns you work: post a one-line plan, do it, and finish with a message that @mentions who is next (result, blocker or done). If it doesn\'t concern you, stay silent.';
+    'If it assigns you work: post a one-line plan, do it, and finish with a message that @mentions who is next (result, blocker or done). ' +
+    'If it doesn\'t concern you, or it only acknowledges something or says someone is standing by, end your turn without posting: don\'t reply to acknowledgements, and don\'t @mention anyone just to say you\'re idle (a mention wakes them).';
 }
 /** Who a message wakes: @all → everyone but the sender; @name → those agents; human with no
  *  agent mention → the lead (if running) else everyone; agent with no mention → nobody. */
@@ -1427,6 +1429,15 @@ function wakeEntry(roomId, agent) {
   let st = wakeState.get(k);
   if (!st) { st = { pending: [], timer: null, last: 0, history: [], capped: false }; wakeState.set(k, st); }
   return st;
+}
+// "Thanks", "noted, standing by", "nothing needed from you": an agent's acknowledgement asks nothing of anyone.
+// Waking the agent it mentions only gets an acknowledgement back, and the two keep each other busy.
+// Kept narrow: short, no question, an acknowledgement phrase, and no request in it.
+const ACK_RE = /\b(ok(ay)?|ack(nowledged)?|noted|thanks|thank you|thx|got it|will do|sounds good|understood|roger|copy that|standing by|on standby|stand(ing)? down|idle|no action (needed|required)|nothing (needed|to do|more|else|pending)|all (good|set|clear)|no (further )?(changes|updates|action))\b|👍|✅|🙏/i;
+const ASK_RE = /\?|\b(please|can you|could you|would you|need you|needs? (your|you)|assign|review|test|fix|implement|start|do this|next step|todo|task #?\d|blocked|error|fail)/i;
+function isAck(text) {
+  const t = String(text || '').replace(/@[\w.-]+/g, '').replace(/[*_`>#-]/g, ' ').replace(/\s+/g, ' ').trim();
+  return t.length > 0 && t.length <= 160 && ACK_RE.test(t) && !ASK_RE.test(t);
 }
 function scheduleWake(roomId, agent, msg) {
   const st = wakeEntry(roomId, agent);
@@ -1480,6 +1491,7 @@ bus.on('message', (m) => {
   }
   const s = wakeSettings(m.room_id);
   if (s.wake === 'paused') return;
+  if (m.sender_kind === 'agent' && isAck(m.content)) return;   // an agent's "thanks / standing by" wakes nobody
   for (const a of pickTargets(s, m, w.agents)) scheduleWake(m.room_id, a, m);
 });
 const roomOf = (req) => requireRoom(normalizeRoomId(req.params.id)).id;
