@@ -1325,11 +1325,43 @@ class Host:
                 log("another host helper for this port is already keeping teams running; this one won't")
         return bool(self._heal_lock)
 
+    KITS_EVERY = 300   # seconds between checks for projects whose team kit is older than this tropa
+
+    def update_kits(self):
+        """After tropa self-update (or a git pull): run `tropa update` in every project whose team kit and default
+        skills are older than this tropa's, so nobody has to do it by hand. `tropa update` records what it installed
+        in ~/.tropa/kit-stamps.json; a project that fails is retried only once tropa changes again."""
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import kit_stamp
+            want = kit_stamp.stamp()
+        except Exception as e:
+            log(f"kit check: {e}"); return
+        path = os.path.expanduser("~/.tropa/kit-stamps.json")
+        failed = getattr(self, "_kit_failed", {})
+        self._kit_failed = failed
+        for slug, root in sorted(self.team_roots().items()):
+            try:
+                have = json.load(open(path)).get(os.path.realpath(root))
+            except (OSError, ValueError):
+                have = None
+            if have == want or failed.get(root) == want:
+                continue
+            r = self.run([TROPA, "update", root], check=False)
+            if r.returncode == 0:
+                log(f"[{slug}] team kit updated to this tropa ({root})")
+            else:
+                failed[root] = want
+                log(f"[{slug}] couldn't update its team kit: {(r.stderr or r.stdout or '').strip()[-300:]}")
+
     def heal_all(self):
         """The automatic check, every HEAL_EVERY seconds in the background."""
         try:
             if time.time() - self._last_job_at < self.HEAL_QUIET or not self.heal_lock():
                 return
+            if time.time() - getattr(self, "_kits_at", 0) > self.KITS_EVERY:
+                self._kits_at = time.time()
+                self.update_kits()
             for slug, root in self.team_roots().items():
                 res = self.heal(slug, root)
                 if res and (res[0] or res[1]):

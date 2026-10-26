@@ -15,6 +15,9 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Projects update themselves
+- **No more `tropa update` in every project after `tropa self-update`.** `tropa update` now records which kit and default skills it installed (in `~/.tropa/kit-stamps.json`, not in the project). Every few minutes the host helper runs `tropa update` in each project that's behind, wherever its folder is, and that restarts a running team's watcher on the new scripts. A project whose update fails is retried after the next tropa update, and the failure is in the host helper's log.
+
 ### TropaAI keeps itself running
 - **The helper on your computer** (it starts and heals teams) **now comes back by itself:**
   - after a crash, within seconds;

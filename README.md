@@ -71,7 +71,7 @@ tropa autostart on       # keep it running: starts at login, back within a minut
 
 **Which port:** without `-p`, these use the port you last started with (`tropa start -p 8181` once, and plain `tropa start` keeps using 8181), else the port TropaAI already runs on, else 8888. `TROPA_PORT=…` overrides it.
 
-**Updating:** `tropa self-update` (the latest release, or `main` while there are none). It restarts the chat server and host helper on the new version by itself; your chats, projects and running teams are kept. Reload the page afterwards. Then run `tropa update <project>` for each project. `tropa restart` restarts them by hand.
+**Updating:** `tropa self-update` (the latest release, or `main` while there are none). It restarts the chat server and host helper on the new version by itself; your chats, projects and running teams are kept. Reload the page afterwards. Each project's team kit and default skills then update by themselves within a few minutes: the host helper runs `tropa update` in every project that's behind, wherever its folder is. `tropa restart` restarts them by hand, and `tropa update <project>` still updates one project right away.
 
 `tropa start` runs the chat server with Node. If you prefer Docker, use `tropa start --docker`; a port that already keeps its chats in Docker stays in Docker. Use `-p PORT` to run on another port (several can run side by side, each with its own chats).
 

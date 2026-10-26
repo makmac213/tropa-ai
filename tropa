@@ -696,6 +696,21 @@ if reg.get(slug) != root:
         json.dump(reg, f, indent=1)
 PYREG
     info "  🔗 linked to room $(C get room) on http://localhost:$port"
+    # remember which kit this project now has: the host helper updates projects whose kit is older (after self-update)
+    python3 - "$STATE_DIR/kit-stamps.json" "$dir" "$(python3 "$TROPA_HOME/host/kit_stamp.py")" <<'PYSTAMP' || true
+import json, os, sys
+path, root, stamp = sys.argv[1:4]
+os.makedirs(os.path.dirname(path), exist_ok=True)
+try:
+    d = json.load(open(path))
+except (OSError, ValueError):
+    d = {}
+d[os.path.realpath(root)] = stamp
+tmp = path + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(d, f, indent=1)
+os.replace(tmp, path)
+PYSTAMP
     if ! health "$port"; then   # linked to a TropaAI that isn't running: probably the wrong port
         local p up=""
         for p in $(known_ports); do [ "$p" != "$port" ] && health "$p" && { up=$p; break; }; done
@@ -885,7 +900,7 @@ case "${1:-help}" in
         else
             curl -fsSL "https://raw.githubusercontent.com/$TROPA_REPO/main/install.sh" | TROPA_REPO="$TROPA_REPO" TROPA_NO_START=1 bash || exit 1
         fi
-        echo "   Run 'tropa update' in each project to refresh its kit."
+        echo "   Your projects' team kits update by themselves within a few minutes (the host helper does it)."
         # the chat server and host helper still run the old code: restart them with the new script
         # (exec: this file was just replaced on disk, so don't read any more of it)
         exec "$TROPA_HOME/tropa" restart ;;
