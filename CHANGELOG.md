@@ -15,6 +15,13 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### TropaAI keeps itself running
+- **The helper on your computer** (it starts and heals teams) **now comes back by itself:**
+  - after a crash, within seconds;
+  - when the chat server runs on your computer rather than in Docker, the server starts it again within a minute;
+  - **a keeper**, which `tropa start` sets up the first time, checks every minute (launchd on a Mac, a systemd timer on Linux) and starts the chat server or the helper if either is down. It also starts TropaAI when you log in, and it works with Docker. `tropa keep` is that check by hand, and `tropa autostart off` turns it off.
+- **No more terminal instructions in the page.** Where the page used to say "run `tropa panel` / `tropa host start`", it now says in plain words that TropaAI's helper isn't running, with a **▶ Start the helper** button when the page can start it. When it can't (Docker), it says the helper comes back within a minute, or to open TropaAI with its shortcut. Once the helper is up, the page shows **▶ Start the team** without a reload.
+
 ### 👍 / 👎 on messages
 - **React to any message with 👍 or 👎** from its hover bar. Your reaction shows under the message; click it (or the same thumb) again to take it back.
 - **On an agent's message it's a quick approve or disapprove:** the agent is told to go ahead (👍) or not to (👎, and to ask what to change if the room doesn't say). Its wake comes a few seconds later with your final choice, so a quick change of mind sends one.

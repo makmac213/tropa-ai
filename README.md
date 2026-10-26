@@ -66,7 +66,7 @@ The Setup check shows the commands for the other agents: [OpenCode](https://open
 ```bash
 tropa start              # start TropaAI (chat + host helper) and open it in the browser
 tropa stop               # stop it
-tropa autostart on       # start it whenever you log in (macOS and Linux); off to undo
+tropa autostart on       # keep it running: starts at login, back within a minute if it stops (tropa start turns this on the first time); off to undo
 ```
 
 **Which port:** without `-p`, these use the port you last started with (`tropa start -p 8181` once, and plain `tropa start` keeps using 8181), else the port TropaAI already runs on, else 8888. `TROPA_PORT=…` overrides it.
@@ -922,7 +922,7 @@ Or put it in a project's `.mcp.json`:
 |---|---|
 | `tropa start [-p PORT] [--docker] [--no-open]` | Start TropaAI (chat server and host helper) and open it in the browser. Node by default. |
 | `tropa stop [-p PORT]` | Stop it |
-| `tropa autostart on\|off\|status [-p PORT]` | Start TropaAI when you log in (launchd on macOS, a systemd user service on Linux) |
+| `tropa autostart on\|off\|status [-p PORT]` | Keep TropaAI running: start it when you log in and bring the chat server or host helper back within a minute if one stops (launchd on macOS, a systemd timer on Linux). `tropa start` turns it on the first time |
 | `tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--panel] [--node] [--tts] [DIR]` | Add the team kit to DIR (default: the current folder) and make sure the server on PORT is running. Safe to re-run: settings are kept. |
 | `tropa panel [DIR]` | Control panel: 1 create an agent · 2 create several · 3 start all agents + the watcher · 4 restart one · 5 change a model · 6 list · 7 wake everyone · 8 settings · d doctor |
 | `tropa doctor [DIR]` | Checks tools, the server, each agent's CLI, sign-in, MCP connection and tmux, and suggests a fix for each problem |
@@ -937,6 +937,7 @@ Or put it in a project's `.mcp.json`:
 | `tropa host start\|stop\|status\|logs [-p PORT] [--projects-dir DIR]` | The host helper that lets the chat create projects and start teams |
 | `tropa update [DIR]` | Refresh a project's kit to your installed tropa version |
 | `tropa self-update` | Update tropa itself (and restart what's running on the new version) |
+| `tropa keep` | Start the chat server or host helper if one is down (the keeper runs this every minute) |
 | `tropa restart` | Restart the chat server and host helper on the current code |
 | `tropa install [BIN_DIR]` | Put this copy of `tropa` on your PATH |
 | `tropa version` · `tropa help` | |

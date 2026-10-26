@@ -1974,6 +1974,32 @@ const host = { seen: 0, info: {}, queue: [], waiters: new Set() };
 const jobs = new Map();
 const HOST_TTL = 45000;
 const hostOnline = () => Date.now() - host.seen < HOST_TTL;
+// The host helper is what starts and heals teams on the computer. When this server runs on the computer itself
+// (not in Docker) it can start the helper when it's missing: by itself after a short wait, or from the page's button.
+// In Docker it can't reach the computer; there the keeper (tropa autostart, every minute) brings the helper back.
+const TROPA_BIN = path.join(__dirname, '..', 'tropa');
+const canStartHost = () => !fs.existsSync('/.dockerenv') && fs.existsSync(TROPA_BIN) && process.platform !== 'win32';
+const SERVER_UP = Date.now();
+let hostStartAt = 0;
+function startHost(why, force = false) {   // force: asked from the page (tropa host start does nothing if it's running)
+  if (!canStartHost() || (!force && (hostOnline() || Date.now() - hostStartAt < 60e3))) return false;
+  hostStartAt = Date.now();
+  try {
+    const p = require('node:child_process').spawn(TROPA_BIN, ['host', 'start', '-p', String(PORT)], { detached: true, stdio: 'ignore', env: process.env });
+    p.on('error', (e) => console.error(`could not start the host helper: ${e.message}`));
+    p.unref();
+    console.log(`starting the host helper (${why})`);
+    return true;
+  } catch (e) { console.error(`could not start the host helper: ${e.message}`); return false; }
+}
+setInterval(() => {
+  if (hostOnline()) return;
+  if (host.announced) {   // tell open pages it went away, so they show the Start-the-helper button
+    host.announced = false; host.sig = '';
+    broadcast({ type: 'host', host: { connected: false, ...host.info, can_start: canStartHost() } });
+  }
+  if (Date.now() - SERVER_UP > 40e3) startHost('it was offline');
+}, 20e3).unref();
 const CLI_TOOLS = ['claude', 'opencode', 'qwen', 'codex', 'gemini'];
 const KEY_PROVIDERS = { openrouter: 'OpenRouter', gemini: 'Gemini' };
 const RESERVED = new Set(['controlcenter', 'watcher', 'tropa', 'all', 'here', 'team', 'everyone', 'system']);
@@ -1989,7 +2015,12 @@ function sanitizeKeys(k, orInfo) {
   }
   return out;
 }
-api.get('/host', wrap(() => ({ connected: hostOnline(), ...host.info, human: HUMAN_NAME })));
+api.get('/host', wrap(() => ({ connected: hostOnline(), ...host.info, human: HUMAN_NAME, can_start: canStartHost() })));
+api.post('/host/start', wrap(() => {   // the page's "Start the helper" button
+  if (!canStartHost()) throw new UserError("TropaAI runs in Docker here, so this page can't start the helper on your computer. It comes back by itself within a minute when TropaAI is set to keep running (tropa autostart on); otherwise open TropaAI with its shortcut, or run tropa start once");
+  if (!startHost('asked from the page', true)) throw new UserError("couldn't start the helper (is tmux installed?)");
+  return { ok: true, starting: true };
+}));
 api.post('/host/poll', wrap(async (req, res) => {
   const wasOn = hostOnline();
   host.seen = Date.now();
@@ -2051,7 +2082,7 @@ api.post('/host/poll', wrap(async (req, res) => {
   }
   // tell the monitor when the host comes online or what it offers changes (e.g. an OpenRouter key was just added)
   const sig = JSON.stringify([host.info.openrouter_info, host.info.keys, host.info.claude, Object.values(host.info.models).map((m) => m.length), host.info.clis]);
-  if (!wasOn || sig !== host.sig) { host.sig = sig; broadcast({ type: 'host', host: { connected: true, ...host.info } }); }
+  if (!wasOn || sig !== host.sig) { host.sig = sig; host.announced = true; broadcast({ type: 'host', host: { connected: true, ...host.info, can_start: canStartHost() } }); }
   const t = Math.min(Math.max(Number(req.body.timeout) || 0, 0), 25) * 1000;
   if (!host.queue.length && t) {
     await new Promise((resolve) => {
