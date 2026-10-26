@@ -252,6 +252,10 @@
   .msg.speaking { background: var(--accent-weak); box-shadow: inset 3px 0 0 var(--accent); }
   .msg.speaking .actions { display: flex; }
   .actions button.on { color: var(--accent); font-weight: 600; }
+  .actions button[data-react].on { background: var(--accent-weak); }
+  .rx { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .rx-chip { border: 1px solid var(--line); background: var(--panel2); color: var(--text); border-radius: 999px; font-size: 12px; padding: 0 9px; line-height: 20px; cursor: pointer; }
+  .rx-chip.mine { border-color: var(--accent); background: var(--accent-weak); }
   @keyframes flash { from { background: var(--accent-weak); } to { background: transparent; } }
   .avatar { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 14px; margin-top: 2px; }
   .msg.cont { padding-top: 0; }
@@ -1437,11 +1441,27 @@
           ${showRoom ? `<span class="roomtag" data-room="${esc(m.room_id)}">${esc(roomLabel(m.room_id))}</span>` : ''}
           <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><span class="rid">#${m.id}</span></div>`}
         ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
-        <div class="body">${md(m.content)}</div>${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${rmReqActs(m)}${oq ? `<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} — answer</button>` : ''}
+        <div class="body">${md(m.content)}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${rmReqActs(m)}${oq ? `<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} — answer</button>` : ''}
       </div>
-      <div class="actions"><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? '■ Stop' : '▶ Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>
+      <div class="actions"><button data-react="up" data-rxmsg="${m.id}" class="${myRx(m) === 'up' ? 'on' : ''}" title="Approve (👍)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} to go ahead` : ''}" aria-label="Thumbs up">👍</button><button data-react="down" data-rxmsg="${m.id}" class="${myRx(m) === 'down' ? 'on' : ''}" title="Disapprove (👎)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} not to go ahead` : ''}" aria-label="Thumbs down">👎</button><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? '■ Stop' : '▶ Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>
     </div>`;
   }
+  // 👍 / 👎: a quick approve or disapprove. An agent whose message you react to is told; on its question, it's the answer.
+  const myRx = (m) => (m.reactions || []).find((r) => r.who.toLowerCase() === myName().toLowerCase())?.kind || '';
+  function rxHtml(m) {
+    const rs = m.reactions || []; if (!rs.length) return '';
+    const mine = myRx(m);
+    return `<div class="rx">${['up', 'down'].map((k) => { const who = rs.filter((r) => r.kind === k).map((r) => r.who); if (!who.length) return '';
+      return `<button type="button" class="rx-chip ${mine === k ? 'mine' : ''}" data-react="${k}" data-rxmsg="${m.id}" title="${esc(who.join(', '))}${mine === k ? ' (click to take yours back)' : ''}">${k === 'up' ? '👍' : '👎'} ${esc(who.join(', '))}</button>`; }).join('')}</div>`;
+  }
+  async function react(id, kind) {
+    const m = [...state.messages.values()].flat().find((x) => x.id === id);
+    const next = m && myRx(m) === kind ? '' : kind;   // the same thumb again takes it back
+    try { await api(`/messages/${id}/react`, { method: 'POST', body: { kind: next, by: myName() } });
+      if (next && m?.sender_kind === 'agent') infoInline(next === 'up' ? `👍 ${m.sender} is told to go ahead.` : `👎 ${m.sender} is told not to go ahead.`); }
+    catch (err) { alertInline(err.message); }
+  }
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-react][data-rxmsg]'); if (b) react(Number(b.dataset.rxmsg), b.dataset.react); });
   function rmReqActs(m) {
     if (m.sender !== 'tropa' || !/@tropa confirm remove \d+/.test(m.content)) return '';
     const r = state.rmReqs.find((x) => x.message_id === m.id);
@@ -1668,6 +1688,11 @@
       else if (e.type === 'skills') {
         state.skills[e.skills.room_id] = e.skills;
         if (e.skills.room_id === state.current && $('#skillsDlg').open && sk.mode === 'list') renderSkills();
+      }
+      else if (e.type === 'reaction') {
+        let hit = false;
+        for (const arr of state.messages.values()) for (const m of arr) if (m.id === e.message_id) { m.reactions = e.reactions; hit = true; }
+        if (hit && (e.room_id === state.current || state.current === ALL)) renderMessages({ stick: false });
       }
       else if (e.type === 'attention') {
         state.attention[e.attention.room_id] = e.attention;

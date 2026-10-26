@@ -54,6 +54,13 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
+  CREATE TABLE IF NOT EXISTS reactions (   -- 👍 / 👎 on a message, one per person
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    who TEXT NOT NULL,
+    kind TEXT NOT NULL,                  -- 'up' | 'down'
+    at INTEGER NOT NULL,
+    PRIMARY KEY (message_id, who)
+  );
   CREATE TABLE IF NOT EXISTS agents (
     name TEXT PRIMARY KEY,
     project TEXT,
@@ -202,10 +209,15 @@ function parseMentions(content) {
   while ((m = re.exec(content))) set.add(m[2].replace(/[.]+$/, '').toLowerCase());
   return [...set];
 }
+const rx = {
+  forMsg: db.prepare('SELECT who, kind, at FROM reactions WHERE message_id = ? ORDER BY at'),
+  set: db.prepare('INSERT INTO reactions (message_id, who, kind, at) VALUES (?,?,?,?) ON CONFLICT(message_id, who) DO UPDATE SET kind = excluded.kind, at = excluded.at'),
+  del: db.prepare('DELETE FROM reactions WHERE message_id = ? AND lower(who) = lower(?)'),
+};
 function rowToMessage(r) {
   if (!r) return r;
   const atts = qa.forMsg.all(r.id).map(attView);
-  return { ...r, mentions: JSON.parse(r.mentions || '[]'), created_iso: new Date(r.created_at).toISOString(), attachments: atts };
+  return { ...r, mentions: JSON.parse(r.mentions || '[]'), created_iso: new Date(r.created_at).toISOString(), attachments: atts, reactions: rx.forMsg.all(r.id) };
 }
 
 // ---------- rooms ----------
@@ -556,7 +568,8 @@ function fmtMsg(m) {
   const reply = m.reply_to ? ` ↩#${m.reply_to}` : '';
   const who = m.sender_kind === 'human' ? `${m.sender} (human)` : m.sender;
   const files = (m.attachments || []).map((a) => `\n📎 ${a.path} (${a.mime}, ${fmtSize(a.size)})${a.synced ? '' : a.stored ? ' — still being copied into the project' : a.error ? ` — upload failed: ${a.error}` : ' — not uploaded yet'}`).join('');
-  return `[#${m.id} ${m.room_id} ${fmtTime(m.created_at)}${reply}] ${who}: ${m.content}${files}`;
+  const rxs = (m.reactions || []).map((r) => `${r.kind === 'up' ? '👍' : '👎'} ${r.who}`).join(', ');
+  return `[#${m.id} ${m.room_id} ${fmtTime(m.created_at)}${reply}] ${who}: ${m.content}${files}${rxs ? `\n(reactions: ${rxs})` : ''}`;
 }
 function fmtMsgs(msgs, empty = 'No messages.') {
   return msgs.length ? msgs.map(fmtMsg).join('\n\n') : empty;
@@ -1082,6 +1095,39 @@ api.post('/rooms/:id/messages', wrap((req) => {
   if (kind === 'human') sender = cleanName(req.body.sender) || HUMAN_NAME;
   else sender = resolveAgent(req.body.sender || req.body.agent).name;
   return postMessage({ room: req.params.id, sender, kind, content: req.body.content, reply_to: req.body.reply_to, attachments: req.body.attachments });
+}));
+// 👍 / 👎 on a message: a quick approve / disapprove. On an agent's message the agent is told (a few seconds
+// later, so a quick change of mind sends one wake); on a question it asked, it's the answer.
+const rxWakes = new Map();   // message id -> timer
+api.post('/messages/:id/react', wrap((req) => {
+  const m = q.getMsg.get(Number(req.params.id));
+  if (!m) throw new UserError('message not found');
+  const kind = ['up', 'down'].includes(req.body?.kind) ? req.body.kind : '';
+  const who = cleanName(req.body?.by) || HUMAN_NAME;
+  if (kind) rx.set.run(m.id, who, kind, Date.now()); else rx.del.run(m.id, who);
+  const reactions = rx.forMsg.all(m.id);
+  broadcast({ type: 'reaction', message_id: m.id, room_id: m.room_id, reactions });
+  if (m.sender_kind === 'agent' && kind) {
+    const oq = qq.byMsg.get(m.id);
+    if (oq) {   // an open question: the reaction is the answer
+      const rec = JSON.parse(oq.options || '[]')[oq.recommended - 1];
+      const answer = kind === 'up' ? `👍 Yes${rec ? `: go with your recommendation (${rec})` : ', go ahead'}.` : `👎 No${rec ? `, not ${rec}` : ''}. Tell me the other options, or ask what I'd prefer.`;
+      postMessage({ room: oq.room_id, sender: HUMAN_NAME, kind: 'human', content: `@${oq.agent} ${answer}`, reply_to: m.id });
+      if (qq.get.get(oq.id).status === 'open') closeQuestion(oq, 'answered', answer, HUMAN_NAME);
+    } else {
+      clearTimeout(rxWakes.get(m.id));
+      rxWakes.set(m.id, setTimeout(() => {
+        rxWakes.delete(m.id);
+        const now = rx.forMsg.all(m.id).find((r) => r.who.toLowerCase() === who.toLowerCase());
+        if (!now || !watcherFor(m.room_id)) return;
+        const quote = String(m.content).replace(/\s+/g, ' ').slice(0, 100);
+        fireWake(m.room_id, m.sender, { manual: true, reason: now.kind === 'up'
+          ? `${who} 👍 approved your message #${m.id} ("${quote}…"). Go ahead with it; no need to reply first.`
+          : `${who} 👎 didn't approve your message #${m.id} ("${quote}…"). Don't go ahead with it. If the room doesn't say why, ask ${who} in one short question what to change.` });
+      }, 4000));
+    }
+  }
+  return { message_id: m.id, reactions };
 }));
 api.delete('/messages/:id', wrap((req) => {
   const m = q.getMsg.get(Number(req.params.id));

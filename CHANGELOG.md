@@ -15,6 +15,12 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### 👍 / 👎 on messages
+- **React to any message with 👍 or 👎** from its hover bar. Your reaction shows under the message; click it (or the same thumb) again to take it back.
+- **On an agent's message it's a quick approve or disapprove:** the agent is told to go ahead (👍) or not to (👎, and to ask what to change if the room doesn't say). Its wake comes a few seconds later with your final choice, so a quick change of mind sends one.
+- **On a question an agent asked you,** 👍 answers "yes, go with your recommendation" and 👎 answers "no", closing the question.
+- Agents see reactions when they read the room.
+
 ### Every room keeps a lead
 - **Every project room has at least one agent, its lead orchestrator.**
   - **The lead's job** is in `teams/lead.md`: it runs the room, plans and assigns the work, asks for teammates when needed, and does the work itself on a team of one.
