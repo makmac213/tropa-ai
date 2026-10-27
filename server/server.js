@@ -600,6 +600,7 @@ Quiet when idle: a @mention wakes that agent, so mention someone only when they 
 8. Questions for ${HUMAN_NAME}: use ask_human (question, numbered options, your recommendation, what you'll do if there's no answer). It posts in the room and lists the question for ${HUMAN_NAME}; you are woken with the answer.
 7. Public links: if the human needs to open the running app from outside this machine (a phone, a client), call request_share with the port. The human approves it in the room. Never run ngrok or similar tunnels yourself.
 10. Removing teammates (lead only): if a teammate can't help any more (rate-limited for days, out of credit, failing, or done and not needed), call remove_agents with the names and a reason, after reassigning its open tasks. Only when you're sure.
+11. New rooms: when the human asks you to make a room or project, or (as a lead) when part of the work should run on its own, call create_room (name, brief, optional ready-made team, optional existing folder path). Every room gets a lead orchestrator. A lead's request follows its project's "New rooms" setting (the human approves by default).
 9. New teammates (lead only): if the work needs a role nobody on the team covers, call request_agent (name, cli, model, role, reason). Reuse existing teammates first. The human approves it, or it is added at once if the project allows; then give the newcomer its first assignment.
 Project-specific talk belongs in the project room; use general only for cross-project matters.`;
 
@@ -697,6 +698,19 @@ const tools = () => [
       reason: { type: 'string', description: 'Why a public link is needed, in one sentence.' },
       hours: { type: 'integer', description: 'How long to keep it open (default 4, max 72; 0 = until stopped).' },
     }, required: ['agent', 'room', 'port', 'reason'] },
+  },
+  {
+    name: 'create_room',
+    description: 'Create a new project room with its own team and folder. Use it when the human asks you to (e.g. "make a room for this", "start a project for the newsletter"), or, as a team lead, when part of the work should run on its own. Every room gets a lead orchestrator (or the ready-made team you name), the brief, and a folder: a new one, or an existing folder you give as path (e.g. the repo you are working in). If you lead a project room, your project\'s "New rooms" setting decides: the human approves it in your room (default), it is created at once, or it is off.',
+    inputSchema: { type: 'object', properties: {
+      agent: agentProp,
+      name: { type: 'string', description: 'The room\'s name, e.g. "Newsletter relaunch". It becomes its #room (and folder name for a new folder).' },
+      brief: { type: 'string', description: 'What the room is for: the goal, what done looks like, anything its team must know. Saved as its brief in docs/ and given to its lead.' },
+      team: { type: 'string', description: 'Optional: a ready-made team id (e.g. "seo", "recruitment", "small-dev-team"). Default: just a lead orchestrator, who asks for teammates as the work needs.' },
+      path: { type: 'string', description: 'Optional: an existing folder for the project, as a full path (e.g. the repo you\'re in, "~/work/site"). Default: a new folder in the projects folder.' },
+      room: { type: 'string', description: 'Only if you lead a project room: that room, "project:<slug>" (the request is shown there and the new room reports back to it).' },
+      reason: { type: 'string', description: 'Why, in one sentence (shown to the human).' },
+    }, required: ['agent', 'name', 'brief'] },
   },
   {
     name: 'request_agent',
@@ -880,6 +894,26 @@ async function callTool(name, args, ctx) {
         `Anyone with the link could open it. @${HUMAN_NAME}: approve with the button, or reply \`@tropa approve share ${share.id}\` / \`@tropa deny share ${share.id}\`.`);
       shareChanged(share);
       return `Asked @${HUMAN_NAME} to approve share #${share.id} (port ${share.port}). You'll be woken with the URL or the answer. Carry on with other work meanwhile.`;
+    }
+    case 'create_room': {
+      const a = agent();
+      // a lead inside a project team follows that project's "New rooms" setting; anyone else (a Claude Code or Cowork
+      // session the human is talking to) was asked by the human directly, so the room is created at once
+      // the team it runs in: the watcher's roster says (its registration may not name the project)
+      const low = a.name.toLowerCase();
+      const team = [...watchers.keys()].find((rid) => (watcherFor(rid)?.agents || []).some((x) => x.toLowerCase() === low))
+        || (a.project && watcherFor(`project:${String(a.project).toLowerCase()}`) ? `project:${String(a.project).toLowerCase()}` : '');
+      const roomId = args.room ? normalizeRoomId(args.room) : team || '';
+      if (roomId) {
+        requireRoom(roomId);
+        if (!roomId.startsWith('project:')) throw new UserError('room must be your project room ("project:<slug>")');
+        const lead = String(wakeSettings(roomId).lead || '');
+        if (lead && lead.toLowerCase() !== a.name.toLowerCase()) return `Only the lead (@${lead}) can start new rooms from ${roomId}. Ask @${lead} in the room if the work needs one.`;
+      }
+      const res = requestRoom(roomId, { name: args.name, brief: args.brief, team: args.team, path: args.path }, { by: a.name, reason: args.reason });
+      return res.status === 'created'
+        ? `Created #${res.request.slug}: its folder${res.request.path ? ` (${res.request.path})` : ''} and team start in a minute, with a lead orchestrator running it. Post to it with send_message (room "project:${res.request.slug}"); its lead answers there.`
+        : `Asked @${HUMAN_NAME} to approve the new room #${res.request.slug} (request #${res.request.id}) in ${roomId}. You'll be told the answer; carry on meanwhile.`;
     }
     case 'request_agent': {
       const a = agent();
@@ -1356,6 +1390,8 @@ const WAKE_DEFAULTS = { lead: '', wake: 'auto', wake_rules: 'smart', max_wakes_p
   // new teammates asked for by the lead (request_agent): 'ask' the human, add them 'auto'matically, or 'off'.
   // In 'auto', at most auto_agents_per_hour are added on their own; past that, the request waits for the human.
   team_growth: 'ask', auto_agents_per_hour: 2,
+  // new rooms asked for by the lead (request_room): 'ask' the human, create them 'auto'matically, or 'off'
+  room_growth: 'ask',
   // the lead removing teammates (remove_agents): done at once ('auto'), only with the human's OK ('ask'), or not allowed ('off')
   team_shrink: 'auto',
   // "needs attention" limits in minutes (0 = don't flag): quiet in Doing, waiting in Review, on an approval prompt, Blocked, idle with ready work
@@ -1381,6 +1417,10 @@ function cleanWake(patch) {
   if ('team_shrink' in patch) {
     if (!['ask', 'auto', 'off'].includes(patch.team_shrink)) throw new UserError('team_shrink must be "ask", "auto" or "off"');
     out.team_shrink = patch.team_shrink;
+  }
+  if ('room_growth' in patch) {
+    if (!['ask', 'auto', 'off'].includes(patch.room_growth)) throw new UserError('room_growth must be "ask", "auto" or "off"');
+    out.room_growth = patch.room_growth;
   }
   if ('team_growth' in patch) {
     if (!['ask', 'auto', 'off'].includes(patch.team_growth)) throw new UserError('team_growth must be "ask", "auto" or "off"');
@@ -2282,8 +2322,8 @@ function leadOrchestrator() {
     role: human(t.role || 'Lead: runs this room for {human}: plans the work, assigns it, keeps it moving, reports back'),
     prompt: human(t.prompt || '') };
 }
-api.post('/projects', wrap((req) => {
-  const b = req.body || {};
+api.post('/projects', wrap((req) => createProject(req.body || {})));
+function createProject(b) {
   if (!hostOnline()) throw new UserError('the tropa host helper is not running on your machine — start it with: tropa host start');
   const name = String(b.name || '').trim().slice(0, 80);
   const slug = slugify(b.slug || name);
@@ -2365,7 +2405,7 @@ api.post('/projects', wrap((req) => {
   if (b.topic || name) { q.setTopic.run(String(b.topic || name).slice(0, 300), roomId); broadcast({ type: 'room', room: q.getRoom.get(roomId) }); }
   setWakeSettings(roomId, { lead: lead_, auto_approve: b.auto_approve === true });
   const brief_ = renamed.size ? String(b.brief || '').slice(0, MAX_CONTENT - 500) : brief;
-  const intro = [existing ? `🧩 **Team added to existing project: ${name || slug}** (\`${path || folder}\`)` : `🆕 **New project: ${name || slug}**`, brief_ ? `\n${brief_}` : '',
+  const intro = [existing ? `🧩 **Team added to existing project: ${name || slug}** (\`${path || folder}\`)` : `🆕 **New project: ${name || slug}**`, b.origin ? String(b.origin).slice(0, 300) : '', brief_ ? `\n${brief_}` : '',
     renamed.size ? `\nThese names were already used in other projects, so this team has: ${[...renamed].map(([o, n]) => `${o} → @${n}`).join(', ')}.` : '',
     files.length ? `\nFiles are saved in \`${ATT_DIR}/\`.` : ''].filter(Boolean).join('\n').trim();
   const msg = postMessage({ room: roomId, sender: HUMAN_NAME, kind: 'human', content: intro, attachments: files });
@@ -2376,7 +2416,7 @@ api.post('/projects', wrap((req) => {
   host.queue.push({ ...job, log: undefined, keys: projectKeys });   // the keys only travel in the queue, never kept in `jobs`
   for (const f of [...host.waiters]) f();
   return { job: jobView(job), room: q.getRoom.get(roomId) || room, renamed: Object.fromEntries(renamed) };
-}));
+}
 /** Names this team can't have because another agent already has them: name(lower) → a free one ("lead-<slug>", then "-2"…). */
 function nameTaken(n, slug) {
   const low = n.toLowerCase();
@@ -3174,6 +3214,79 @@ function denyAgentReq(r, why) {
   return r;
 }
 const agentReqOf = (req) => { const r = agentReqs.get(Number(req.params.id)); if (!r) throw new UserError('unknown request'); return r; };
+
+// ---------- new rooms asked for by a lead (request_room): room_growth 'ask' → a card the human approves; 'auto' → created at once
+const roomReqs = new Map();   // id -> { id, room_id, slug, name, brief, team, by, reason, status, message_id, created_at }
+let roomReqSeq = 0;
+const roomReqView = (r) => ({ id: r.id, room_id: r.room_id, slug: r.slug, name: r.name, brief: r.brief, team: r.team, path: r.path || '', by: r.by, reason: r.reason, status: r.status, message_id: r.message_id || 0, created_at: r.created_at });
+const roomReqChanged = (r) => broadcast({ type: 'room_request', request: roomReqView(r) });
+function requestRoom(roomId, spec, { by, reason }) {
+  if (!hostOnline()) throw new UserError("TropaAI's helper isn't running on the computer, so no folder or team can be set up right now");
+  const s = roomId ? wakeSettings(roomId) : { room_growth: 'auto' };   // no room: the human asked this agent directly
+  if ((s.room_growth || 'ask') === 'off') throw new UserError(`starting new rooms is turned off for this project; ask @${HUMAN_NAME} in the room instead`);
+  const name = String(spec.name || '').trim().slice(0, 80), slug = slugify(name);
+  if (!slug) throw new UserError('give the new room a name');
+  if (`project:${slug}` === roomId) throw new UserError('that is this room; pick a different name');
+  const existing = q.getRoom.get(`project:${slug}`);
+  const settingUp = [...jobs.values()].some((j) => j.type === 'create_project' && j.slug === slug && j.status !== 'failed')
+    || [...roomReqs.values()].some((x) => x.slug === slug && x.status === 'created');
+  if (settingUp || (existing && (watcherFor(existing.id) || q.listAgents.all().some((x) => (x.project || '').toLowerCase() === slug))))
+    throw new UserError(`#${slug} already exists with a team${settingUp ? ' (or is being set up)' : ''}; post there instead (room "project:${slug}")`);
+  const brief = String(spec.brief || '').trim().slice(0, 8000);
+  if (!brief) throw new UserError('give the new room a brief: the goal and what done looks like');
+  const path = spec.path ? String(spec.path).trim().slice(0, 500) : '';
+  if (path && !/^(~|\/)/.test(path)) throw new UserError('path must be the folder\'s full path, e.g. ~/work/site');
+  const team = spec.team ? String(spec.team).trim() : '';
+  if (team && !(host.info.teams || []).some((t) => t.id === team)) throw new UserError(`no ready-made team "${team}"; teams: ${(host.info.teams || []).map((t) => t.id).join(', ') || 'none listed'}`);
+  const dup = [...roomReqs.values()].find((r) => r.status === 'requested' && r.slug === slug);
+  if (dup) return { status: 'requested', request: dup };
+  const r = { id: ++roomReqSeq, room_id: roomId, slug, name, brief, team, path, by, reason: String(reason || '').slice(0, 300), status: 'requested', created_at: Date.now() };
+  roomReqs.set(r.id, r);
+  if ((s.room_growth || 'ask') === 'auto') {
+    try { createRequestedRoom(r, true); } catch (e) { roomReqs.delete(r.id); throw e; }
+    return { status: 'created', request: r };
+  }
+  const t = team && (host.info.teams || []).find((x) => x.id === team);
+  r.message_id = postNote(roomId, `🏠 **@${by} asks to start a new room: #${slug}** (${t ? `${t.name}: ${t.members.map((m) => '@' + m.name).join(', ')}` : 'a lead orchestrator, who adds teammates as needed'})${path ? ` in \`${path}\`` : ''}\n` +
+    `${r.reason ? `Why: ${r.reason}\n` : ''}Brief: ${brief.replace(/\s+/g, ' ').slice(0, 400)}${brief.length > 400 ? '…' : ''}\n` +
+    `@${HUMAN_NAME}: approve with the button, or reply \`@tropa approve room ${r.id}\` / \`@tropa deny room ${r.id}\`.`);
+  roomReqChanged(r);
+  return { status: 'requested', request: r };
+}
+function createRequestedRoom(r, auto = false) {
+  const from = r.room_id ? '#' + r.room_id.replace(/^project:/, '') : '';
+  const t = r.team && (host.info.teams || []).find((x) => x.id === r.team);
+  const human = (x) => String(x || '').replace(/\{human\}/g, HUMAN_NAME);
+  const how = t?.how ? `\n\n## How this team works\n${human(t.how)}` : '';
+  const agents = t ? t.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: human(m.role), prompt: human(m.prompt) + how })) : [];
+  const lead = t ? t.lead : '';
+  const res = createProject({ name: r.name, slug: r.slug, folder: r.slug, topic: r.name, brief: r.brief, agents, lead, git: t ? t.git !== false : true,
+    path: r.path || undefined, existing: !!r.path,
+    origin: `_Created by @${r.by}${from ? ` from ${from}` : ` at ${HUMAN_NAME}'s request`}${r.reason ? `: ${r.reason}` : ''}._`,
+    // no @mention: a message from the human without one goes to the lead, whatever its name turns out to be
+    kickoff: `You lead this new room, created by @${r.by}${from ? ` from ${from}` : ''}. Read the brief in docs/, plan the work, and post the plan here in a few lines.` +
+      (from ? ` When there's a result (or a question) for ${from}, post it there with send_message (room "${r.room_id}").` : ` @${r.by} may post here too.`),
+    start: true, trust: true, auto_approve: false });
+  r.status = 'created'; r.slug = res.room?.id?.replace(/^project:/, '') || r.slug; roomReqChanged(r);
+  shareNote(r.room_id || 'general', `🏠 ${auto ? `@${r.by} created` : `${HUMAN_NAME} approved`} the new room **#${r.slug}**${r.path ? ` in \`${r.path}\`` : ''}. Its folder and team start in a minute, with a lead running it${r.room_id ? '; its lead reports back here' : ''}.`);
+  if (!auto) wakeAgentReq(r, `${HUMAN_NAME} approved the new room #${r.slug} (request #${r.id}); it's starting now. Its lead reports back here; you can post to it with send_message (room "project:${r.slug}").`);
+  return r;
+}
+function approveRoomReq(r) {
+  if (r.status !== 'requested') throw new UserError(`room request #${r.id} is ${r.status}, not waiting for approval`);
+  return createRequestedRoom(r);
+}
+function denyRoomReq(r, why) {
+  if (r.status !== 'requested') throw new UserError(`room request #${r.id} is ${r.status}, not waiting for approval`);
+  r.status = 'denied'; roomReqChanged(r);
+  shareNote(r.room_id, `🚫 ${HUMAN_NAME} didn't start #${r.slug}${why ? `: ${why}` : ''}.`);
+  wakeAgentReq(r, `Your request for a new room #${r.slug} was denied${why ? `: ${why}` : ''}. Carry on in this room.`);
+  return r;
+}
+const roomReqOf = (req) => { const r = roomReqs.get(Number(req.params.id)); if (!r) throw new UserError('unknown room request'); return r; };
+api.get('/room-requests', wrap(() => [...roomReqs.values()].map(roomReqView)));
+api.post('/room-requests/:id/approve', wrap((req) => roomReqView(approveRoomReq(roomReqOf(req)))));
+api.post('/room-requests/:id/deny', wrap((req) => roomReqView(denyRoomReq(roomReqOf(req), String(req.body?.reason || '').slice(0, 200)))));
 api.get('/agent-requests', wrap((req) => {
   const room = req.query.room ? normalizeRoomId(String(req.query.room)) : '';
   return [...agentReqs.values()].filter((r) => !room || r.room_id === room).map(agentReqView);
@@ -3277,7 +3390,17 @@ function removalCommand(m) {
 // chat: @tropa approve agent 3 · @tropa deny agent 3 · @tropa add agent NAME [cli] [model] [: role]
 const AGENT_CMD = /@tropa\s+(?:(approve|deny)\s+agent\s+#?(\d{1,6})|add\s+agent\s+@?([A-Za-z0-9._-]{1,40})(?:\s+(claude|codex|opencode|qwen|gemini)\b)?(?:\s+(?![:—-])([A-Za-z0-9._:/@-]{1,81}))?\s*(?:[:—-]\s*)?([^\n]*))/i;
 const CLONE_CMD = /@tropa\s+clone\s+@?([A-Za-z0-9._-]{1,40})(?:\s+as\s+@?([A-Za-z0-9._-]{1,40}))?(?:\s+(?:on\s+)?([A-Za-z0-9._:/@-]{1,80}))?/i;
+const ROOM_CMD = /@tropa\s+(approve|deny)\s+room\s+#?(\d{1,6})/i;
 function agentCommand(m) {
+  const rc = String(m.content).match(ROOM_CMD);
+  if (rc) {
+    try {
+      const r = roomReqs.get(Number(rc[2]));
+      if (!r || r.room_id !== m.room_id) throw new UserError(`no room request #${rc[2]} in this room`);
+      if (rc[1].toLowerCase() === 'approve') approveRoomReq(r); else denyRoomReq(r);
+    } catch (e) { shareNote(m.room_id, `⚠️ ${e.message}`); }
+    return true;
+  }
   const k = String(m.content).match(CLONE_CMD);
   if (k) {
     try {

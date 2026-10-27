@@ -1252,6 +1252,7 @@
     taskTab: localGet('airc.taskTab') === 'flow' ? 'flow' : 'board',
     questions: [],            // questions agents asked the human (open + answered in the last day)
     agentReqs: [],            // new teammates the lead asked for (request_agent)
+    roomReqs: [],             // new rooms a lead asked for (create_room)
     rmReqs: [],               // removals waiting for the human's confirmation
     attention: {},            // roomId -> { items, notes, limits, watching } (needs attention)
     docs: {},                 // roomId -> { watching, dir, tree, error } (docs viewer)
@@ -1450,7 +1451,7 @@
           ${showRoom ? `<span class="roomtag" data-room="${esc(m.room_id)}">${esc(roomLabel(m.room_id))}</span>` : ''}
           <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><span class="rid">#${m.id}</span></div>`}
         ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
-        <div class="body">${md(m.content)}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${rmReqActs(m)}${oq ? `<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} — answer</button>` : ''}
+        <div class="body">${md(m.content)}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}${oq ? `<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} — answer</button>` : ''}
       </div>
       <div class="actions"><button data-react="up" data-rxmsg="${m.id}" class="${myRx(m) === 'up' ? 'on' : ''}" title="Approve (👍)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} to go ahead` : ''}" aria-label="Thumbs up">👍</button><button data-react="down" data-rxmsg="${m.id}" class="${myRx(m) === 'down' ? 'on' : ''}" title="Disapprove (👎)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} not to go ahead` : ''}" aria-label="Thumbs down">👎</button><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? '■ Stop' : '▶ Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>
     </div>`;
@@ -1477,6 +1478,14 @@
     if (!r) return '';
     if (r.status !== 'requested') return `<div class="sh-acts"><span class="sub">${r.status === 'confirmed' ? '✓ removed' : '↩ kept'}</span></div>`;
     return `<div class="sh-acts"><button class="danger" data-rmreq-confirm="${r.id}">Remove ${r.names.length > 1 ? r.names.length + ' agents' : '@' + esc(r.names[0])}</button><button data-rmreq-cancel="${r.id}">Keep</button></div>`;
+  }
+  function roomReqActs(m) {   // a lead asked to start a new room (create_room)
+    if (m.sender !== 'tropa') return '';
+    const hit = String(m.content).match(/@tropa approve room (\d+)/);
+    const r = hit && state.roomReqs.find((x) => x.id === Number(hit[1]) && x.message_id === m.id);
+    if (!r) return '';
+    if (r.status !== 'requested') return `<div class="sh-acts"><span class="sub">${r.status === 'created' ? `✓ created <button type="button" class="lnk" data-room="project:${esc(r.slug)}">#${esc(r.slug)}</button>` : '✗ denied'}</span></div>`;
+    return `<div class="sh-acts"><button class="ok" data-rreq-approve="${r.id}">Start #${esc(r.slug)}</button><button data-rreq-deny="${r.id}">Deny</button></div>`;
   }
   function agentReqActs(m) {
     if (m.sender !== 'tropa') return '';
@@ -1609,6 +1618,7 @@
   async function refreshState() {
     api('/shares').then((r) => { state.shares = r; renderHeader(); }).catch(() => {});
     api('/agent-requests').then((r) => { state.agentReqs = r; renderMessages({ stick: false }); }).catch(() => {});
+    api('/room-requests').then((r) => { state.roomReqs = r; renderMessages({ stick: false }); }).catch(() => {});
     api('/removal-requests').then((r) => { state.rmReqs = r; renderMessages({ stick: false }); }).catch(() => {});
     api('/questions').then((r) => { state.questions = r; renderSidebar(); renderHeader(); renderQPanel(); renderMessages({ stick: false }); }).catch(() => {});
     api('/attention').then((r) => { for (const a of r) state.attention[a.room_id] = a; renderSidebar(); renderHeader(); if (state.view === 'team') renderAttention(); }).catch(() => {});
@@ -1730,6 +1740,11 @@
       else if (e.type === 'removal_request') {
         const i = state.rmReqs.findIndex((x) => x.id === e.request.id);
         if (i >= 0) state.rmReqs[i] = e.request; else state.rmReqs.push(e.request);
+        if (e.request.room_id === state.current) renderMessages({ stick: false });
+      }
+      else if (e.type === 'room_request') {
+        const i = state.roomReqs.findIndex((x) => x.id === e.request.id);
+        if (i >= 0) state.roomReqs[i] = e.request; else state.roomReqs.push(e.request);
         if (e.request.room_id === state.current) renderMessages({ stick: false });
       }
       else if (e.type === 'agent_request') {
@@ -2362,6 +2377,7 @@
       <label title="Minimum seconds between wake-ups of the same agent">Cooldown <input type="number" min="0" max="3600" data-set="cooldown_seconds" value="${esc(s.cooldown_seconds ?? 20)}">s</label>
       <label title="Max wake-ups per agent per hour (0 = no limit)">Limit <input type="number" min="0" max="1000" data-set="max_wakes_per_agent_per_hour" value="${esc(s.max_wakes_per_agent_per_hour ?? 0)}">/h</label>
       <label title="When the lead asks for a new teammate (request_agent): ask you in the room, add it at once, or don't allow it. You can always add one yourself with ＋ Add agent or @tropa add agent NAME [cli] [model]: role">New agents <select data-set="team_growth">${[['ask', 'ask me'], ['auto', 'automatic'], ['off', 'off']].map(([v, l]) => `<option value="${v}" ${(s.team_growth || 'ask') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label title="When the lead asks to start a new room for part of the work (create_room): ask you in the room, create it at once, or don't allow it. A room you ask an agent for directly (e.g. in Claude Code or Cowork) is created right away.">New rooms <select data-set="room_growth">${[['ask', 'ask me'], ['auto', 'automatic'], ['off', 'off']].map(([v, l]) => `<option value="${v}" ${(s.room_growth || 'ask') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label title="When the lead removes teammates that can't help any more (rate-limited, out of credit, done): do it at once, ask you first, or don't allow it. Removals you ask for in the chat are always confirmed first.">Lead removes <select data-set="team_shrink">${[['auto', 'automatic'], ['ask', 'ask me'], ['off', 'off']].map(([v, l]) => `<option value="${v}" ${(s.team_shrink || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       ${s.team_growth === 'auto' ? `<label title="In automatic mode, the lead adds at most this many agents per hour on its own; past that, its requests wait for your OK in the room (0 = always ask). Agents you add yourself don't count.">Auto max <input type="number" min="0" max="20" data-set="auto_agents_per_hour" value="${esc(s.auto_agents_per_hour ?? 2)}">/h</label>` : ''}
       <span class="sp"></span>
@@ -3405,6 +3421,13 @@
       rq.disabled = true;
       try { await api(`/removal-requests/${rq.dataset.rmreqConfirm || rq.dataset.rmreqCancel}/${rq.dataset.rmreqConfirm ? 'confirm' : 'cancel'}`, { method: 'POST', body: {} }); }
       catch (err) { alertInline(err.message); rq.disabled = false; }
+      return;
+    }
+    const rr = e.target.closest('[data-rreq-approve],[data-rreq-deny]');
+    if (rr) {
+      rr.disabled = true;
+      try { await api(`/room-requests/${rr.dataset.rreqApprove || rr.dataset.rreqDeny}/${rr.dataset.rreqApprove ? 'approve' : 'deny'}`, { method: 'POST', body: {} }); }
+      catch (err) { alertInline(err.message); rr.disabled = false; }
       return;
     }
     const ar = e.target.closest('[data-areq-approve],[data-areq-deny],[data-areq-edit]');
