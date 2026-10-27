@@ -3,6 +3,7 @@
 #
 #   tropa start [-p PORT] [--docker] [--no-open]   start TropaAI (chat server + host helper) and open it in the browser
 #   tropa stop [-p PORT]                    stop it
+#   tropa keep [-p PORT]                    start the chat server or host helper if one is down (autostart runs it every minute)
 #   tropa restart [-p PORT]                 restart what's running (chat server + host helper) on the current code
 #   tropa autostart on|off|status [-p PORT] start TropaAI when you log in
 #   tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--no-tts] [--panel] [DIR]
@@ -270,8 +271,9 @@ host_start() {   # $1 port, $2 projects dir (optional)
     fi
     mkdir -p "$STATE_DIR"
     host_build >"$STATE_DIR/host-$port.build"
+    # in a loop: if the helper crashes it's back 3 seconds later (tropa host stop ends the whole session)
     tmux new-session -d -s "$s" -n host \
-        "python3 -u \"$TROPA_HOME/host/tropa_host.py\" --server http://localhost:$port --projects-dir \"$dir\" 2>&1 | tee -a \"$STATE_DIR/host-$port.log\"" \
+        "while :; do python3 -u \"$TROPA_HOME/host/tropa_host.py\" --server http://localhost:$port --projects-dir \"$dir\" 2>&1 | tee -a \"$STATE_DIR/host-$port.log\"; echo \"\$(date '+%H:%M:%S') host helper stopped; restarting in 3s\" | tee -a \"$STATE_DIR/host-$port.log\"; sleep 3; done" \
         && info "🤝 Host helper started (tmux '$s') — the chat can now create projects in $dir"
 }
 cmd_host() {
@@ -446,6 +448,11 @@ cmd_start() {   # the everyday command: server (Node unless this port already ke
     [ "$mode" = docker ] && mode=""   # server_up uses Docker unless told node
     remember_port "$port"   # plain `tropa start` / `tropa stop` use this port from now on
     TROPA_NO_HOST=0 server_up "$port" "$human" 0 "$mode"
+    # the first time: keep TropaAI running (starts at login, back within a minute if it stops). Once; off: tropa autostart off
+    if [ ! -f "$STATE_DIR/keeper-$port.asked" ] && [ -z "${TROPA_NO_AUTOSTART:-}" ]; then
+        touch "$STATE_DIR/keeper-$port.asked"
+        ( cmd_autostart on -p "$port" ) 2>/dev/null || info "   (couldn't set TropaAI to keep running here: run 'tropa start' after you log in)"
+    fi
     local url="http://localhost:$port/?setup=1"
     info ""
     info "👉 TropaAI: http://localhost:$port"
@@ -484,7 +491,20 @@ cmd_restart() {   # stop and start again whatever is running, so it runs the cod
     done
     [ "$n" -gt 0 ] || info "TropaAI isn't running; 'tropa start' starts the new version."
 }
-cmd_autostart() {   # start TropaAI at login: launchd (macOS) or a systemd user service (Linux)
+cmd_keep() {   # the keeper's check (every minute, from autostart): start the chat server or host helper if one is down; quiet otherwise
+    local port=""
+    while [ $# -gt 0 ]; do case "$1" in -p|--port) port="$2"; shift ;; *) die "unknown option '$1'" ;; esac; shift; done
+    port="${port:-$(default_port)}"
+    if ! health "$port"; then
+        info "$(date '+%F %T') keeper: TropaAI wasn't running on port $port; starting it"
+        TROPA_NO_HOST=0 server_up "$port" "$(default_human)" 0 ""
+    elif is_tropa_server "$port" && ! host_running "$port"; then
+        info "$(date '+%F %T') keeper: the host helper wasn't running (port $port); starting it"
+        host_start "$port"
+    fi
+    return 0
+}
+cmd_autostart() {   # start TropaAI at login and keep it running: launchd (macOS) or systemd user units (Linux)
     local sub="${1:-status}" port; port=$(default_port); shift || true
     while [ $# -gt 0 ]; do case "$1" in -p|--port) port="$2"; shift ;; *) die "unknown option '$1'" ;; esac; shift; done
     valid_port "$port" || die "invalid port '$port'"
@@ -498,41 +518,31 @@ cmd_autostart() {   # start TropaAI at login: launchd (macOS) or a systemd user 
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>$label</string>
-  <key>ProgramArguments</key><array><string>$bin</string><string>start</string><string>-p</string><string>$port</string><string>--no-open</string></array>
+  <key>ProgramArguments</key><array><string>$bin</string><string>keep</string><string>-p</string><string>$port</string></array>
   <key>RunAtLoad</key><true/>
+  <key>StartInterval</key><integer>60</integer>
   <key>EnvironmentVariables</key><dict><key>PATH</key><string>$PATH</string><key>HOME</key><string>$HOME</string></dict>
   <key>StandardOutPath</key><string>$STATE_DIR/autostart-$port.log</string>
   <key>StandardErrorPath</key><string>$STATE_DIR/autostart-$port.log</string>
 </dict></plist>
 EOF
-                launchctl unload "$plist" 2>/dev/null; launchctl load "$plist" && info "✅ TropaAI (port $port) now starts when you log in. Turn off: tropa autostart off" ;;
+                launchctl unload "$plist" 2>/dev/null; launchctl load "$plist" && info "✅ TropaAI (port $port) now starts when you log in, and comes back within a minute if it stops. Turn off: tropa autostart off" ;;
             off) launchctl unload "$plist" 2>/dev/null; rm -f "$plist"; info "⏹  Autostart off (port $port)" ;;
             status) if [ -f "$plist" ]; then info "✅ Autostart on (port $port)"; else info "⏹  Autostart off (port $port)"; return 1; fi ;;
             *) die "usage: tropa autostart on|off|status [-p PORT]" ;;
         esac
     elif command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; then
-        local unit="$HOME/.config/systemd/user/tropa-$port.service"
+        local unit="$HOME/.config/systemd/user/tropa-$port.service" timer="$HOME/.config/systemd/user/tropa-$port.timer"
         case "$sub" in
             on) mkdir -p "$(dirname "$unit")"
-                cat >"$unit" <<EOF
-[Unit]
-Description=TropaAI chat server and host helper (port $port)
-After=network-online.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-KillMode=process
-Environment=PATH=$PATH
-ExecStart=$bin start -p $port --no-open
-ExecStop=$bin stop -p $port
-
-[Install]
-WantedBy=default.target
-EOF
-                systemctl --user daemon-reload && systemctl --user enable --now "tropa-$port.service" >/dev/null && info "✅ TropaAI (port $port) now starts when you log in. Turn off: tropa autostart off" ;;
-            off) systemctl --user disable --now "tropa-$port.service" >/dev/null 2>&1; rm -f "$unit"; systemctl --user daemon-reload; info "⏹  Autostart off (port $port)" ;;
-            status) if systemctl --user is-enabled "tropa-$port.service" >/dev/null 2>&1; then info "✅ Autostart on (port $port)"; else info "⏹  Autostart off (port $port)"; return 1; fi ;;
+                printf '%s\n' "[Unit]" "Description=TropaAI keeper: starts the chat server and host helper (port $port) if they're down" "" \
+                    "[Service]" "Type=oneshot" "KillMode=process" "Environment=PATH=$PATH" "ExecStart=$bin keep -p $port" >"$unit"
+                printf '%s\n' "[Unit]" "Description=Keep TropaAI (port $port) running" "" "[Timer]" "OnStartupSec=5" "OnUnitActiveSec=60" "" \
+                    "[Install]" "WantedBy=timers.target" >"$timer"
+                systemctl --user disable --now "tropa-$port.service" >/dev/null 2>&1   # the old start-at-login unit
+                systemctl --user daemon-reload && systemctl --user enable --now "tropa-$port.timer" >/dev/null && info "✅ TropaAI (port $port) now starts when you log in, and comes back within a minute if it stops. Turn off: tropa autostart off" ;;
+            off) systemctl --user disable --now "tropa-$port.timer" "tropa-$port.service" >/dev/null 2>&1; rm -f "$unit" "$timer"; systemctl --user daemon-reload; info "⏹  Autostart off (port $port)" ;;
+            status) if systemctl --user is-enabled "tropa-$port.timer" >/dev/null 2>&1; then info "✅ Autostart on (port $port)"; else info "⏹  Autostart off (port $port)"; return 1; fi ;;
             *) die "usage: tropa autostart on|off|status [-p PORT]" ;;
         esac
     else
@@ -584,7 +594,7 @@ PY
 }
 
 cmd_init() {
-    local dir="" port="" slug="" human="" no_server=0 panel=0 tts=1 mode=""
+    local dir="" port="" slug="" human="" no_server=0 panel=0 tts=1 mode="" no_lead=0
     while [ $# -gt 0 ]; do
         case "$1" in
             -p|--port) port="$2"; shift ;;
@@ -595,6 +605,7 @@ cmd_init() {
             --tts) tts=1 ;;
             --no-tts) tts=0 ;;
             --node) mode=node ;;
+            --no-lead) no_lead=1 ;;   # the host helper adds the lead itself, after creating the team it was asked for
             -h|--help) usage; exit 0 ;;
             -*) die "unknown option '$1' (see: tropa help)" ;;
             *) dir="$1" ;;
@@ -662,6 +673,14 @@ cmd_init() {
             "http://localhost:$port/api/rooms" >/dev/null 2>&1 && info "  ✓ room $(C get room) ready"
     fi
     python3 "$S/setup_agent.py" refresh >/dev/null
+    # every project room keeps a lead orchestrator: one is created for an empty team (or picked, if none is set)
+    local el="" did lead_name
+    [ "$no_lead" = 1 ] || el=$(python3 "$S/setup_agent.py" ensure-lead 2>/dev/null | tail -n 1)
+    did=$(printf '%s' "$el" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("did",""))' 2>/dev/null)
+    lead_name=$(printf '%s' "$el" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("lead",""))' 2>/dev/null)
+    [ -n "$did" ] && info "  🧭 $did"
+    [ -n "$lead_name" ] && curl -fsS -X PATCH -H 'Content-Type: application/json' -d "{\"lead\":\"$lead_name\"}" \
+        "http://localhost:$port/api/rooms/$(C get room | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip(), safe=""))')/wake" >/dev/null 2>&1 || true
     # remember where this project lives, so the host helper (the chat's Start / Add agent buttons) finds it anywhere
     python3 - "$HOME/.tropa/projects-$port.json" "$(C get project)" "$dir" <<'PYREG' || true
 import json, os, sys
@@ -677,6 +696,21 @@ if reg.get(slug) != root:
         json.dump(reg, f, indent=1)
 PYREG
     info "  🔗 linked to room $(C get room) on http://localhost:$port"
+    # remember which kit this project now has: the host helper updates projects whose kit is older (after self-update)
+    python3 - "$STATE_DIR/kit-stamps.json" "$dir" "$(python3 "$TROPA_HOME/host/kit_stamp.py")" <<'PYSTAMP' || true
+import json, os, sys
+path, root, stamp = sys.argv[1:4]
+os.makedirs(os.path.dirname(path), exist_ok=True)
+try:
+    d = json.load(open(path))
+except (OSError, ValueError):
+    d = {}
+d[os.path.realpath(root)] = stamp
+tmp = path + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(d, f, indent=1)
+os.replace(tmp, path)
+PYSTAMP
     if ! health "$port"; then   # linked to a TropaAI that isn't running: probably the wrong port
         local p up=""
         for p in $(known_ports); do [ "$p" != "$port" ] && health "$p" && { up=$p; break; }; done
@@ -866,11 +900,12 @@ case "${1:-help}" in
         else
             curl -fsSL "https://raw.githubusercontent.com/$TROPA_REPO/main/install.sh" | TROPA_REPO="$TROPA_REPO" TROPA_NO_START=1 bash || exit 1
         fi
-        echo "   Run 'tropa update' in each project to refresh its kit."
+        echo "   Your projects' team kits update by themselves within a few minutes (the host helper does it)."
         # the chat server and host helper still run the old code: restart them with the new script
         # (exec: this file was just replaced on disk, so don't read any more of it)
         exec "$TROPA_HOME/tropa" restart ;;
     restart) shift; cmd_restart "$@" ;;
+    keep) shift; cmd_keep "$@" ;;
     version|--version|-v) echo "tropa $VERSION — built by Mark Allan Meriales with Claude (Anthropic)" ;;
     help|-h|--help) usage ;;
     *) die "unknown command '$1' (see: tropa help)" ;;

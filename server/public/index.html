@@ -57,6 +57,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }   /* hidden always hides, even when a class sets display (the Replying-to bar did) */
   html, body { height: 100%; margin: 0; }
   body { background: var(--bg); color: var(--text); font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   button, input, textarea { font: inherit; color: inherit; }
@@ -205,6 +206,9 @@
   .rs-ask .s { white-space: normal; }
   /* chat side panel: background tasks, files shared, docs mentioned (4/5 chat, 1/5 panel) */
   .chatrow { flex: 1; min-height: 0; display: flex; position: relative; }
+  .room-note { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 10px 20px; background: var(--mention); border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .room-note[hidden] { display: none; }
+  .helper-off .tbtn { margin-left: 4px; } .room-note .t { flex: 1 1 320px; }
   .newmsgs { position: absolute; bottom: 12px; transform: translateX(-50%); z-index: 5; border: 0; border-radius: 999px; padding: 5px 14px; font-size: 12.5px; font-weight: 600;
     background: var(--fill-accent); color: var(--on-accent); box-shadow: 0 4px 14px var(--shadow); cursor: pointer; }
   .newmsgs[hidden] { display: none; }
@@ -250,6 +254,10 @@
   .msg.speaking { background: var(--accent-weak); box-shadow: inset 3px 0 0 var(--accent); }
   .msg.speaking .actions { display: flex; }
   .actions button.on { color: var(--accent); font-weight: 600; }
+  .actions button[data-react].on { background: var(--accent-weak); }
+  .rx { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .rx-chip { border: 1px solid var(--line); background: var(--panel2); color: var(--text); border-radius: 999px; font-size: 12px; padding: 0 9px; line-height: 20px; cursor: pointer; }
+  .rx-chip.mine { border-color: var(--accent); background: var(--accent-weak); }
   @keyframes flash { from { background: var(--accent-weak); } to { background: transparent; } }
   .avatar { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 14px; margin-top: 2px; }
   .msg.cont { padding-top: 0; }
@@ -918,6 +926,7 @@
       <button class="dl-btn" id="teamBtn" hidden title="See every agent's screen live">▦ Team</button>
       <input class="search" id="search" placeholder="Search…">
     </header>
+    <div class="room-note" id="roomNote" hidden></div>
     <div class="chatrow" id="chatRow"><div class="msgs" id="msgs"></div><button type="button" class="newmsgs" id="newMsgs" hidden>↓ New messages</button><aside class="rside" id="rside" hidden aria-label="Background tasks, files and docs"></aside></div>
     <div class="team" id="team" hidden></div>
     <div class="usage" id="usage" hidden></div>
@@ -1217,14 +1226,6 @@
   <datalist id="npModels-claude-openrouter"></datalist><datalist id="npModels-opencode-openrouter"></datalist><datalist id="npModels-qwen-openrouter"></datalist><datalist id="npModels-codex-openrouter"></datalist><datalist id="npModels-gemini-openrouter"></datalist>
 </dialog>
 
-<dialog id="roomDlg">
-  <form method="dialog" id="roomForm">
-    <h3>New project room</h3>
-    <input id="roomProject" placeholder="project slug, e.g. oa-website" required>
-    <input id="roomTopicInput" placeholder="topic (optional)">
-    <div class="btns"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">Create</button></div>
-  </form>
-</dialog>
 
 <script>
 (() => {
@@ -1325,6 +1326,7 @@
 
   // ---------- sidebar ----------
   function renderSidebar() {
+    renderRoomNote();   // the team may have just appeared (or gone)
     const btn = (id, label, extra = '') => {
       const r = state.rooms.find((x) => x.id === id);
       const u = r && id !== state.current ? (r.unread_live || 0) : 0;
@@ -1359,7 +1361,46 @@
   }
 
   // ---------- messages ----------
+  // a project room with no team at all: every project room keeps at least its lead orchestrator
+  function renderRoomNote() {
+    const el = $('#roomNote'), slug = projectOf(state.current);
+    const t = state.team[state.current];
+    const none = !!slug && !state.searching && state.view === 'chat' && !t?.watching && !(t?.agents || []).length
+      && !state.agents.some((a) => (a.project || '').toLowerCase() === slug.toLowerCase()) && !state.addingLead?.[slug];
+    const paused = !!slug && !none && t?.settings?.wake === 'paused' && !state.searching;
+    el.hidden = !none && !paused;
+    if (paused) {
+      el.innerHTML = `<span class="t">⏸ <b>This room is paused.</b> Nothing wakes the agents, and the watcher doesn't nudge them. Your messages are kept; the lead catches up when you resume.</span>
+        <button type="button" class="tbtn pri" data-resume>▶ Resume</button>`;
+      return;
+    }
+    if (!none) return;
+    const base = parentBase();
+    el.innerHTML = `<span class="t">🧭 <b>This room has no team yet.</b> Every project room has a lead that runs it. Add one in a new folder <code>${esc(base)}/${esc(slug)}</code>, or in a folder you already have.</span>
+      <button type="button" class="tbtn pri" data-addlead ${state.host?.connected ? '' : 'disabled title="Start TropaAI\'s helper first (tropa start)"'}>Add a lead</button>
+      <button type="button" class="tbtn" data-addlead-folder>Use a folder I already have…</button>`;
+  }
+  document.addEventListener('click', async (e) => {
+    const slug = projectOf(state.current); if (!slug) return;
+    if (e.target.closest('[data-resume]')) { setPaused(false); return; }
+    if (e.target.closest('[data-addlead]')) {
+      const b = e.target.closest('[data-addlead]'); b.disabled = true; b.textContent = 'Adding the lead…';
+      (state.addingLead ||= {})[slug] = true;
+      try {
+        const room = state.rooms.find((r) => r.id === state.current);
+        await api('/projects', { method: 'POST', body: { name: room?.topic || slug, slug, folder: slug, topic: room?.topic || slug, brief: '', agents: [], parent: newParent() || undefined,
+          kickoff: `@lead You're the lead of this room. Say hi to ${state.human || 'the human'} in one line and ask what this project is about.`,
+          tools: [], design_system: '', git: true, auto_approve: false, start: true, trust: true, keys: {} } });
+      } catch (err) { delete state.addingLead[slug]; renderRoomNote(); alertInline(err.message); }
+      renderRoomNote(); return;
+    }
+    if (e.target.closest('[data-addlead-folder]')) {
+      if (simple()) { openBuild(); bt.teamId = ''; btPick(''); bt.name = slug; bt.where = 'existing'; renderBuild(); }
+      else { await openNewProject(); setPreset(''); $('#npName').value = slug; document.querySelector('input[name="npMode"][value="existing"]').checked = true; applyMode(); }
+    }
+  });
   function renderHeader() {
+    renderRoomNote();
     const r = state.rooms.find((x) => x.id === state.current);
     $('#roomTitle').textContent = state.searching ? `Search: “${state.searching}”` : roomLabel(state.current);
     $('#roomTopic').textContent = state.searching ? '' : state.current === ALL ? 'Every room, newest at the bottom' : (r?.topic || '');
@@ -1409,11 +1450,27 @@
           ${showRoom ? `<span class="roomtag" data-room="${esc(m.room_id)}">${esc(roomLabel(m.room_id))}</span>` : ''}
           <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><span class="rid">#${m.id}</span></div>`}
         ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
-        <div class="body">${md(m.content)}</div>${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${rmReqActs(m)}${oq ? `<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} — answer</button>` : ''}
+        <div class="body">${md(m.content)}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${rmReqActs(m)}${oq ? `<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} — answer</button>` : ''}
       </div>
-      <div class="actions"><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? '■ Stop' : '▶ Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>
+      <div class="actions"><button data-react="up" data-rxmsg="${m.id}" class="${myRx(m) === 'up' ? 'on' : ''}" title="Approve (👍)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} to go ahead` : ''}" aria-label="Thumbs up">👍</button><button data-react="down" data-rxmsg="${m.id}" class="${myRx(m) === 'down' ? 'on' : ''}" title="Disapprove (👎)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} not to go ahead` : ''}" aria-label="Thumbs down">👎</button><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? '■ Stop' : '▶ Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>
     </div>`;
   }
+  // 👍 / 👎: a quick approve or disapprove. An agent whose message you react to is told; on its question, it's the answer.
+  const myRx = (m) => (m.reactions || []).find((r) => r.who.toLowerCase() === myName().toLowerCase())?.kind || '';
+  function rxHtml(m) {
+    const rs = m.reactions || []; if (!rs.length) return '';
+    const mine = myRx(m);
+    return `<div class="rx">${['up', 'down'].map((k) => { const who = rs.filter((r) => r.kind === k).map((r) => r.who); if (!who.length) return '';
+      return `<button type="button" class="rx-chip ${mine === k ? 'mine' : ''}" data-react="${k}" data-rxmsg="${m.id}" title="${esc(who.join(', '))}${mine === k ? ' (click to take yours back)' : ''}">${k === 'up' ? '👍' : '👎'} ${esc(who.join(', '))}</button>`; }).join('')}</div>`;
+  }
+  async function react(id, kind) {
+    const m = [...state.messages.values()].flat().find((x) => x.id === id);
+    const next = m && myRx(m) === kind ? '' : kind;   // the same thumb again takes it back
+    try { await api(`/messages/${id}/react`, { method: 'POST', body: { kind: next, by: myName() } });
+      if (next && m?.sender_kind === 'agent') infoInline(next === 'up' ? `👍 ${m.sender} is told to go ahead.` : `👎 ${m.sender} is told not to go ahead.`); }
+    catch (err) { alertInline(err.message); }
+  }
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-react][data-rxmsg]'); if (b) react(Number(b.dataset.rxmsg), b.dataset.react); });
   function rmReqActs(m) {
     if (m.sender !== 'tropa' || !/@tropa confirm remove \d+/.test(m.content)) return '';
     const r = state.rmReqs.find((x) => x.message_id === m.id);
@@ -1641,6 +1698,11 @@
         state.skills[e.skills.room_id] = e.skills;
         if (e.skills.room_id === state.current && $('#skillsDlg').open && sk.mode === 'list') renderSkills();
       }
+      else if (e.type === 'reaction') {
+        let hit = false;
+        for (const arr of state.messages.values()) for (const m of arr) if (m.id === e.message_id) { m.reactions = e.reactions; hit = true; }
+        if (hit && (e.room_id === state.current || state.current === ALL)) renderMessages({ stick: false });
+      }
       else if (e.type === 'attention') {
         state.attention[e.attention.room_id] = e.attention;
         renderSidebar(); renderHeader();
@@ -1683,6 +1745,7 @@
       }
       else if (e.type === 'host') {
         state.host = e.host;
+        renderHelperNotes();
         if ($('#projDlg').open) { renderHostNote(); renderTeamPick(); renderTeamRows(); }
         if ($('#modelDlg').open) { fillModelLists(); mdRender(false); }
         if ($('#addAgentDlg').open) { fillModelLists(); aaRender(false); }
@@ -1691,7 +1754,7 @@
         if ($('#projDlg').open) renderNpKeys();
         if (state.view === 'team' && !$('#team').hidden && !state.team[state.current]?.watching) renderTeam();
       }
-      else if (e.type === 'wake_settings') { const t = state.team[e.room_id]; if (t) { t.settings = e.settings; if (e.room_id === state.current && state.view === 'team') renderTeamBar(); } }
+      else if (e.type === 'wake_settings') { const t = state.team[e.room_id]; if (t) { t.settings = e.settings; if (e.room_id === state.current) { renderRoomNote(); if (state.view === 'team') renderTeamBar(); } } }
       else if (e.type === 'message_deleted') { for (const [k, arr] of state.messages) state.messages.set(k, arr.filter((m) => m.id !== e.id)); renderMessages({ stick: false }); }
     };
   }
@@ -2332,9 +2395,9 @@
         ? `<div class="graphwrap"><div class="graph" id="graph">${graphSvg(t)}</div><div class="graph-side" id="graphSide">${cardHtml(graphSelected(t), t)}</div></div>`
         : `<div class="grid ${L === 'auto' ? '' : 'cols-' + L}">${names.map((n) => cardHtml(n, t)).join('')}</div>`)
       : `<div class="empty">${t.watching ? 'The watcher is running, but no agents are in tmux yet.'
-        : `The team isn't running (no room watcher for this project).<br>${state.host?.connected
+        : `The team isn't running.<br>${state.host?.connected
           ? `<button type="button" class="tbtn pri start-team" id="startTeam">▶ Start the team</button><br><small class="mut">Starts every agent that isn't running, and the room watcher.</small>`
-          : `Start it with <code>tropa panel</code> → 3 in the project folder, or start the host helper (<code>tropa host start</code>) to get a Start button here.`}`}</div>`);
+          : helperOff('the team can\'t be started from here yet')}`}</div>`);
     renderTeamBar(); renderAttention();
     el.querySelectorAll('pre.screen').forEach((pre) => { pre.scrollTop = pre.scrollHeight; });
   }
@@ -2501,7 +2564,7 @@
     const main = $('#dcMain'); if (!main) return;
     const seq = ++docSeq, scroll = keepScroll ? main.scrollTop : 0;
     if (!d.watching) {
-      main.innerHTML = `<div class="dc-empty">The team isn't running, so its docs folder can't be read.<br>Start it with <code>tropa panel</code> → 3; the watcher lists <code>${esc(d.dir || 'docs')}/</code> here.</div>`; return;
+      main.innerHTML = `<div class="dc-empty">The team isn't running, so its docs folder can't be read.<br>${state.host?.connected ? '<button type="button" class="tbtn pri" data-fixteam>▶ Start the team</button>' : helperOff('the team can\'t be started')}</div>`; return;
     }
     if (d.listed === false) {
       main.innerHTML = `<div class="dc-empty">This project's watcher doesn't list docs yet: it's running scripts from before the Docs view.<br>Run <code>tropa update</code> in the project folder: it refreshes the project's scripts and restarts the watcher.<br>The list appears here a few seconds later.</div>`; return;
@@ -2617,7 +2680,7 @@
     let html = `<div class="rs-top"><span>Room</span><button type="button" data-rs-toggle title="${off ? 'Show' : 'Hide'} this panel">${off ? '⟨' : '⟩'}</button></div>`;
     if (proj && simple()) {
       const t = state.team[room], lead = String(t?.settings?.lead || '').toLowerCase();
-      const body = !t?.watching ? `<div class="rs-empty">The team isn't running.</div><div class="rs-ask" style="padding: 0 14px 6px"><button type="button" class="tbtn pri" data-fixteam>▶ Start the team</button></div>`
+      const body = !t?.watching ? `<div class="rs-empty">The team isn't running.</div><div class="rs-ask" style="padding: 0 14px 6px">${state.host?.connected ? '<button type="button" class="tbtn pri" data-fixteam>▶ Start the team</button>' : helperOff('it can\'t be started yet')}</div>`
         : (t.agents || []).map((n) => {
           const p = t.panes?.[n] || {}, a = state.agents.find((x) => x.name.toLowerCase() === n.toLowerCase());
           const st = p.state === 'approval' ? ['wait', 'Needs your OK'] : p.limit ? ['lim', `Paused: ${limitLabel(p)}${p.limit.kind === 'credits' ? ' (top up the account)' : ''}`] : p.state === 'working' ? ['busy', 'Working'] : bgTasks(p) ? ['bg', 'Running a long task'] : p.state ? ['idle', 'Waiting for work'] : ['', 'Not started'];
@@ -2754,7 +2817,7 @@
     $('#kdGet').href = k.get; $('#kdKey').placeholder = k.ph; $('#kdLabel').textContent = proj ? 'This project\'s API key' : 'API key';
     const own = proj && projKey(proj, kd.prov);
     $('#kdStatus').innerHTML = !h.connected
-      ? `<span class="bad">The host helper isn't running on this computer, so the key can't be saved from here.</span> Start it with <code>tropa host start</code> (it starts with <code>tropa server up</code>).`
+      ? helperOff('the key can\'t be saved from here')
       : proj ? keyUse(kd.prov, proj).html + (own ? '' : '. Paste a key below to give this project its own.')
       : o.ready ? `<span class="ok">✓ Connected</span> · key <code>${esc(o.masked || 'set')}</code>, ${SRC[o.source] ? SRC[o.source](kd.prov) : 'set'}${kd.prov === 'openrouter' && orModels('claude').length ? ` · <b>${orModels('claude').length}</b> models with tools` : ''}${o.error ? `<br><span class="bad">${esc(o.error)}</span>` : ''}${o.source === 'env' ? `<br><span class="mut">${k.env} takes priority over a key saved here (a project's own key still wins).</span>` : ''}`
       : `Not set up yet${kd.prov === 'gemini' ? ': Gemini CLI agents use your Google sign-in' : ''}. Paste a key below.`;
@@ -2995,6 +3058,8 @@
     { name: 'stop', desc: 'Stop reading aloud', run: () => { ttsStop(); infoInline('Stopped reading.'); } },
     { name: 'tts', desc: 'Show which voice engine reads aloud · /tts kokoro · /tts mac', run: (args) => ttsCommand(args[0]) },
     { name: 'theme', desc: 'Colour theme: /theme light · dark · auto', run: (args) => setTheme(args[0] || 'next') },
+    { name: 'pause', desc: 'Pause this room: nothing wakes the agents (no nudges either) until /resume', run: () => setPaused(true) },
+    { name: 'resume', desc: 'Resume this room: agents are woken again, and the lead catches up', run: () => setPaused(false) },
     { name: 'help', desc: 'List available commands', run: () => {
       const ag = [...agentCmds().values()].map((c) => '/' + c.name);
       infoInline('Commands: ' + COMMANDS.map((c) => '/' + c.name).join('  ·  ') + (ag.length ? '   ·   the team\'s: ' + ag.slice(0, 12).join(' ') + (ag.length > 12 ? ' …' : '') : '') + '   (start with // to post a message beginning with /)');
@@ -3159,6 +3224,15 @@
       infoInline(bits.join(' '));
     } catch (e) { alertInline(e.message); }
     finally { $('#sendBtn').disabled = false; input.focus(); }
+  }
+  async function setPaused(on) {
+    if (!projectOf(state.current)) { alertInline('Pause works in a project room.'); return; }
+    try {
+      const s = await api(`/rooms/${encodeURIComponent(state.current)}/wake`, { method: 'PATCH', body: { wake: on ? 'paused' : 'auto' } });
+      if (state.team[state.current]) state.team[state.current].settings = s;
+      renderRoomNote(); if (state.view === 'team') renderTeamBar();
+      infoInline(on ? '⏸ Room paused. /resume to wake the agents again.' : '▶ Room resumed.');
+    } catch (e) { alertInline(e.message); }
   }
   function runCommand(text) {
     const name = text.slice(1).split(/\s+/)[0].toLowerCase();
@@ -3410,7 +3484,7 @@
     if (t.dataset.del) { if (t.dataset.confirm) { await api(`/messages/${t.dataset.del}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); } else { t.dataset.confirm = '1'; t.textContent = 'Confirm?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = 'Delete'; }, 2500); } return; }
     if (t.dataset.jump) { const el = document.getElementById('m' + t.dataset.jump); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } return; }
     if (t.dataset.editAgent) { openAgentEditor(t.dataset.editAgent); return; }
-    if (t.dataset.delAgent) { if (t.dataset.confirm) await api(`/agents/${encodeURIComponent(t.dataset.delAgent)}`, { method: 'DELETE' }); else { t.dataset.confirm = '1'; t.textContent = '?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = '×'; }, 2500); } }
+    if (t.dataset.delAgent) { if (t.dataset.confirm) await api(`/agents/${encodeURIComponent(t.dataset.delAgent)}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); else { t.dataset.confirm = '1'; t.textContent = '?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = '×'; }, 2500); } }
   });
   $('#menuBtn').addEventListener('click', () => $('#app').classList.toggle('nav'));
 
@@ -3566,7 +3640,7 @@
   function renderTeamPick() {
     const ts = teamTemplates();
     $('#npTeamPick').innerHTML = ts.map((t) => `<option value="${esc(t.id)}">${esc(t.name)} · ${t.members.length}</option>`).join('')
-      + `<option value="" ${np.teamId ? '' : 'selected'}>Start empty</option>`;
+      + `<option value="" ${np.teamId ? '' : 'selected'}>Just a lead (hire the rest yourself)</option>`;
     if (np.teamId) $('#npTeamPick').value = np.teamId;
     const t = ts.find((x) => x.id === np.teamId);
     $('#npTeamSum').textContent = t?.summary ? forHuman(t.summary) : '';
@@ -3574,11 +3648,38 @@
   function setPreset(id) {
     const t = teamTemplates().find((x) => x.id === id);
     np.teamId = t ? t.id : ''; np.how = t?.how || '';
-    np.team = t ? t.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: forHuman(m.role), prompt: forHuman(m.prompt) })) : [];
-    np.lead = t ? t.lead : ''; renderTeamPick(); renderTeamRows(); defaultKickoff();
+    np.team = t ? t.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: forHuman(m.role), prompt: forHuman(m.prompt) })) : [leadMember()];
+    np.lead = t ? t.lead : 'lead'; renderTeamPick(); renderTeamRows(); defaultKickoff();
     if (t && !$('#npGit').disabled) $('#npGit').checked = t.git !== false;   // git: no in team.md: a team that doesn't write code
   }
   // each member's job (their prompt file) plus how the team works (team.md), saved in their AGENT.md
+  // TropaAI's helper (the host helper) runs on the computer and starts and heals teams. When it's down, say so in plain
+  // words with a button: the chat server starts it when it can (not in Docker), else the keeper brings it back.
+  function helperOff(what) {
+    const can = state.host?.can_start;
+    return `<span class="helper-off" data-helper-off>TropaAI's helper on this computer isn't running, so ${what}. ` +
+      (can ? `<button type="button" class="tbtn pri" data-starthost>▶ Start the helper</button>`
+        : `It comes back by itself within a minute when TropaAI is set to keep running. If it doesn't, open TropaAI with its shortcut (or run <code>tropa start</code> once).`) + '</span>';
+  }
+  function renderHelperNotes() {   // re-render what showed the helper as off (or on)
+    if (state.view === 'team' && !$('#team').hidden) renderTeam();
+    if (!$('#build').hidden) renderBuild();
+    renderRside();
+  }
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-starthost]'); if (!b) return;
+    b.disabled = true; b.textContent = 'Starting the helper…';
+    try {
+      await api('/host/start', { method: 'POST', body: {} });
+      for (let i = 0; i < 20 && !state.host?.connected; i++) { await new Promise((r) => setTimeout(r, 1500)); try { state.host = await api('/host'); } catch {} }
+      if (state.host?.connected) { infoInline('The helper is running.'); renderHelperNotes(); } else { b.disabled = false; b.textContent = '▶ Start the helper'; alertInline("The helper didn't come up. Run tropa start once on this computer."); }
+    } catch (err) { b.disabled = false; b.textContent = '▶ Start the helper'; alertInline(err.message); }
+  });
+  // every project room keeps at least one agent, its lead orchestrator (teams/lead.md, sent by the host helper)
+  function leadMember() {
+    const t = state.host?.lead_template || {};
+    return { name: 'lead', tool: 'claude', model: t.model || 'sonnet', role: forHuman(t.role || 'Lead: runs this room for {human}: plans the work, assigns it, keeps it moving, reports back'), prompt: forHuman(t.prompt || '') };
+  }
   const jobFor = (a) => [a.prompt, np.how ? `## How this team works\n${forHuman(np.how)}` : ''].filter(Boolean).join('\n\n');
   function renderHostNote() {
     const h = state.host || {}; const el = $('#npHost');
@@ -3589,7 +3690,7 @@
         : `✓ Host helper connected — the project is created in <code>${esc($('#npBase').textContent)}</code> on ${esc(where)}.`;
     } else {
       el.className = 'np-host off';
-      el.innerHTML = `The host helper isn't running, so the chat can't create folders or start agents. Run <code>tropa host start -p ${esc(location.port || '80')}</code> on the machine running TropaAI, then reopen this dialog. You can still create just the room.`;
+      el.innerHTML = helperOff('the project can\'t be created yet');
     }
     $('#npCreate').disabled = !h.connected;
   }
@@ -3821,6 +3922,7 @@
   });
   $('#npTeam').addEventListener('click', (e) => {
     const rm = e.target.closest('.rm'); if (!rm) return;
+    if (np.team.length === 1) { $('#npErr').textContent = 'Every project room keeps at least one agent, its lead.'; return; }
     const i = Number(rm.closest('.np-row').dataset.i); const [gone] = np.team.splice(i, 1);
     if (gone.name === np.lead) np.lead = np.team[0]?.name || '';
     renderTeamRows(); defaultKickoff();
@@ -4327,7 +4429,7 @@
     fillModelLists();
     const slug = projectOf(state.current);
     $('#aaTitle').textContent = `Add an agent to ${slug}`;
-    $('#aaErr').textContent = state.host.connected ? '' : 'The host helper isn\'t running on your machine: start it with tropa host start.';
+    $('#aaErr').innerHTML = state.host.connected ? '' : helperOff('agents can\'t be added right now');
     $('#aaName').value = ''; $('#aaRole').value = ''; $('#aaInstr').value = ''; $('#aaStart').checked = true;
     aa.tool = (state.host.clis || []).includes('claude') || !(state.host.clis || []).length ? 'claude' : state.host.clis[0];
     aa.req = fromReq?.status === 'requested' ? fromReq : null;
@@ -4380,7 +4482,7 @@
       ${x.url ? `<button type="button" data-copy-url="${esc(x.url)}">Copy</button>` : ''}
       ${x.status === 'requested' ? `<button type="button" class="ok" data-share-approve="${x.id}">Approve</button><button type="button" data-share-deny="${x.id}">Deny</button>` : x.status === 'stopping' ? '' : `<button type="button" data-share-stop="${x.id}">Stop</button>`}</div>`).join('')}</div>` : '';
     let form = '';
-    if (!h.connected) form = `<div class="sh-note warn">The host helper isn't running on your machine, so links can't be opened from the chat. Start it with <code>tropa host start</code>.</div>`;
+    if (!h.connected) form = `<div class="sh-note warn">${helperOff('links can\'t be opened from the chat')}</div>`;
     else if (!n.installed) form = `<div class="sh-note warn"><b>ngrok is optional and not installed.</b> To share links to apps running on your machine:<br>1. Install it: <code>brew install ngrok</code> (macOS) or see <a href="https://ngrok.com/download" target="_blank" rel="noopener">ngrok.com/download</a><br>2. Add your free token once: <code>ngrok config add-authtoken &lt;token&gt;</code> (<a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener">get it here</a>)<br>Then reopen this dialog.</div>`;
     else if (!n.authed) form = `<div class="sh-note warn"><b>ngrok needs your token once.</b> Run <code>ngrok config add-authtoken &lt;token&gt;</code> (free at <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener">dashboard.ngrok.com</a>), then reopen this dialog.</div>`;
     else form = `<div class="sh-row"><div><label class="f" for="sharePort">Local port</label><input id="sharePort" inputmode="numeric" placeholder="3000" value="${esc($('#sharePort')?.value || '3000')}"></div>
@@ -4483,8 +4585,8 @@
   function btPick(id) {
     const t = teamTemplates().find((x) => x.id === id);
     bt.teamId = t ? t.id : ''; bt.how = t?.how || ''; bt.git = t ? t.git !== false : true;
-    bt.members = t ? t.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: forHuman(m.role), prompt: forHuman(m.prompt), open: false })) : [];
-    bt.lead = t ? t.lead : ''; bt.hiring = false;
+    bt.members = t ? t.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: forHuman(m.role), prompt: forHuman(m.prompt), open: false })) : [{ ...leadMember(), open: false }];
+    bt.lead = t ? t.lead : 'lead'; bt.hiring = false;
     renderBuild();
   }
   function roleLibrary() {   // every member of every ready-made team, once, minus those already on this team
@@ -4518,11 +4620,11 @@
     $('#build').innerHTML = `<div class="bd-wrap">
       <div class="bd-top"><h1>Build your team</h1><button type="button" class="bd-x" data-bd="close" aria-label="Close">×</button></div>
       <p class="bd-lead">Hire the roles you need, the way you'd staff a small office. Each one gets a job you can read and change.</p>
-      ${h.connected ? '' : `<div class="bd-warn">TropaAI's helper isn't running on this computer, so the team can't be created yet. Start it with <code>tropa start</code>.</div>`}
+      ${h.connected ? '' : `<div class="bd-warn">${helperOff('the team can\'t be created yet')}</div>`}
       ${h.connected && !(h.clis || []).includes('claude') ? `<div class="bd-warn">Claude Code isn't installed on this computer, and your team runs on it. Open <b>⚙ Settings → Setup</b> to install it.</div>` : ''}
       <section><h2>1. Start from a ready-made team</h2>
         <div class="bd-grid">${ts.map((t) => `<button type="button" class="bd-tpl ${t.id === bt.teamId ? 'on' : ''}" data-bd-team="${esc(t.id)}" aria-pressed="${t.id === bt.teamId}"><b>${esc(t.name)}</b>${t.summary ? `<span>${esc(forHuman(t.summary))}</span>` : ''}<small>${t.members.map((m) => esc(m.name)).join(' · ')}</small></button>`).join('')}
-          <button type="button" class="bd-tpl ${bt.teamId === '' ? 'on' : ''}" data-bd-team="" aria-pressed="${bt.teamId === ''}"><b>Start empty</b><span>Hire everyone yourself.</span></button></div></section>
+          <button type="button" class="bd-tpl ${bt.teamId === '' ? 'on' : ''}" data-bd-team="" aria-pressed="${bt.teamId === ''}"><b>Start with a lead</b><span>Just the lead orchestrator; hire the rest yourself.</span></button></div></section>
       <section><h2>2. Your team <span class="mut">· ${bt.members.length} ${bt.members.length === 1 ? 'member' : 'members'}</span></h2>
         <div class="bd-grid">${bt.members.map((m, i) => `<div class="bd-mem ${m.name === bt.lead ? 'lead' : ''}" data-i="${i}">
             <div class="bd-mh"><span class="bd-av" style="background:${colorFor(m.name)}">${esc(initialsOf(m.name))}</span>
@@ -4578,7 +4680,7 @@
     switch (b.dataset.bd) {
       case 'close': closeBuild(); return;
       case 'lead': bt.lead = bt.members[i].name; break;
-      case 'rm': { const [gone] = bt.members.splice(i, 1); if (gone?.name === bt.lead) bt.lead = bt.members[0]?.name || ''; break; }
+      case 'rm': if (bt.members.length === 1) { $('#bdErr').textContent = 'Every project room keeps at least one agent, its lead.'; return; } { const [gone] = bt.members.splice(i, 1); if (gone?.name === bt.lead) bt.lead = bt.members[0]?.name || ''; break; }
       case 'hire': bt.hiring = !bt.hiring; break;
       case 'addnew': {
         const name = $('#bdNewName').value.trim().replace(/\s+/g, '-');
@@ -4727,7 +4829,7 @@
     $('#cpSend').hidden = !ready;
     if (!ready || cp.auth) {
       $('#cpBody').innerHTML = `<div class="cp-req">${!h.connected
-        ? `<b>The host helper isn't running.</b><span>It runs Claude and creates the project folder. Start it with <code>tropa host start</code> (it starts with <code>tropa server up</code>).</span>`
+        ? `<b>TropaAI's helper isn't running.</b><span>${helperOff('Claude can\'t plan the project here yet')}</span>`
         : `<b>${cp.auth ? 'Claude Code needs you to sign in' : 'New projects can be set up by chatting with Claude'}</b>
           <span>${cp.auth ? esc(cp.err) : 'It runs as Claude Code on this computer, which isn\'t installed yet. Your agents can still use any CLI; this is only for the setup chat.'}</span>
           ${cp.auth ? '' : '<span>1. Install Claude Code:</span><pre>curl -fsSL https://claude.ai/install.sh | bash</pre>'}
@@ -4813,14 +4915,6 @@
   // "New project": the chat with Claude when Claude Code is installed (unless you last chose the form), else the form
   $('#newRoom').addEventListener('click', () => (simple() ? openBuild() : claudeInfo().installed && localGet('airc.npMode') !== 'form' ? openChat() : openNewProject()));
   $('#newRoom').title = 'New project';
-  $('#roomDlg').addEventListener('close', async () => {
-    if ($('#roomDlg').returnValue !== 'ok') return;
-    try {
-      const room = await api('/rooms', { method: 'POST', body: { project: $('#roomProject').value, topic: $('#roomTopicInput').value } });
-      if (!state.rooms.find((r) => r.id === room.id)) state.rooms.push({ ...room, message_count: 0, unread_live: 0 });
-      selectRoom(room.id);
-    } catch (e) { alertInline(e.message); }
-  });
 
   // search
   let searchTimer;

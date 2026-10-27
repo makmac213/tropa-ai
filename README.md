@@ -66,12 +66,12 @@ The Setup check shows the commands for the other agents: [OpenCode](https://open
 ```bash
 tropa start              # start TropaAI (chat + host helper) and open it in the browser
 tropa stop               # stop it
-tropa autostart on       # start it whenever you log in (macOS and Linux); off to undo
+tropa autostart on       # keep it running: starts at login, back within a minute if it stops (tropa start turns this on the first time); off to undo
 ```
 
 **Which port:** without `-p`, these use the port you last started with (`tropa start -p 8181` once, and plain `tropa start` keeps using 8181), else the port TropaAI already runs on, else 8888. `TROPA_PORT=…` overrides it.
 
-**Updating:** `tropa self-update` (the latest release, or `main` while there are none). It restarts the chat server and host helper on the new version by itself; your chats, projects and running teams are kept. Reload the page afterwards. Then run `tropa update <project>` for each project. `tropa restart` restarts them by hand.
+**Updating:** `tropa self-update` (the latest release, or `main` while there are none). It restarts the chat server and host helper on the new version by itself; your chats, projects and running teams are kept. Reload the page afterwards. Each project's team kit and default skills then update by themselves within a few minutes: the host helper runs `tropa update` in every project that's behind, wherever its folder is. `tropa restart` restarts them by hand, and `tropa update <project>` still updates one project right away.
 
 `tropa start` runs the chat server with Node. If you prefer Docker, use `tropa start --docker`; a port that already keeps its chats in Docker stays in Docker. Use `-p PORT` to run on another port (several can run side by side, each with its own chats).
 
@@ -145,6 +145,11 @@ Claude runs on your computer through the host helper (`claude -p`, with no tools
 4. Click **▦ Team** to watch every agent work, and chat with them in the room.
 
 ### Ready-made teams
+
+**Every project room keeps a lead.** It has at least one agent, its lead orchestrator, which runs the room for you: it plans the work, assigns it, asks for teammates when needed, and does the work itself on a team of one. Its job is [`teams/lead.md`](teams/lead.md).
+- Start with an empty team and you get that lead. `tropa init`/`tropa update` in a folder without agents creates `lead-<project>`.
+- A room with no team shows **Add a lead**.
+- The lead can't be removed while others remain (give ★ to someone else first), and the last agent can't be removed.
 
 Each ready-made team is a folder of prompts in [`teams/`](teams/): a `team.md` (name, summary, lead, and how the team works together) and one file per member, whose name is the agent's name and whose text is that member's job. When you start a project from a team, each agent's job, plus the team's way of working, is saved in its `AGENT.md` under *Your job* and stays there for the whole project.
 
@@ -511,6 +516,8 @@ How it's set up:
 - **Other rooms:** `#general` is for talk across projects. **All activity** shows every room together.
 - **Light / dark mode:** the ◐ button next to ⚙ cycles **Auto** (follows your system) → **Light** → **Dark**, and your choice is remembered in the browser. Both themes meet WCAG AA contrast.
 - **Read aloud:** hover a message and click **▶ Read**, or type `/read`, `/read 5` or `/read #37`. Each sender gets their own voice. It uses **Kokoro**, natural local voices started automatically by `tropa server up` (needs Docker), and falls back to your system's voices while Kokoro downloads (a few GB, the first time only) or if Docker isn't running. ⚙ Settings picks the engine, voices and speed.
+- **👍 / 👎:** hover a message to approve or disapprove it. On an agent's message, the agent is told to go ahead or not; on a question it asked you, it's the answer (yes, with its recommendation / no). Click your reaction again to take it back.
+- **Pause a room:** `/pause` (or Auto-wake off in ▦ Team) when there's nothing to work on. Nothing wakes the agents and the watcher stops nudging them until `/resume`; then the lead catches up on what was posted meanwhile.
 - **Auto-scroll:** the chat follows new messages only while you're at the bottom, and **↓ N new messages** takes you down when something arrives while you read. The *Auto-scroll* switch under the message box turns following off completely.
 - **Slash commands in the chat box:** `/help`, `/theme light|dark|auto`, `/download md|txt|json` (transcript), `/read` (read aloud), `/blur`. Any other `/command` goes to the agents (see *The agents' own slash commands*).
 
@@ -916,7 +923,7 @@ Or put it in a project's `.mcp.json`:
 |---|---|
 | `tropa start [-p PORT] [--docker] [--no-open]` | Start TropaAI (chat server and host helper) and open it in the browser. Node by default. |
 | `tropa stop [-p PORT]` | Stop it |
-| `tropa autostart on\|off\|status [-p PORT]` | Start TropaAI when you log in (launchd on macOS, a systemd user service on Linux) |
+| `tropa autostart on\|off\|status [-p PORT]` | Keep TropaAI running: start it when you log in and bring the chat server or host helper back within a minute if one stops (launchd on macOS, a systemd timer on Linux). `tropa start` turns it on the first time |
 | `tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--panel] [--node] [--tts] [DIR]` | Add the team kit to DIR (default: the current folder) and make sure the server on PORT is running. Safe to re-run: settings are kept. |
 | `tropa panel [DIR]` | Control panel: 1 create an agent · 2 create several · 3 start all agents + the watcher · 4 restart one · 5 change a model · 6 list · 7 wake everyone · 8 settings · d doctor |
 | `tropa doctor [DIR]` | Checks tools, the server, each agent's CLI, sign-in, MCP connection and tmux, and suggests a fix for each problem |
@@ -931,6 +938,7 @@ Or put it in a project's `.mcp.json`:
 | `tropa host start\|stop\|status\|logs [-p PORT] [--projects-dir DIR]` | The host helper that lets the chat create projects and start teams |
 | `tropa update [DIR]` | Refresh a project's kit to your installed tropa version |
 | `tropa self-update` | Update tropa itself (and restart what's running on the new version) |
+| `tropa keep` | Start the chat server or host helper if one is down (the keeper runs this every minute) |
 | `tropa restart` | Restart the chat server and host helper on the current code |
 | `tropa install [BIN_DIR]` | Put this copy of `tropa` on your PATH |
 | `tropa version` · `tropa help` | |

@@ -3,6 +3,7 @@
 
   setup_agent.py create NAME TOOL ROLE INSTRUCTION [MODEL] [--lead]
   setup_agent.py refresh [NAME]     rebuild config files from agent.json (all agents if no name)
+  setup_agent.py ensure-lead        every project keeps a lead: create one if the team is empty, pick one if none is set
   setup_agent.py team               regenerate .agent_sync/TEAM.md
   setup_agent.py remove NAME        stop NAME's tmux window, move agents/NAME/ to agents/.removed/, update TEAM.md
   setup_agent.py rename OLD NEW     rename an agent: its folder, agent.json, lead setting, @mentions in the team's
@@ -155,6 +156,51 @@ def duty(cfg, a):
     if re.search(r"\b(qa|test|tests|tester|testing|quality)\b", f"{a['name']} {a.get('role', '')}", re.I):
         return "qa"
     return "dev"
+
+
+def lead_template(cfg):
+    """tropa's teams/lead.md (role, model, job) via host/teams.py; a short built-in one if tropa isn't found."""
+    home = cfg.get("tropa_home") or ""
+    try:
+        sys.path.insert(0, os.path.join(home, "host"))
+        import teams
+        m = teams.lead_member()
+        if m and m.get("prompt"):
+            return m
+    except Exception:
+        pass
+    finally:
+        if sys.path and sys.path[0] == os.path.join(home, "host"):
+            sys.path.pop(0)
+    return {"role": "Lead: runs this room for {human}: plans the work, assigns it, keeps it moving, reports back", "model": "sonnet",
+            "prompt": "You lead this project's room for {human}. Messages without an @mention are for you: plan the work, "
+                      "do it or assign it, and report back in plain words. Ask for a teammate with request_agent when the work needs one."}
+
+
+def ensure_lead(cfg):
+    """Every project room keeps a lead orchestrator. Empty team: create `lead-<project>` on the first CLI installed.
+    Agents but no (valid) lead: the first one leads. Returns (lead name, what was done or "", the CLI of a lead it created or "")."""
+    agents = all_agents(cfg)
+    names = [a["name"] for a in agents]
+    if agents:
+        if cfg.get("lead") in names:
+            return cfg["lead"], "", ""
+        config.save_key("lead", json.dumps(names[0]))
+        write_team(config.load())
+        return names[0], f"@{names[0]} leads the team now (it had no lead)", ""
+    import shutil
+    tool = next((t for t in ("claude", "codex", "opencode", "qwen", "gemini") if shutil.which(t)), "claude")
+    t = lead_template(cfg)
+    human = cfg.get("human") or "the human"
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", f"lead-{cfg.get('project') or 'team'}")[:40].rstrip("-.")
+    a = {"name": name, "tool": tool, "provider": PROVIDERS[tool], "model": t.get("model", "") if tool == "claude" else "",
+         "role": t["role"].replace("{human}", human), "instruction": "", "prompt": t["prompt"].replace("{human}", human)}
+    dump(os.path.join(agents_dir(cfg), name, "agent.json"), a)
+    config.save_key("lead", json.dumps(name))
+    cfg = config.load()
+    write_team(cfg)
+    write_agent(cfg, a)
+    return name, f"created @{name} ({PROVIDERS[tool]}), the lead every project room keeps", tool
 
 
 def job_block(a):
@@ -717,6 +763,9 @@ def main():
             cfg = config.load()
         write_team(cfg)
         print(write_agent(cfg, a))
+    elif cmd == "ensure-lead":
+        name, did, tool = ensure_lead(cfg)
+        print(json.dumps({"lead": name, "did": did, "created_tool": tool}))
     elif cmd == "refresh":
         write_team(cfg)
         for a in all_agents(cfg):

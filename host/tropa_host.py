@@ -68,6 +68,17 @@ def teams_catalog():
         return []
 
 
+def lead_template():
+    """teams/lead.md: the lead orchestrator every project room keeps (for a project started with an empty team)."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import teams
+        return teams.lead_member()
+    except Exception as e:
+        log(f"lead template: {e}")
+        return None
+
+
 def tools_catalog():
     """The optional tools (hosted MCP servers) a project can enable, from the kit's tools.json."""
     try:
@@ -787,6 +798,24 @@ class Host:
     def setc(self, root, key, value):
         self.run([sys.executable, os.path.join(root, ".agent_sync", "config.py"), "set", key, json.dumps(value)])
 
+    def ensure_lead(self, root, room_id, trust=True):
+        """Every project room keeps a lead orchestrator: the kit creates one for an empty team (or picks one), and
+        the chat is told who leads. Returns what was done ("" if nothing)."""
+        r = self.run([sys.executable, os.path.join(root, ".agent_sync", "setup_agent.py"), "ensure-lead"], check=False)
+        try:
+            d = json.loads((r.stdout or "").strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            log(f"ensure-lead in {root}: {(r.stderr or r.stdout or '').strip()[-300:]}")
+            return ""
+        if d.get("created_tool") == "claude" and trust:
+            self.trust_claude(root, [d["lead"]])
+        if d.get("lead"):
+            try:
+                self.http(f"/rooms/{urllib.parse.quote(room_id, safe='')}/wake", {"lead": d["lead"]}, method="PATCH")
+            except Exception as e:
+                log(f"could not tell the chat who leads {room_id}: {e}")
+        return d.get("did") or ""
+
     # ---------- create_project ----------
     def create_project(self, job):
         folder = job["folder"]
@@ -818,7 +847,7 @@ class Host:
             else:
                 self.report(job, f"⚠️ git isn't installed on this machine, so the project isn't a git repo and the team can't use branches/worktrees. "
                                  f"Install it ({git_hint()}), then run `git -C {root} init -b main`, commit, and `tropa update {root}`.")
-        r = self.run([TROPA, "init", "-p", str(self.port), "-n", job["slug"], root])
+        r = self.run([TROPA, "init", "-p", str(self.port), "-n", job["slug"], "--no-lead", root])
         room = self.cfg(root, "room")
         if room != job["room_id"]:
             raise RuntimeError(f"room mismatch: {room} vs {job['room_id']}")
@@ -905,7 +934,11 @@ class Host:
                 self.report(job, f"⚠️ Didn't save the {prov} key: {e}. Agents use your global key or sign-in instead; set it later in 🔑 Keys.")
         self.run([sys.executable, setup, "refresh"])
         lead = f" — lead: @{job['lead']}" if job.get("lead") else ""
-        self.report(job, "🤖 Created agents: " + ", ".join(f"@{a['name']} ({a['tool']}{' · ' + a['model'] if a.get('model') else ''})" for a in agents) + lead + ".")
+        if agents:
+            self.report(job, "🤖 Created agents: " + ", ".join(f"@{a['name']} ({a['tool']}{' · ' + a['model'] if a.get('model') else ''})" for a in agents) + lead + ".")
+        did = self.ensure_lead(root, job["room_id"], trust=bool(job.get("trust")))
+        if did:
+            self.report(job, f"🧭 Every project room keeps a lead: {did}.")
 
         self.initial_commit(job, root, existing)
         if job.get("trust") and "claude" in tools:
@@ -1292,11 +1325,43 @@ class Host:
                 log("another host helper for this port is already keeping teams running; this one won't")
         return bool(self._heal_lock)
 
+    KITS_EVERY = 300   # seconds between checks for projects whose team kit is older than this tropa
+
+    def update_kits(self):
+        """After tropa self-update (or a git pull): run `tropa update` in every project whose team kit and default
+        skills are older than this tropa's, so nobody has to do it by hand. `tropa update` records what it installed
+        in ~/.tropa/kit-stamps.json; a project that fails is retried only once tropa changes again."""
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import kit_stamp
+            want = kit_stamp.stamp()
+        except Exception as e:
+            log(f"kit check: {e}"); return
+        path = os.path.expanduser("~/.tropa/kit-stamps.json")
+        failed = getattr(self, "_kit_failed", {})
+        self._kit_failed = failed
+        for slug, root in sorted(self.team_roots().items()):
+            try:
+                have = json.load(open(path)).get(os.path.realpath(root))
+            except (OSError, ValueError):
+                have = None
+            if have == want or failed.get(root) == want:
+                continue
+            r = self.run([TROPA, "update", root], check=False)
+            if r.returncode == 0:
+                log(f"[{slug}] team kit updated to this tropa ({root})")
+            else:
+                failed[root] = want
+                log(f"[{slug}] couldn't update its team kit: {(r.stderr or r.stdout or '').strip()[-300:]}")
+
     def heal_all(self):
         """The automatic check, every HEAL_EVERY seconds in the background."""
         try:
             if time.time() - self._last_job_at < self.HEAL_QUIET or not self.heal_lock():
                 return
+            if time.time() - getattr(self, "_kits_at", 0) > self.KITS_EVERY:
+                self._kits_at = time.time()
+                self.update_kits()
             for slug, root in self.team_roots().items():
                 res = self.heal(slug, root)
                 if res and (res[0] or res[1]):
@@ -1326,6 +1391,9 @@ class Host:
         root = self.project_root(slug)
         if not root:
             raise RuntimeError(self.no_root(slug))
+        did = self.ensure_lead(root, job.get("room_id") or f"project:{slug}", trust=self.cfg(root, "trust_agent_folders").lower() not in ("false", "0"))
+        if did:
+            self.report(job, f"🧭 Every project room keeps a lead: {did}.")
         session = self.cfg(root, "tmux_session")
         cur = self.cfg(root, "server").rstrip("/")
         if cur != self.server:   # e.g. set up with the template's port 8888: the team belongs to the TropaAI that starts it
@@ -1369,7 +1437,7 @@ class Host:
                                               "models": self.models(), "folders": self.folders(), "elsewhere": self.elsewhere(),
                                               "blocked": getattr(self, "blocked", []), "picker": self.has_picker(),
                                               "git": git_version(), "git_hint": git_hint(), "tools": tools_catalog(),
-                                              "design_systems": design_catalog(), "teams": teams_catalog(),
+                                              "design_systems": design_catalog(), "teams": teams_catalog(), "lead_template": lead_template(),
                                               "ngrok": self.ngrok_info(), "shares": self.shares.ids(), "usage": self.usage_on,
                                               "timeout": 20}, timeout=35)
                 if ok is not True:

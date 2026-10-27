@@ -54,6 +54,13 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
+  CREATE TABLE IF NOT EXISTS reactions (   -- 👍 / 👎 on a message, one per person
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    who TEXT NOT NULL,
+    kind TEXT NOT NULL,                  -- 'up' | 'down'
+    at INTEGER NOT NULL,
+    PRIMARY KEY (message_id, who)
+  );
   CREATE TABLE IF NOT EXISTS agents (
     name TEXT PRIMARY KEY,
     project TEXT,
@@ -202,10 +209,15 @@ function parseMentions(content) {
   while ((m = re.exec(content))) set.add(m[2].replace(/[.]+$/, '').toLowerCase());
   return [...set];
 }
+const rx = {
+  forMsg: db.prepare('SELECT who, kind, at FROM reactions WHERE message_id = ? ORDER BY at'),
+  set: db.prepare('INSERT INTO reactions (message_id, who, kind, at) VALUES (?,?,?,?) ON CONFLICT(message_id, who) DO UPDATE SET kind = excluded.kind, at = excluded.at'),
+  del: db.prepare('DELETE FROM reactions WHERE message_id = ? AND lower(who) = lower(?)'),
+};
 function rowToMessage(r) {
   if (!r) return r;
   const atts = qa.forMsg.all(r.id).map(attView);
-  return { ...r, mentions: JSON.parse(r.mentions || '[]'), created_iso: new Date(r.created_at).toISOString(), attachments: atts };
+  return { ...r, mentions: JSON.parse(r.mentions || '[]'), created_iso: new Date(r.created_at).toISOString(), attachments: atts, reactions: rx.forMsg.all(r.id) };
 }
 
 // ---------- rooms ----------
@@ -556,7 +568,8 @@ function fmtMsg(m) {
   const reply = m.reply_to ? ` ↩#${m.reply_to}` : '';
   const who = m.sender_kind === 'human' ? `${m.sender} (human)` : m.sender;
   const files = (m.attachments || []).map((a) => `\n📎 ${a.path} (${a.mime}, ${fmtSize(a.size)})${a.synced ? '' : a.stored ? ' — still being copied into the project' : a.error ? ` — upload failed: ${a.error}` : ' — not uploaded yet'}`).join('');
-  return `[#${m.id} ${m.room_id} ${fmtTime(m.created_at)}${reply}] ${who}: ${m.content}${files}`;
+  const rxs = (m.reactions || []).map((r) => `${r.kind === 'up' ? '👍' : '👎'} ${r.who}`).join(', ');
+  return `[#${m.id} ${m.room_id} ${fmtTime(m.created_at)}${reply}] ${who}: ${m.content}${files}${rxs ? `\n(reactions: ${rxs})` : ''}`;
 }
 function fmtMsgs(msgs, empty = 'No messages.') {
   return msgs.length ? msgs.map(fmtMsg).join('\n\n') : empty;
@@ -1083,6 +1096,39 @@ api.post('/rooms/:id/messages', wrap((req) => {
   else sender = resolveAgent(req.body.sender || req.body.agent).name;
   return postMessage({ room: req.params.id, sender, kind, content: req.body.content, reply_to: req.body.reply_to, attachments: req.body.attachments });
 }));
+// 👍 / 👎 on a message: a quick approve / disapprove. On an agent's message the agent is told (a few seconds
+// later, so a quick change of mind sends one wake); on a question it asked, it's the answer.
+const rxWakes = new Map();   // message id -> timer
+api.post('/messages/:id/react', wrap((req) => {
+  const m = q.getMsg.get(Number(req.params.id));
+  if (!m) throw new UserError('message not found');
+  const kind = ['up', 'down'].includes(req.body?.kind) ? req.body.kind : '';
+  const who = cleanName(req.body?.by) || HUMAN_NAME;
+  if (kind) rx.set.run(m.id, who, kind, Date.now()); else rx.del.run(m.id, who);
+  const reactions = rx.forMsg.all(m.id);
+  broadcast({ type: 'reaction', message_id: m.id, room_id: m.room_id, reactions });
+  if (m.sender_kind === 'agent' && kind) {
+    const oq = qq.byMsg.get(m.id);
+    if (oq) {   // an open question: the reaction is the answer
+      const rec = JSON.parse(oq.options || '[]')[oq.recommended - 1];
+      const answer = kind === 'up' ? `👍 Yes${rec ? `: go with your recommendation (${rec})` : ', go ahead'}.` : `👎 No${rec ? `, not ${rec}` : ''}. Tell me the other options, or ask what I'd prefer.`;
+      postMessage({ room: oq.room_id, sender: HUMAN_NAME, kind: 'human', content: `@${oq.agent} ${answer}`, reply_to: m.id });
+      if (qq.get.get(oq.id).status === 'open') closeQuestion(oq, 'answered', answer, HUMAN_NAME);
+    } else {
+      clearTimeout(rxWakes.get(m.id));
+      rxWakes.set(m.id, setTimeout(() => {
+        rxWakes.delete(m.id);
+        const now = rx.forMsg.all(m.id).find((r) => r.who.toLowerCase() === who.toLowerCase());
+        if (!now || !watcherFor(m.room_id)) return;
+        const quote = String(m.content).replace(/\s+/g, ' ').slice(0, 100);
+        fireWake(m.room_id, m.sender, { manual: true, reason: now.kind === 'up'
+          ? `${who} 👍 approved your message #${m.id} ("${quote}…"). Go ahead with it; no need to reply first.`
+          : `${who} 👎 didn't approve your message #${m.id} ("${quote}…"). Don't go ahead with it. If the room doesn't say why, ask ${who} in one short question what to change.` });
+      }, 4000));
+    }
+  }
+  return { message_id: m.id, reactions };
+}));
 api.delete('/messages/:id', wrap((req) => {
   const m = q.getMsg.get(Number(req.params.id));
   if (!m) throw new UserError('not found');
@@ -1252,8 +1298,8 @@ function removeAgentNow(rawName) {
   for (const [rid, w] of watchers) if (w.agents.some((x) => x.toLowerCase() === low)) { roomId = rid; break; }
   const w = roomId ? watchers.get(roomId) : null;
   const slug = roomId.startsWith('project:') ? roomId.slice('project:'.length) : '';
+  keepsLead(roomId, [name]);
   removedAgents.set(low, Date.now() + REMOVED_TTL);
-  if (roomId && String(wakeSettings(roomId).lead || '').toLowerCase() === low) setWakeSettings(roomId, { lead: '' });
   q.deleteAgent.run(name);
   broadcast({ type: 'agent_deleted', name });
   let stopped = 'none';
@@ -1374,8 +1420,28 @@ function setWakeSettings(roomId, patch) {
   qw.put.run(roomId, JSON.stringify(next), now);
   const settings = { ...next, updated_at: now };
   broadcast({ type: 'wake_settings', room_id: roomId, settings });
+  if (cur.wake !== next.wake) setTimeout(() => pauseChanged(roomId, next.wake === 'paused', now), 0);
   return settings;
 }
+// Pausing a room (Auto-wake off, /pause): nothing wakes its agents automatically: no message wakes, no nudges,
+// no "task unblocked" and no question deadlines. Resuming tells the lead to catch up on what was posted meanwhile.
+const pausedSince = new Map();   // roomId -> when it was paused
+const sinceMsgs = db.prepare("SELECT count(*) AS n FROM messages WHERE room_id = ? AND created_at > ? AND sender_kind != 'system'");
+function pauseChanged(roomId, paused, at) {
+  if (!String(roomId).startsWith('project:')) return;
+  if (paused) {
+    pausedSince.set(roomId, at);
+    watcherSay(roomId, `⏸ Room paused: the agents aren't woken until you resume (type \`/resume\`, or turn Auto-wake back on).`);
+    return;
+  }
+  const since = pausedSince.get(roomId); pausedSince.delete(roomId);
+  const n = since ? sinceMsgs.get(roomId, since).n : 0;
+  watcherSay(roomId, `▶ Room resumed: agents are woken again${n ? `; the lead catches up on the ${n} message${n === 1 ? '' : 's'} posted while it was paused` : ''}.`);
+  const w = watcherFor(roomId), lead = String(wakeSettings(roomId).lead || '');
+  const agent = w?.agents.find((a) => a.toLowerCase() === lead.toLowerCase());
+  if (n && agent) fireWake(roomId, agent, { manual: true, reason: `The room was paused and is running again. Read the ${n} message${n === 1 ? '' : 's'} posted while it was paused and carry on.` });
+}
+const roomPaused = (roomId) => wakeSettings(roomId).wake === 'paused';
 
 const watchers = new Map();   // roomId -> { agents, tmux, seen, queue, waiters, panes }
 const wakeState = new Map();  // roomId \0 agent(lower) -> { pending, timer, last, history, capped }
@@ -1928,6 +1994,32 @@ const host = { seen: 0, info: {}, queue: [], waiters: new Set() };
 const jobs = new Map();
 const HOST_TTL = 45000;
 const hostOnline = () => Date.now() - host.seen < HOST_TTL;
+// The host helper is what starts and heals teams on the computer. When this server runs on the computer itself
+// (not in Docker) it can start the helper when it's missing: by itself after a short wait, or from the page's button.
+// In Docker it can't reach the computer; there the keeper (tropa autostart, every minute) brings the helper back.
+const TROPA_BIN = path.join(__dirname, '..', 'tropa');
+const canStartHost = () => !fs.existsSync('/.dockerenv') && fs.existsSync(TROPA_BIN) && process.platform !== 'win32';
+const SERVER_UP = Date.now();
+let hostStartAt = 0;
+function startHost(why, force = false) {   // force: asked from the page (tropa host start does nothing if it's running)
+  if (!canStartHost() || (!force && (hostOnline() || Date.now() - hostStartAt < 60e3))) return false;
+  hostStartAt = Date.now();
+  try {
+    const p = require('node:child_process').spawn(TROPA_BIN, ['host', 'start', '-p', String(PORT)], { detached: true, stdio: 'ignore', env: process.env });
+    p.on('error', (e) => console.error(`could not start the host helper: ${e.message}`));
+    p.unref();
+    console.log(`starting the host helper (${why})`);
+    return true;
+  } catch (e) { console.error(`could not start the host helper: ${e.message}`); return false; }
+}
+setInterval(() => {
+  if (hostOnline()) return;
+  if (host.announced) {   // tell open pages it went away, so they show the Start-the-helper button
+    host.announced = false; host.sig = '';
+    broadcast({ type: 'host', host: { connected: false, ...host.info, can_start: canStartHost() } });
+  }
+  if (Date.now() - SERVER_UP > 40e3) startHost('it was offline');
+}, 20e3).unref();
 const CLI_TOOLS = ['claude', 'opencode', 'qwen', 'codex', 'gemini'];
 const KEY_PROVIDERS = { openrouter: 'OpenRouter', gemini: 'Gemini' };
 const RESERVED = new Set(['controlcenter', 'watcher', 'tropa', 'all', 'here', 'team', 'everyone', 'system']);
@@ -1943,7 +2035,12 @@ function sanitizeKeys(k, orInfo) {
   }
   return out;
 }
-api.get('/host', wrap(() => ({ connected: hostOnline(), ...host.info, human: HUMAN_NAME })));
+api.get('/host', wrap(() => ({ connected: hostOnline(), ...host.info, human: HUMAN_NAME, can_start: canStartHost() })));
+api.post('/host/start', wrap(() => {   // the page's "Start the helper" button
+  if (!canStartHost()) throw new UserError("TropaAI runs in Docker here, so this page can't start the helper on your computer. It comes back by itself within a minute when TropaAI is set to keep running (tropa autostart on); otherwise open TropaAI with its shortcut, or run tropa start once");
+  if (!startHost('asked from the page', true)) throw new UserError("couldn't start the helper (is tmux installed?)");
+  return { ok: true, starting: true };
+}));
 api.post('/host/poll', wrap(async (req, res) => {
   const wasOn = hostOnline();
   host.seen = Date.now();
@@ -1988,6 +2085,8 @@ api.post('/host/poll', wrap(async (req, res) => {
         return { id: String(t.id), name: String(t.name || t.id).slice(0, 60), summary: String(t.summary || '').slice(0, 300),
           lead: members.some((m) => m.name === t.lead) ? String(t.lead) : (members[0]?.name || ''), how: String(t.how || '').slice(0, 6000), git: t.git !== false, members };
       }).filter((t) => t.members.length),
+    lead_template: (() => { const m = req.body.lead_template; return m && typeof m === 'object' && m.prompt
+      ? { role: String(m.role || '').slice(0, 200), model: String(m.model || '').slice(0, 80), prompt: String(m.prompt).slice(0, 6000) } : null; })(),
     keys: sanitizeKeys(req.body.keys, req.body.openrouter_info),
     usage: !!req.body.usage,
     ngrok: { installed: !!req.body.ngrok?.installed, authed: !!req.body.ngrok?.authed, version: String(req.body.ngrok?.version || '').slice(0, 40) },
@@ -2003,7 +2102,7 @@ api.post('/host/poll', wrap(async (req, res) => {
   }
   // tell the monitor when the host comes online or what it offers changes (e.g. an OpenRouter key was just added)
   const sig = JSON.stringify([host.info.openrouter_info, host.info.keys, host.info.claude, Object.values(host.info.models).map((m) => m.length), host.info.clis]);
-  if (!wasOn || sig !== host.sig) { host.sig = sig; broadcast({ type: 'host', host: { connected: true, ...host.info } }); }
+  if (!wasOn || sig !== host.sig) { host.sig = sig; host.announced = true; broadcast({ type: 'host', host: { connected: true, ...host.info, can_start: canStartHost() } }); }
   const t = Math.min(Math.max(Number(req.body.timeout) || 0, 0), 25) * 1000;
   if (!host.queue.length && t) {
     await new Promise((resolve) => {
@@ -2174,6 +2273,15 @@ api.post('/host/jobs/:id', wrap((req) => {
 const jobView = (j) => ({ id: j.id, room_id: j.room_id, slug: j.slug, status: j.status, folder_path: j.folder_path || '', log: j.log });
 api.get('/jobs/:id', wrap((req) => { const j = jobs.get(req.params.id); if (!j) throw new UserError('unknown job'); return jobView(j); }));
 
+function leadOrchestrator() {
+  const t = host.info.lead_template || {};
+  const clis = host.info.clis || [];
+  const tool = clis.includes('claude') || !clis.length ? 'claude' : clis.find((c) => CLI_TOOLS.includes(c)) || 'claude';
+  const human = (s) => String(s || '').replace(/\{human\}/g, HUMAN_NAME);
+  return { name: 'lead', tool, model: tool === 'claude' ? (t.model || 'sonnet') : '', instruction: '',
+    role: human(t.role || 'Lead: runs this room for {human}: plans the work, assigns it, keeps it moving, reports back'),
+    prompt: human(t.prompt || '') };
+}
 api.post('/projects', wrap((req) => {
   const b = req.body || {};
   if (!hostOnline()) throw new UserError('the tropa host helper is not running on your machine — start it with: tropa host start');
@@ -2196,6 +2304,9 @@ api.post('/projects', wrap((req) => {
     role: String(a.role || '').trim().slice(0, 200), instruction: String(a.instruction || '').trim().slice(0, 2000),
     prompt: String(a.prompt || '').trim().slice(0, 12000),
   }));
+  // every project room keeps at least one agent, its lead orchestrator (teams/lead.md). An existing folder may
+  // already have a team: there the host helper adds the lead only if it has none.
+  if (!agents.length && !existing) agents.push(leadOrchestrator());
   const seen = new Set();
   for (const a of agents) {
     if (!a.name) throw new UserError('every agent needs a name');
@@ -2207,7 +2318,7 @@ api.post('/projects', wrap((req) => {
     if (a.tool === 'gemini' && /^(ollama|openrouter)\//.test(a.model)) throw new UserError(`${a.name}: Gemini CLI only runs Google's Gemini models`);
     if (a.model && !/^[A-Za-z0-9._:/@-]{1,80}$/.test(a.model)) throw new UserError(`${a.name}: invalid model id`);
   }
-  const lead = b.lead ? cleanName(b.lead) : '';
+  const lead = (b.lead ? cleanName(b.lead) : '') || agents[0]?.name || '';
   // this project's own API keys (optional): checked and saved by the host helper outside the project folder
   const projectKeys = {};
   for (const [prov, v] of Object.entries(b.keys && typeof b.keys === 'object' ? b.keys : {})) {
@@ -2621,7 +2732,7 @@ function announceUnblocked(roomId, before, cause) {
     const why = dep?.kind === 'contract' ? `#${cause.id} has started, so its contract is out` : `#${cause.id} is done`;
     watcherSay(roomId, `🔓 #${t.id} ${t.title} is ready to start: ${why}.${t.assignee ? ` @${t.assignee}` : ''}`);
     const agent = t.assignee && w?.agents.find((a) => a.toLowerCase() === t.assignee.toLowerCase());
-    if (agent) fireWake(roomId, agent, { manual: true, reason: `Task #${t.id} "${t.title}" is unblocked (${why}). Check it on the board (task_list) and start it.` });
+    if (agent && !roomPaused(roomId)) fireWake(roomId, agent, { manual: true, reason: `Task #${t.id} "${t.title}" is unblocked (${why}). Check it on the board (task_list) and start it.` });
   }
 }
 
@@ -2813,6 +2924,7 @@ bus.on('message', (m) => {
 });
 setInterval(() => {   // deadlines: the agent goes ahead with what it said it would do
   for (const q of qq.due.all(Date.now())) {
+    if (roomPaused(q.room_id)) continue;   // waits: it goes ahead once the room is resumed
     closeQuestion(q, 'assumed', q.fallback, q.agent);
     watcherSay(q.room_id, `⏱ No answer to @${q.agent}'s question (#${q.message_id}), so it goes ahead with: ${q.fallback}`);
     const w = watcherFor(q.room_id);
@@ -3082,7 +3194,20 @@ function teamMembers(roomId, words) {
   for (const a of q.listAgents.all()) if ((a.project || '').toLowerCase() === slug) team.set(a.name.toLowerCase(), a.name);
   return [...new Set(words.map((w) => team.get(String(w).replace(/^@/, '').toLowerCase())).filter(Boolean))];
 }
+/** Every project room keeps its lead: refuse a removal that would take the lead or leave nobody. */
+function keepsLead(roomId, names) {
+  if (!String(roomId).startsWith('project:')) return;
+  const slug = roomId.slice('project:'.length).toLowerCase();
+  const team = new Set((watcherFor(roomId)?.agents || []).map((n) => n.toLowerCase()));
+  for (const a of q.listAgents.all()) if ((a.project || '').toLowerCase() === slug) team.add(a.name.toLowerCase());
+  const gone = new Set(names.map((n) => String(n).toLowerCase()));
+  const left = [...team].filter((n) => !gone.has(n));
+  const lead = String(wakeSettings(roomId).lead || '').toLowerCase();
+  if (team.size && !left.length) throw new UserError(`every project room keeps at least one agent, its lead: ${names.length === 1 ? `@${names[0]} is` : 'they are'} the last on this team`);
+  if (lead && gone.has(lead) && left.length) throw new UserError(`@${wakeSettings(roomId).lead} leads this room. Make another agent the lead first (★ in ▦ Team), then remove it`);
+}
 function askRemoval(roomId, names, { by, reason }) {
+  keepsLead(roomId, names);
   const dup = [...rmReqs.values()].find((r) => r.room_id === roomId && r.status === 'requested' && r.names.join() === names.join());
   if (dup) return dup;
   const r = { id: ++rmReqSeq, room_id: roomId, names, by, reason: String(reason || '').slice(0, 300), status: 'requested', created_at: Date.now() };
@@ -3144,7 +3269,8 @@ function removalCommand(m) {
   const names = teamMembers(m.room_id, ask[1].split(/[\s,]+|\band\b/i).filter(Boolean));
   if (!names.length) { if (explicit) shareNote(m.room_id, `⚠️ No agent on this team matches "${ask[1].slice(0, 80)}".`); return explicit; }
   if (!explicit && names.length !== ask[1].split(/[\s,]+|\band\b/i).filter((w) => w && !/^(the|agents?|@?all)$/i.test(w)).length) return false;   // "remove the old code" etc.
-  askRemoval(m.room_id, names, { by: HUMAN_NAME, reason: '' });
+  try { askRemoval(m.room_id, names, { by: HUMAN_NAME, reason: '' }); }
+  catch (e) { shareNote(m.room_id, `⚠️ ${e.message}.`); }
   return true;
 }
 

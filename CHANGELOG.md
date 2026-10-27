@@ -15,6 +15,39 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Fixed
+- **The "Replying to …" bar now goes away** when you click ✕, send your reply or press Escape. Its style overrode the page's *hidden*, so it stayed on screen, empty or not. Now *hidden* always hides, everywhere on the page; no other element changes.
+
+### Pause a room
+- **`/pause` and `/resume`** in the chat box. They do the same as the Auto-wake switch in ▦ Team.
+- **While a room is paused, nothing wakes its agents automatically:** new messages, the watcher's "stopped without reporting" nudges, "task unblocked" wakes and question deadlines all wait. A banner says the room is paused, with **▶ Resume** (Simple and Advanced mode).
+- **On resume**, the lead is told to catch up on what was posted during the pause. A question whose deadline passed meanwhile goes ahead then. Things you do yourself still reach the agents while paused: 👍/👎, Wake all, approvals.
+
+### Projects update themselves
+- **No more `tropa update` in every project after `tropa self-update`.** `tropa update` now records which kit and default skills it installed (in `~/.tropa/kit-stamps.json`, not in the project). Every few minutes the host helper runs `tropa update` in each project that's behind, wherever its folder is, and that restarts a running team's watcher on the new scripts. A project whose update fails is retried after the next tropa update, and the failure is in the host helper's log.
+
+### TropaAI keeps itself running
+- **The helper on your computer** (it starts and heals teams) **now comes back by itself:**
+  - after a crash, within seconds;
+  - when the chat server runs on your computer rather than in Docker, the server starts it again within a minute;
+  - **a keeper**, which `tropa start` sets up the first time, checks every minute (launchd on a Mac, a systemd timer on Linux) and starts the chat server or the helper if either is down. It also starts TropaAI when you log in, and it works with Docker. `tropa keep` is that check by hand, and `tropa autostart off` turns it off.
+- **No more terminal instructions in the page.** Where the page used to say "run `tropa panel` / `tropa host start`", it now says in plain words that TropaAI's helper isn't running, with a **▶ Start the helper** button when the page can start it. When it can't (Docker), it says the helper comes back within a minute, or to open TropaAI with its shortcut. Once the helper is up, the page shows **▶ Start the team** without a reload.
+
+### 👍 / 👎 on messages
+- **React to any message with 👍 or 👎** from its hover bar. Your reaction shows under the message; click it (or the same thumb) again to take it back.
+- **On an agent's message it's a quick approve or disapprove:** the agent is told to go ahead (👍) or not to (👎, and to ask what to change if the room doesn't say). Its wake comes a few seconds later with your final choice, so a quick change of mind sends one.
+- **On a question an agent asked you,** 👍 answers "yes, go with your recommendation" and 👎 answers "no", closing the question.
+- Agents see reactions when they read the room.
+
+### Every room keeps a lead
+- **Every project room has at least one agent, its lead orchestrator.**
+  - **The lead's job** is in `teams/lead.md`: it runs the room, plans and assigns the work, asks for teammates when needed, and does the work itself on a team of one.
+  - **Starting with an empty team** gives you that lead: *Start with a lead* in Build your team, *Just a lead* in the New project form, or a project created with no agents.
+  - **`tropa init`/`tropa update`** in a folder with no agents creates `lead-<project>`. Starting a team whose agents are gone does the same.
+  - **A team with agents but no lead** gets its first agent as lead.
+- **The lead can't be removed while others remain** (make another agent the lead first, ★ in ▦ Team), **and the last agent can't be removed.** This covers the sidebar's ×, the agent dialog, "@tropa remove …" in the chat and the lead's `remove_agents`. Build your team and the New project form don't let you remove the last member either.
+- **A room with no team** shows a banner: **Add a lead** creates its folder with the lead and starts it; **Use a folder I already have…** sets the team up in your folder. The old *New project room* dialog, which made rooms without a team, is gone.
+
 ### Quieter idle teams
 - **Idle agents no longer trade "standing by" messages.** Three rules together made them: the *stopped without reporting* nudge only accepted a reply with a @mention, every @mention woke its agent, and the wake prompt told every agent to finish with a @mention. Now:
   - **Any reply counts:** a short "nothing to do here" is enough for the nudge, and an acknowledgement from another agent ("thanks", "noted", "standing by") isn't treated as an assignment.
