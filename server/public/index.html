@@ -1366,7 +1366,13 @@
     const t = state.team[state.current];
     const none = !!slug && !state.searching && state.view === 'chat' && !t?.watching && !(t?.agents || []).length
       && !state.agents.some((a) => (a.project || '').toLowerCase() === slug.toLowerCase()) && !state.addingLead?.[slug];
-    el.hidden = !none;
+    const paused = !!slug && !none && t?.settings?.wake === 'paused' && !state.searching;
+    el.hidden = !none && !paused;
+    if (paused) {
+      el.innerHTML = `<span class="t">⏸ <b>This room is paused.</b> Nothing wakes the agents, and the watcher doesn't nudge them. Your messages are kept; the lead catches up when you resume.</span>
+        <button type="button" class="tbtn pri" data-resume>▶ Resume</button>`;
+      return;
+    }
     if (!none) return;
     const base = parentBase();
     el.innerHTML = `<span class="t">🧭 <b>This room has no team yet.</b> Every project room has a lead that runs it. Add one in a new folder <code>${esc(base)}/${esc(slug)}</code>, or in a folder you already have.</span>
@@ -1375,6 +1381,7 @@
   }
   document.addEventListener('click', async (e) => {
     const slug = projectOf(state.current); if (!slug) return;
+    if (e.target.closest('[data-resume]')) { setPaused(false); return; }
     if (e.target.closest('[data-addlead]')) {
       const b = e.target.closest('[data-addlead]'); b.disabled = true; b.textContent = 'Adding the lead…';
       (state.addingLead ||= {})[slug] = true;
@@ -1746,7 +1753,7 @@
         if ($('#projDlg').open) renderNpKeys();
         if (state.view === 'team' && !$('#team').hidden && !state.team[state.current]?.watching) renderTeam();
       }
-      else if (e.type === 'wake_settings') { const t = state.team[e.room_id]; if (t) { t.settings = e.settings; if (e.room_id === state.current && state.view === 'team') renderTeamBar(); } }
+      else if (e.type === 'wake_settings') { const t = state.team[e.room_id]; if (t) { t.settings = e.settings; if (e.room_id === state.current) { renderRoomNote(); if (state.view === 'team') renderTeamBar(); } } }
       else if (e.type === 'message_deleted') { for (const [k, arr] of state.messages) state.messages.set(k, arr.filter((m) => m.id !== e.id)); renderMessages({ stick: false }); }
     };
   }
@@ -3050,6 +3057,8 @@
     { name: 'stop', desc: 'Stop reading aloud', run: () => { ttsStop(); infoInline('Stopped reading.'); } },
     { name: 'tts', desc: 'Show which voice engine reads aloud · /tts kokoro · /tts mac', run: (args) => ttsCommand(args[0]) },
     { name: 'theme', desc: 'Colour theme: /theme light · dark · auto', run: (args) => setTheme(args[0] || 'next') },
+    { name: 'pause', desc: 'Pause this room: nothing wakes the agents (no nudges either) until /resume', run: () => setPaused(true) },
+    { name: 'resume', desc: 'Resume this room: agents are woken again, and the lead catches up', run: () => setPaused(false) },
     { name: 'help', desc: 'List available commands', run: () => {
       const ag = [...agentCmds().values()].map((c) => '/' + c.name);
       infoInline('Commands: ' + COMMANDS.map((c) => '/' + c.name).join('  ·  ') + (ag.length ? '   ·   the team\'s: ' + ag.slice(0, 12).join(' ') + (ag.length > 12 ? ' …' : '') : '') + '   (start with // to post a message beginning with /)');
@@ -3214,6 +3223,15 @@
       infoInline(bits.join(' '));
     } catch (e) { alertInline(e.message); }
     finally { $('#sendBtn').disabled = false; input.focus(); }
+  }
+  async function setPaused(on) {
+    if (!projectOf(state.current)) { alertInline('Pause works in a project room.'); return; }
+    try {
+      const s = await api(`/rooms/${encodeURIComponent(state.current)}/wake`, { method: 'PATCH', body: { wake: on ? 'paused' : 'auto' } });
+      if (state.team[state.current]) state.team[state.current].settings = s;
+      renderRoomNote(); if (state.view === 'team') renderTeamBar();
+      infoInline(on ? '⏸ Room paused. /resume to wake the agents again.' : '▶ Room resumed.');
+    } catch (e) { alertInline(e.message); }
   }
   function runCommand(text) {
     const name = text.slice(1).split(/\s+/)[0].toLowerCase();

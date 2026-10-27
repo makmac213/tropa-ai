@@ -1420,8 +1420,28 @@ function setWakeSettings(roomId, patch) {
   qw.put.run(roomId, JSON.stringify(next), now);
   const settings = { ...next, updated_at: now };
   broadcast({ type: 'wake_settings', room_id: roomId, settings });
+  if (cur.wake !== next.wake) setTimeout(() => pauseChanged(roomId, next.wake === 'paused', now), 0);
   return settings;
 }
+// Pausing a room (Auto-wake off, /pause): nothing wakes its agents automatically: no message wakes, no nudges,
+// no "task unblocked" and no question deadlines. Resuming tells the lead to catch up on what was posted meanwhile.
+const pausedSince = new Map();   // roomId -> when it was paused
+const sinceMsgs = db.prepare("SELECT count(*) AS n FROM messages WHERE room_id = ? AND created_at > ? AND sender_kind != 'system'");
+function pauseChanged(roomId, paused, at) {
+  if (!String(roomId).startsWith('project:')) return;
+  if (paused) {
+    pausedSince.set(roomId, at);
+    watcherSay(roomId, `⏸ Room paused: the agents aren't woken until you resume (type \`/resume\`, or turn Auto-wake back on).`);
+    return;
+  }
+  const since = pausedSince.get(roomId); pausedSince.delete(roomId);
+  const n = since ? sinceMsgs.get(roomId, since).n : 0;
+  watcherSay(roomId, `▶ Room resumed: agents are woken again${n ? `; the lead catches up on the ${n} message${n === 1 ? '' : 's'} posted while it was paused` : ''}.`);
+  const w = watcherFor(roomId), lead = String(wakeSettings(roomId).lead || '');
+  const agent = w?.agents.find((a) => a.toLowerCase() === lead.toLowerCase());
+  if (n && agent) fireWake(roomId, agent, { manual: true, reason: `The room was paused and is running again. Read the ${n} message${n === 1 ? '' : 's'} posted while it was paused and carry on.` });
+}
+const roomPaused = (roomId) => wakeSettings(roomId).wake === 'paused';
 
 const watchers = new Map();   // roomId -> { agents, tmux, seen, queue, waiters, panes }
 const wakeState = new Map();  // roomId \0 agent(lower) -> { pending, timer, last, history, capped }
@@ -2712,7 +2732,7 @@ function announceUnblocked(roomId, before, cause) {
     const why = dep?.kind === 'contract' ? `#${cause.id} has started, so its contract is out` : `#${cause.id} is done`;
     watcherSay(roomId, `🔓 #${t.id} ${t.title} is ready to start: ${why}.${t.assignee ? ` @${t.assignee}` : ''}`);
     const agent = t.assignee && w?.agents.find((a) => a.toLowerCase() === t.assignee.toLowerCase());
-    if (agent) fireWake(roomId, agent, { manual: true, reason: `Task #${t.id} "${t.title}" is unblocked (${why}). Check it on the board (task_list) and start it.` });
+    if (agent && !roomPaused(roomId)) fireWake(roomId, agent, { manual: true, reason: `Task #${t.id} "${t.title}" is unblocked (${why}). Check it on the board (task_list) and start it.` });
   }
 }
 
@@ -2904,6 +2924,7 @@ bus.on('message', (m) => {
 });
 setInterval(() => {   // deadlines: the agent goes ahead with what it said it would do
   for (const q of qq.due.all(Date.now())) {
+    if (roomPaused(q.room_id)) continue;   // waits: it goes ahead once the room is resumed
     closeQuestion(q, 'assumed', q.fallback, q.agent);
     watcherSay(q.room_id, `⏱ No answer to @${q.agent}'s question (#${q.message_id}), so it goes ahead with: ${q.fallback}`);
     const w = watcherFor(q.room_id);
