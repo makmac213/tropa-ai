@@ -271,6 +271,8 @@ class Collector:
         contrib = fs.setdefault("contrib", {})
         n = 0
         for day, model, c, rcost in rows:
+            # one call's input (fresh + cached) is the session's context at that moment: the last one is "now"
+            fs["ctx"] = c["input"] + c["cache_read"] + c["cache_write"] + c["cache_write_1h"]
             if not day:
                 continue
             k = f"{day}|{model or '?'}"
@@ -338,6 +340,7 @@ class Collector:
                 parent = self.st["files"].get(os.path.dirname(os.path.dirname(p)) + ".jsonl", {})
                 if parent.get("who"):
                     self.scan_jsonl(p, parse_claude, owner=parent["who"])
+                    self.st["files"][p]["sub"] = True   # a subagent's context isn't the agent's
 
     def codex(self):
         base = os.environ.get("CODEX_HOME") or home(".codex")
@@ -459,6 +462,18 @@ class Collector:
             except Exception as e:                     # one CLI's odd file never stops the others
                 print(f"usage: {fn.__name__}: {e}", file=sys.stderr)
         self.save()
+
+    def contexts(self, within=6 * 3600):
+        """{"agent|project": tokens}: each agent's context at its latest call (from its newest session file), for the
+        watcher's automatic compaction. Works for every CLI the usage reader knows."""
+        best = {}
+        for path, fs in self.st["files"].items():
+            if not fs.get("who") or fs.get("sub") or not fs.get("ctx") or time.time() - (fs.get("mtime") or 0) > within:
+                continue
+            k = f"{fs['who'][0]}|{fs['who'][1]}"
+            if k not in best or (fs.get("mtime") or 0) > best[k][0]:
+                best[k] = (fs.get("mtime") or 0, int(fs["ctx"]))
+        return {k: v[1] for k, v in best.items()}
 
     def rows(self, days=400, prices=None):
         """Aggregate to (project, agent, cli, model, day) rows with an API-equivalent cost."""

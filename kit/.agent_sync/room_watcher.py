@@ -41,7 +41,7 @@ CHATROOM = os.path.join(HERE, "chatroom")
 BROADCAST = os.path.join(CHATROOM, "broadcast.txt")
 SYNC = os.path.join(CHATROOM, ".wake_sync.json")
 SKIP_WINDOWS = {"ControlCenter", "watcher"}
-ROUTING = ["lead", "wake", "wake_rules", "max_wakes_per_agent_per_hour", "auto_approve",
+ROUTING = ["lead", "wake", "wake_rules", "max_wakes_per_agent_per_hour", "auto_approve", "auto_compact", "compact_at_k", "compact_idle_min",
            "cooldown_seconds", "debounce_seconds", "history_limit", "attention"]
 PANE_EVERY = 2.0          # seconds between screen captures
 PANE_LINES = 60
@@ -524,6 +524,11 @@ class Watcher:
         self.last_slash = 0
         self.last_slash_post = 0
         self.slash_agents = None
+        self.contexts = {}      # agent -> its context size at its latest call (tokens), from TropaAI (read off the CLIs' logs)
+        self.compact_due = {}   # agent -> why it should be compacted when idle: "card" (handed one on) or "asked" (compact_me)
+        self.compacted = {}     # agent -> when it was last compacted
+        self.since_compact = {} # agent -> it was given work since its last compaction
+        self.lead_asked = {}    # lead -> (when, tokens) it was last asked to compact itself
         self.skills_sig = None  # last skills list sent to TropaAI
         self.last_skills_post = 0
         self.slash_busy = {}    # agent -> [lock, commands queued] while slash commands run in its terminal
@@ -558,6 +563,7 @@ class Watcher:
             self.cfg = config.load()
         write_sync(server)
         self.last_resp = r
+        self.contexts = {str(k): int(v) for k, v in (r.get("contexts") or {}).items() if str(v).isdigit()}
         if r.get("human") and r["human"] != self.cfg["human"] and getattr(self, "human_noted", None) != r["human"]:
             self.human_noted = r["human"]   # once per name, not on every poll
             self.adopt_human(r["human"])
@@ -629,6 +635,11 @@ class Watcher:
             self.alerted.pop(a, None)   # a question it was stuck on may be answered now
             self.last_capture = 0       # show the new screen right away
             return
+        if ev.get("type") == "compact":   # a card handed on, or the agent asked (compact_me): compact it once it's idle
+            if a:
+                self.compact_due[a] = "asked" if ev.get("why") == "asked" else self.compact_due.get(a) or "card"
+                self.since_compact[a] = True
+            return
         if ev.get("type") in ("skill_save", "skill_delete"):
             self.edit_skill(ev); return
         if ev.get("type") == "slash":   # the human ran /cmd for this agent from the chat
@@ -662,6 +673,8 @@ class Watcher:
             self.last_capture = 0   # refresh screens soon
 
     def deliver(self, a, text, reason=""):
+        self.since_compact[a] = True
+        text += self.lead_compact_ask(a)
         if a in self.slash_busy:   # a slash command from the chat is running: don't type into its answer
             self.held[a] = text
             return
@@ -1049,6 +1062,8 @@ class Watcher:
             elif state == "idle" and a in self.worked and now - changed_at >= SILENT_AFTER and not popup:
                 self.worked.pop(a, None)
                 self.check_silent(a)
+            if state == "idle" and not prompt and not popup and not menu and not lim:
+                self.maybe_compact(a, now - changed_at)
         for a in list(self.panes):
             if a not in agents:
                 self.panes.pop(a); self.held.pop(a, None)
@@ -1126,6 +1141,63 @@ class Watcher:
             how = "restarted; it picks up its conversation where it left off" if self.cfg.get("resume_sessions", True) not in (False, "false", 0) else "restarted with a fresh session"
         log(f"{a}: model {old or 'default'} → {new or 'default'} ({how})")
         say(self.cfg, f"🔁 `{a}` now runs on `{new or 'its CLI default'}` (was `{old or 'default'}`): {how}.")
+
+    # -- automatic compaction: keep sessions small, for every CLI (its own /compact or /compress) --
+    COMPACT = {"gemini": "/compress", "qwen": "/compress"}   # the others: /compact
+
+    def compact_settings(self):
+        on = self.cfg.get("auto_compact", True) not in (False, "false", 0, "0")
+        return on, int(self.cfg.get("compact_at_k") or 150) * 1000, int(self.cfg.get("compact_idle_min") or 10) * 60
+
+    def maybe_compact(self, a, idle_for):
+        """Idle agent: compact its session when it asked to; or (not the lead) when it's large and it just handed a card
+        on, or has been idle past the prompt cache's life (its next call re-sends everything at full price anyway)."""
+        if a in self.held or a in self.slash_busy:
+            return
+        why = self.compact_due.get(a)
+        if why == "asked":
+            return self.compact(a, "it asked to be compacted")
+        on, at, idle_max = self.compact_settings()
+        if not on or a == self.cfg.get("lead") or time.time() - self.compacted.get(a, 0) < 600:
+            if not on or a == self.cfg.get("lead"):
+                self.compact_due.pop(a, None)
+            return
+        tokens = self.contexts.get(a)
+        if why == "card":
+            if tokens is not None and tokens < at:
+                self.compact_due.pop(a, None)   # small enough: nothing to do
+            else:   # large, or a CLI whose context TropaAI can't read: a handed-on card is a safe moment either way
+                self.compact(a, "it handed its card on")
+        elif self.since_compact.get(a) and tokens is not None and tokens >= at and idle_for >= idle_max:
+            self.compact(a, f"idle for {int(idle_for // 60)} min, so its next turn would re-send everything uncached")
+
+    def compact(self, a, why):
+        tool = agent_tool(self.cfg, a)
+        cmd = self.COMPACT.get(tool, "/compact")
+        tokens = self.contexts.get(a)
+        if self.dismiss(a):
+            time.sleep(0.8)
+        type_into(self.cfg, a, cmd)
+        self.compacted[a] = time.time()
+        self.compact_due.pop(a, None)
+        self.since_compact[a] = False
+        self.last_capture = 0
+        log(f"compacted {a} ({cmd}): {why}{f'; context was ~{tokens // 1000}k tokens' if tokens else ''}")
+        say(self.cfg, f"🗜 Compacted `{a}`'s session{f' (~{tokens // 1000}k tokens)' if tokens else ''}: {why}. It keeps a summary and carries on.")
+
+    def lead_compact_ask(self, a):
+        """The lead isn't compacted automatically: when its session is large, the next wake it gets anyway asks it to
+        call compact_me at a good moment (asking with a wake of its own would cost a full call)."""
+        on, at, _ = self.compact_settings()
+        tokens = self.contexts.get(a)
+        if not on or a != self.cfg.get("lead") or tokens is None or tokens < at:
+            return ""
+        when, was = self.lead_asked.get(a, (0, 0))
+        if time.time() - when < 7200 and tokens < was + 100000:
+            return ""
+        self.lead_asked[a] = (time.time(), tokens)
+        return (f" Also: your session is large (~{tokens // 1000}k tokens), so every turn re-sends all of it. When you're at a good "
+                f"stopping point (not mid-task), call tropa compact_me (room \"{self.cfg['room']}\"): your conversation is replaced by a summary.")
 
     # -- silent stops: an agent finished a turn on assigned work without reporting in the room --
     def owed(self, a, msgs):

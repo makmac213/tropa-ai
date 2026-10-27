@@ -236,6 +236,9 @@ const q = {
   getMsg: db.prepare('SELECT * FROM messages WHERE id = ?'),
   deleteMsg: db.prepare('DELETE FROM messages WHERE id = ?'),
   msgsAfter: db.prepare('SELECT * FROM messages WHERE room_id = ? AND id > ? ORDER BY id ASC LIMIT ?'),
+  // what agents read: everything but TropaAI's own operational notes (watcher restarts, settings, "fixed the team"…)
+  agentMsgsAfter: db.prepare("SELECT * FROM messages WHERE room_id = ? AND id > ? AND sender_kind <> 'system' ORDER BY id ASC LIMIT ?"),
+  agentMsgsBefore: db.prepare("SELECT * FROM (SELECT * FROM messages WHERE room_id = ? AND id < ? AND sender_kind <> 'system' ORDER BY id DESC LIMIT ?) ORDER BY id ASC"),
   msgsBefore: db.prepare('SELECT * FROM (SELECT * FROM messages WHERE room_id = ? AND id < ? ORDER BY id DESC LIMIT ?) ORDER BY id ASC'),
   allMsgsRoom: db.prepare('SELECT * FROM messages WHERE room_id = ? ORDER BY id ASC'),
   allMsgs: db.prepare('SELECT * FROM messages ORDER BY id ASC'),
@@ -268,10 +271,10 @@ const q = {
     ON CONFLICT(agent, room_id) DO UPDATE SET last_read = MAX(cursors.last_read, excluded.last_read)`),
   agentRooms: db.prepare('SELECT room_id FROM cursors WHERE agent = ?'),
   maxId: db.prepare('SELECT COALESCE(MAX(id),0) AS id FROM messages WHERE room_id = ?'),
-  unread: db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE room_id = ? AND id > ? AND lower(sender) <> lower(?)`),
-  unreadMentions: db.prepare(`SELECT * FROM messages WHERE room_id = ? AND id > ? AND lower(sender) <> lower(?)
+  unread: db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE room_id = ? AND id > ? AND lower(sender) <> lower(?) AND sender_kind <> 'system'`),
+  unreadMentions: db.prepare(`SELECT * FROM messages WHERE room_id = ? AND id > ? AND lower(sender) <> lower(?) AND sender_kind <> 'system'
     AND (mentions LIKE ? OR mentions LIKE '%"all"%' OR mentions LIKE '%"here"%') ORDER BY id ASC`),
-  unreadMsgs: db.prepare(`SELECT * FROM messages WHERE room_id = ? AND id > ? AND lower(sender) <> lower(?) ORDER BY id ASC LIMIT ?`),
+  unreadMsgs: db.prepare(`SELECT * FROM messages WHERE room_id = ? AND id > ? AND lower(sender) <> lower(?) AND sender_kind <> 'system' ORDER BY id ASC LIMIT ?`),
 };
 
 // Deleted projects stay deleted: their watcher and agents may still be running for a moment, and
@@ -550,7 +553,7 @@ function waitForMessages(agent, roomIds, timeoutMs, signal) {
   if (existing.length) return Promise.resolve(existing);
   return new Promise((resolve) => {
     const onMsg = (m) => {
-      if (!roomIds.includes(m.room_id) || m.sender.toLowerCase() === agent.name.toLowerCase()) return;
+      if (!roomIds.includes(m.room_id) || m.sender.toLowerCase() === agent.name.toLowerCase() || m.sender_kind === 'system') return;
       // small delay so bursts arrive together
       cleanup();
       setTimeout(() => resolve(collectUnread(agent, roomIds)), 750);
@@ -700,6 +703,11 @@ const tools = () => [
     }, required: ['agent', 'room', 'port', 'reason'] },
   },
   {
+    name: 'compact_me',
+    description: 'Ask TropaAI to compact your session (your CLI\'s /compact or /compress) as soon as you finish this turn: your conversation so far is replaced by a summary, so every later turn is cheaper and faster. Call it at a good stopping point (a task done, a plan posted), not in the middle of something. Leads: you are not compacted automatically; call this when you are told your session is large and it suits you.',
+    inputSchema: { type: 'object', properties: { agent: agentProp, room: { type: 'string', description: 'Your project room, "project:<slug>".' } }, required: ['agent', 'room'] },
+  },
+  {
     name: 'create_room',
     description: 'Create a new project room with its own team and folder. Use it when the human asks you to (e.g. "make a room for this", "start a project for the newsletter"), or, as a team lead, when part of the work should run on its own. Every room gets a lead orchestrator (or the ready-made team you name), the brief, and a folder: a new one, or an existing folder you give as path (e.g. the repo you are working in). If you lead a project room, your project\'s "New rooms" setting decides: the human approves it in your room (default), it is created at once, or it is off.',
     inputSchema: { type: 'object', properties: {
@@ -846,10 +854,10 @@ async function callTool(name, args, ctx) {
       const limit = Math.min(Math.max(Number(args.limit) || 30, 1), 200);
       let msgs;
       if (args.recent) {
-        msgs = q.msgsBefore.all(roomId, Number.MAX_SAFE_INTEGER, limit).map(rowToMessage);
+        msgs = q.agentMsgsBefore.all(roomId, Number.MAX_SAFE_INTEGER, limit).map(rowToMessage);
       } else {
         const since = args.since_id != null ? Number(args.since_id) : (q.getCursor.get(a.name, roomId)?.last_read ?? 0);
-        msgs = q.msgsAfter.all(roomId, since, limit).map(rowToMessage);
+        msgs = q.agentMsgsAfter.all(roomId, since, limit).map(rowToMessage);
       }
       if (msgs.length) markRead(a.name, roomId, msgs[msgs.length - 1].id);
       else if (q.getCursor.get(a.name, roomId) == null) markRead(a.name, roomId, q.maxId.get(roomId).id || 0);
@@ -894,6 +902,14 @@ async function callTool(name, args, ctx) {
         `Anyone with the link could open it. @${HUMAN_NAME}: approve with the button, or reply \`@tropa approve share ${share.id}\` / \`@tropa deny share ${share.id}\`.`);
       shareChanged(share);
       return `Asked @${HUMAN_NAME} to approve share #${share.id} (port ${share.port}). You'll be woken with the URL or the answer. Carry on with other work meanwhile.`;
+    }
+    case 'compact_me': {
+      const a = agent();
+      const roomId = normalizeRoomId(args.room || '');
+      const w = watcherFor(roomId);
+      if (!w || !w.agents.some((x) => x.toLowerCase() === a.name.toLowerCase())) return `There's no running team in ${roomId || 'that room'} with you in it, so there's nothing to compact.`;
+      pushEvent(roomId, { type: 'compact', agent: a.name, why: 'asked' });
+      return 'OK: your session is compacted as soon as you end this turn. Finish what you are saying, then end your turn.';
     }
     case 'create_room': {
       const a = agent();
@@ -1392,6 +1408,9 @@ const WAKE_DEFAULTS = { lead: '', wake: 'auto', wake_rules: 'smart', max_wakes_p
   team_growth: 'ask', auto_agents_per_hour: 2,
   // new rooms asked for by the lead (request_room): 'ask' the human, create them 'auto'matically, or 'off'
   room_growth: 'ask',
+  // automatic compaction (every CLI): a session past compact_at_k thousand tokens is compacted after a finished card,
+  // or after compact_idle_min idle minutes (its prompt cache has expired by then). The lead is only asked.
+  auto_compact: true, compact_at_k: 150, compact_idle_min: 10,
   // the lead removing teammates (remove_agents): done at once ('auto'), only with the human's OK ('ask'), or not allowed ('off')
   team_shrink: 'auto',
   // "needs attention" limits in minutes (0 = don't flag): quiet in Doing, waiting in Review, on an approval prompt, Blocked, idle with ready work
@@ -1418,6 +1437,9 @@ function cleanWake(patch) {
     if (!['ask', 'auto', 'off'].includes(patch.team_shrink)) throw new UserError('team_shrink must be "ask", "auto" or "off"');
     out.team_shrink = patch.team_shrink;
   }
+  if ('auto_compact' in patch) out.auto_compact = patch.auto_compact === true || patch.auto_compact === 'true';
+  if ('compact_at_k' in patch) out.compact_at_k = Math.min(Math.max(Math.round(Number(patch.compact_at_k) || 150), 20), 2000);
+  if ('compact_idle_min' in patch) out.compact_idle_min = Math.min(Math.max(Math.round(Number(patch.compact_idle_min) || 10), 2), 240);
   if ('room_growth' in patch) {
     if (!['ask', 'auto', 'off'].includes(patch.room_growth)) throw new UserError('room_growth must be "ask", "auto" or "off"');
     out.room_growth = patch.room_growth;
@@ -1825,7 +1847,7 @@ api.post('/watch/poll', wrap(async (req, res) => {
   // events name agents by their (new) name; until a rename reaches the machine its window still has the old one
   const back = new Map(Object.values(w.renames || {}).map((r) => [r.new.toLowerCase(), r.old]));
   const events = w.queue.splice(0).map((ev) => (ev.type !== 'rename_agent' && ev.agent && back.has(String(ev.agent).toLowerCase()) ? { ...ev, agent: back.get(String(ev.agent).toLowerCase()) } : ev));
-  return { events, settings: wakeSettings(roomId), human: HUMAN_NAME,
+  return { events, settings: wakeSettings(roomId), human: HUMAN_NAME, contexts: teamContexts(roomId, w.agents),
     files: qa.pendingSync.all(roomId).map(attView), uploads: qa.pendingUpload.all(roomId).map(attView) };
 }));
 api.post('/watch/panes', wrap((req) => {
@@ -2586,6 +2608,18 @@ const uq = {
 const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 const dayOf = (ms) => dayFmt.format(new Date(ms));
 let usageInfo = { prices_as_of: '', updated_at: 0 };
+// each agent's context size at its latest call ("agent|project" -> tokens), read from the CLIs' logs by the host helper
+const contexts = new Map();
+api.post('/host/contexts', wrap((req) => {
+  contexts.clear();
+  for (const [k, v] of Object.entries(req.body?.contexts || {})) if (Number(v) > 0) contexts.set(String(k).toLowerCase(), Math.round(Number(v)));
+  return { ok: true };
+}));
+function teamContexts(roomId, agents) {   // agent -> tokens, for this room's team
+  const slug = roomId.replace(/^project:/, '').toLowerCase(), out = {};
+  for (const a of agents) { const n = contexts.get(`${a.toLowerCase()}|${slug}`); if (n) out[a] = n; }
+  return out;
+}
 api.post('/host/usage', wrap((req) => {
   const rows = Array.isArray(req.body?.rows) ? req.body.rows.slice(0, 50000) : [];
   const now = Date.now(), touched = new Set();
@@ -2850,6 +2884,9 @@ function updateTask(id, patch, by) {
   const out = tq.get.get(t.id);
   broadcastTasks(t.room_id);
   if (out.status !== t.status) announceUnblocked(t.room_id, before, out);
+  // its owner handed the card on (review / QA / done): a good moment to compact that agent's session
+  const handedOn = (st) => ['review', 'qa', 'done'].includes(st);
+  if (t.assignee && handedOn(out.status) && !handedOn(t.status) && watcherFor(t.room_id)) pushEvent(t.room_id, { type: 'compact', agent: t.assignee, why: 'card' });
   return taskView(out);
 }
 api.get('/rooms/:id/tasks', wrap((req) => taskViews(roomOf(req))));
