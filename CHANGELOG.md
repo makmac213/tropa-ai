@@ -15,6 +15,9 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Fixed
+- **The "Replying to …" bar now goes away** when you click ✕, send your reply or press Escape. Its style overrode the page's *hidden*, so it stayed on screen, empty or not. Now *hidden* always hides, everywhere on the page; no other element changes.
+
 ### Pause a room
 - **`/pause` and `/resume`** in the chat box. They do the same as the Auto-wake switch in ▦ Team.
 - **While a room is paused, nothing wakes its agents automatically:** new messages, the watcher's "stopped without reporting" nudges, "task unblocked" wakes and question deadlines all wait. A banner says the room is paused, with **▶ Resume** (Simple and Advanced mode).
