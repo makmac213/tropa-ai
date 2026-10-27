@@ -739,6 +739,10 @@ class Host:
                     as_of = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prices.json"))).get("_as_of", "")
                     self.http("/host/usage", {"rows": rows, "prices_as_of": as_of}, timeout=60)
                     self.usage_sent = sig
+                ctx = c.contexts()   # each agent's current context size, for the watchers' automatic compaction
+                if ctx != getattr(self, "ctx_sent", None):
+                    self.http("/host/contexts", {"contexts": ctx})
+                    self.ctx_sent = ctx
             except Exception as e:
                 log(f"usage: {e}")
             finally:

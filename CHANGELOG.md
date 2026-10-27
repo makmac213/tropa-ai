@@ -15,6 +15,21 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Smaller sessions, cheaper turns
+- **Sessions are compacted automatically, for every CLI** (Claude Code, Codex and OpenCode `/compact`; Gemini CLI and Qwen Code `/compress`), with no one at the terminal. TropaAI reads each agent's current context size from its CLI's logs. An agent past **150k tokens** is compacted:
+  - when it hands a card on (to review, QA or done);
+  - or when it has been idle **10 minutes** after being given work. By then its prompt cache has expired, so its next turn would re-send everything at full price.
+
+  A CLI whose logs TropaAI can't read is compacted when it hands a card on. A short note in the room says who was compacted and why.
+- **The lead is never compacted automatically.** When its session is large, the next wake it gets anyway asks it to call the new `compact_me` tool at a good stopping point. Any agent can call `compact_me`, and it's compacted once its turn ends.
+- **Settings in ▦ Team:** *Compact on/off*, *past __k* and *idle __ min*.
+- **Agents no longer read TropaAI's own notes.** `read_messages`, the inbox and `wait_for_messages` leave out system notes (watcher restarts, "fixed the team", settings, these compaction notes). You still see them in the room.
+
+### Agents create rooms
+- **Agents can create a project room with its own team:** the new `create_room` tool takes a name, a brief, an optional ready-made team and an optional existing folder. Every room it creates has a lead orchestrator (or the ready-made team and its lead), a folder (a new one, or the folder given, e.g. the repo a Claude Code session is in), the brief in `docs/`, and a kickoff to its lead.
+- **Asked directly:** a Claude Code or Claude Cowork session you tell to "make a room for this" creates it at once, and #general says so.
+- **A team's lead** starting a room for part of its work follows that project's new **New rooms** setting in ▦ Team: *ask me* (default; a card with **Start #room** / **Deny**, or `@tropa approve room N`), *automatic*, or *off*. The new room's lead reports back to the room that asked. Other team members can't start rooms. A room that exists with a team, or is being set up, can't be created twice.
+
 ### Fixed
 - **The "Replying to …" bar now goes away** when you click ✕, send your reply or press Escape. Its style overrode the page's *hidden*, so it stayed on screen, empty or not. Now *hidden* always hides, everywhere on the page; no other element changes.
 
