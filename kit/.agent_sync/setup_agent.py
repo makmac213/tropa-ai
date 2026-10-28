@@ -74,12 +74,20 @@ GUARD_DENY = ["Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git push 
               "Read(**/*.pem)", "Read(**/id_rsa)", "Read(**/id_ed25519)"]
 
 
+def code_root(cfg):
+    """Where the project's code is: its own folder when it's left untouched (settings.code_dir, the team's files kept
+    in a team folder of their own), else the team folder itself."""
+    return cfg.get("code_dir") or cfg["root"]
+
+
 def claude_env(cfg):
     """Environment for Claude agents (their .claude/settings.json "env"): settings.claude_env, plus
     CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY=1 unless claude_feedback_survey is on (nobody is there to answer it)."""
     env = {}
     if cfg.get("claude_feedback_survey") not in (True, "true", 1, "1"):
         env["CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY"] = "1"
+    if cfg.get("code_dir"):
+        env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] = "1"   # the project's own CLAUDE.md, in the code folder
     extra = cfg.get("claude_env") or {}
     if isinstance(extra, dict):
         env.update({str(k): str(v) for k, v in extra.items() if v is not None})
@@ -134,7 +142,7 @@ def guardrails_on(cfg):
 
 def git_info(cfg):
     """{'repo': bool, 'base': branch the lead merges into}. Re-read on every launch."""
-    root = cfg["root"]
+    root = code_root(cfg)
     def git(*args):
         r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
         return r.stdout.strip() if r.returncode == 0 else ""
@@ -437,8 +445,10 @@ def write_agent(cfg, a):
 - **Role:** {a.get('role', '')}
 - **Runs in:** {PROVIDERS[tool]}{f" · model {a['model']}" if a.get('model') else ""}
 - **Project room:** `{cfg['room']}`
-- **Project folder:** `{cfg['root']}` (docs and specs in `{cfg['docs_path']}`)
-- **Where to write:** all project files go under `{cfg['root']}` — use absolute paths. Your own folder `{ws}` only holds your config; never put project code there.
+{f"""- **Project code:** `{cfg['code_dir']}` (the project's own folder: work on the code there, with absolute paths)
+- **Team folder:** `{cfg['root']}` (docs and specs in `{cfg['docs_path']}`). Notes, plans and handoff docs for the team go there, never into the project folder: it's kept free of TropaAI's files.
+- **Your own folder** `{ws}` only holds your config; never put project code there.""" if cfg.get('code_dir') else f"""- **Project folder:** `{cfg['root']}` (docs and specs in `{cfg['docs_path']}`)
+- **Where to write:** all project files go under `{cfg['root']}` — use absolute paths. Your own folder `{ws}` only holds your config; never put project code there."""}
 {lead_block}{job_block(a)}{git_rules(cfg, a, all_agents(cfg))}{tool_rules(cfg, a)}{skill_rules(cfg, a)}
 # Initial instruction
 {a.get('instruction', '')}
@@ -461,9 +471,10 @@ It was typed by the room watcher, not by {cfg['human']}. Read the room. If a mes
         dump(os.path.join(ws, ".mcp.json"), {"mcpServers": servers})
         dump(os.path.join(ws, ".claude", "settings.json"),
              {"enableAllProjectMcpServers": True,
-              "permissions": {"allow": ["mcp__tropa", f"Edit(/{cfg['root']}/**)"] + list(cfg.get("claude_allow", []))
+              "permissions": {"allow": ["mcp__tropa"] + [f"Edit(/{d}/**)" for d in dict.fromkeys([cfg["root"], code_root(cfg)])]
+                              + list(cfg.get("claude_allow", []))
                               + (GIT_ALLOW if cfg.get("git_workflow", "worktrees") != "off" else []),
-                              "additionalDirectories": [cfg["root"]],
+                              "additionalDirectories": list(dict.fromkeys([cfg["root"], code_root(cfg)])),
                               "deny": ["AskUserQuestion"] + (GUARD_DENY if guardrails_on(cfg) else [])},   # questions go to the room
               **({"env": claude_env(cfg)} if claude_env(cfg) else {})})
         claude_bypass_consent(ws, cfg.get("auto_approve") in (True, "true", 1, "1"))
@@ -476,7 +487,8 @@ It was typed by the room watcher, not by {cfg['human']}. Read the room. If a mes
               **({"provider": {"ollama": {"npm": "@ai-sdk/openai-compatible", "name": "Ollama (local)",
                                           "options": {"baseURL": ollama_local.url(cfg) + "/v1"},
                                           "models": {local_model(a): {"name": local_model(a)}}}}} if local_model(a) else {}),
-              "instructions": [team, os.path.join(ws, "AGENT.md")],
+              # in a project left untouched it runs in the code folder, whose AGENTS.md is the project's own: add the team's
+              "instructions": ([rules] if cfg.get("code_dir") else []) + [team, os.path.join(ws, "AGENT.md")],
               "permission": {**({"edit": "allow", "bash": "allow", "webfetch": "allow"} if cfg.get("auto_approve") in (True, "true", 1) else {}),
                              "question": "deny"},   # its ask-the-user dialog only shows in the terminal; questions go to the room
               "mcp": {"tropa": {"type": "remote", "url": mcp_url, "enabled": True},
@@ -624,7 +636,7 @@ def trust_folders(cfg, a, ws):
     CLI's own file. Off with settings.trust_agent_folders = false (the New project form's "trust" box)."""
     if cfg.get("trust_agent_folders", True) in (False, "false", 0, "0"):
         return
-    tool, root = a.get("tool"), os.path.realpath(cfg["root"])
+    tool, root = a.get("tool"), os.path.realpath(code_root(cfg))   # where the CLI runs or includes: the code
     try:
         if tool == "claude":
             trust_claude_folder(ws)

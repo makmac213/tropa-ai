@@ -9,6 +9,8 @@ export PYTHONDONTWRITEBYTECODE=1
 TROPA_PATH_FILE="${TROPA_STATE:-$HOME/.tropa}/path"
 if [ -s "$TROPA_PATH_FILE" ]; then PATH="$(head -1 "$TROPA_PATH_FILE"):$PATH"; export PATH; fi
 ROOT="$(dirname "$HERE")"
+# a project left untouched: the code is in its own folder (settings.code_dir), the team's files here in ROOT
+CODE="$(python3 "$HERE/config.py" get code_dir 2>/dev/null)"; [ -n "$CODE" ] && [ -d "$CODE" ] || CODE="$ROOT"
 cfg() { python3 "$HERE/config.py" get "$1"; }
 SESSION_NAME="$(cfg tmux_session)"
 
@@ -109,7 +111,7 @@ run_cli() {
                           export CLAUDE_CODE_OAUTH_TOKEN="$(tr -d '[:space:]' < "$ctok")"; echo "🔑 using the long-lived Claude token (tropa claude-token)"
                       fi
                       claude ${res[@]+"${res[@]}"} $flags -n "$name" ${model:+--model "$model"} "$p"; fi ;;
-        opencode) ( cd "$ROOT" || exit 1; local ochelp; ochelp=$(opencode --help 2>&1)
+        opencode) ( cd "$CODE" || exit 1; local ochelp; ochelp=$(opencode --help 2>&1)
                     # OpenCode 2.x: a private server per agent (each has its own config + tropa identity), and --auto
                     case "$ochelp" in *--standalone*) flags="$flags --standalone" ;; esac
                     case "$(cfg auto_approve)" in True|true|1) case "$ochelp" in *--auto*) flags="$flags --auto" ;; esac ;; esac
@@ -122,20 +124,20 @@ run_cli() {
                     OPENCODE_CONFIG="$ws/opencode.json" opencode $flags ${res[@]+"${res[@]}"} --prompt "$p" ) ;;   # model comes from opencode.json
         qwen)     if [ "$r" = 1 ] && qwen --help 2>&1 | grep -q -- '--continue'; then res=(--continue); echo "↻ resuming the previous Qwen Code session"; else p="$boot"; fi
                   if [ -n "$local_model" ]; then   # OpenAI-compatible endpoint (auth type set in .qwen/settings.json)
-                      OPENAI_API_KEY=ollama OPENAI_BASE_URL="$ourl/v1" OPENAI_MODEL="$local_model" qwen ${res[@]+"${res[@]}"} $flags --include-directories "$ROOT" -m "$local_model" -i "$p"
+                      OPENAI_API_KEY=ollama OPENAI_BASE_URL="$ourl/v1" OPENAI_MODEL="$local_model" qwen ${res[@]+"${res[@]}"} $flags --include-directories "$ROOT" --include-directories "$CODE" -m "$local_model" -i "$p"
                   elif [ -n "$or_model" ]; then   # OpenRouter's OpenAI-compatible endpoint
-                      OPENAI_API_KEY="$or_key" OPENAI_BASE_URL="https://openrouter.ai/api/v1" OPENAI_MODEL="$or_model" qwen ${res[@]+"${res[@]}"} $flags --include-directories "$ROOT" -m "$or_model" -i "$p"
-                  else qwen ${res[@]+"${res[@]}"} $flags --include-directories "$ROOT" ${model:+-m "$model"} -i "$p"; fi ;;
+                      OPENAI_API_KEY="$or_key" OPENAI_BASE_URL="https://openrouter.ai/api/v1" OPENAI_MODEL="$or_model" qwen ${res[@]+"${res[@]}"} $flags --include-directories "$ROOT" --include-directories "$CODE" -m "$or_model" -i "$p"
+                  else qwen ${res[@]+"${res[@]}"} $flags --include-directories "$ROOT" --include-directories "$CODE" ${model:+-m "$model"} -i "$p"; fi ;;
         gemini)   # Same layout as Qwen Code: GEMINI.md + .gemini/settings.json in the agent's folder (its own session history)
                   if [ "$r" = 1 ] && gemini --help 2>&1 | grep -q -- '--resume'; then res=(--resume latest); echo "↻ resuming the previous Gemini CLI session"; else p="$boot"; fi
                   local gkey="" gsrc=""
                   if gkey=$(python3 "$HERE/keys.py" get gemini --project "$project" 2>/dev/null); then
                       gsrc=$(python3 "$HERE/keys.py" where gemini --project "$project")
                       echo "🔑 Gemini API key: $gsrc"
-                      GEMINI_API_KEY="$gkey" gemini ${res[@]+"${res[@]}"} $flags --include-directories "$ROOT" ${model:+-m "$model"} -i "$p"
+                      GEMINI_API_KEY="$gkey" gemini ${res[@]+"${res[@]}"} $flags --include-directories "$ROOT" --include-directories "$CODE" ${model:+-m "$model"} -i "$p"
                   else
                       echo "🔑 no Gemini API key set: using your Google sign-in (add a key in ⚙ Settings → API keys)"
-                      gemini ${res[@]+"${res[@]}"} $flags --include-directories "$ROOT" ${model:+-m "$model"} -i "$p"
+                      gemini ${res[@]+"${res[@]}"} $flags --include-directories "$ROOT" --include-directories "$CODE" ${model:+-m "$model"} -i "$p"
                   fi ;;
         codex)    # Runs in the project root (reads the root AGENTS.md itself); identity is in AGENT.md.
                   # The tropa MCP server is passed as a -c override, so ~/.codex (and its login) is untouched.
@@ -150,9 +152,11 @@ run_cli() {
                   # Codex sessions all live in one place: find this agent's own latest one by its startup prompt
                   [ "$r" = 1 ] && sid=$(python3 "$HERE/last_session.py" codex "$name" "$project" 2>/dev/null)
                   if [ -n "$sid" ]; then res=(resume "$sid"); echo "↻ resuming Codex session $sid"; else p="$boot"; fi
-                  ( cd "$ROOT" && codex ${res[@]+"${res[@]}"} $flags ${oss[@]+"${oss[@]}"} -C "$ROOT" ${m:+-m "$m"} \
+                  local adddir=()   # a project left untouched: Codex runs in the code folder and may also write in the team folder
+                  [ "$CODE" != "$ROOT" ] && codex --help 2>&1 | grep -q -- '--add-dir' && adddir=(--add-dir "$ROOT")
+                  ( cd "$CODE" && codex ${res[@]+"${res[@]}"} $flags ${oss[@]+"${oss[@]}"} -C "$CODE" ${adddir[@]+"${adddir[@]}"} ${m:+-m "$m"} \
                       -c "mcp_servers.tropa.url=\"$url\"" ${extra[@]+"${extra[@]}"} \
-                      "First read agents/$name/AGENT.md (your identity and role) and .agent_sync/TEAM.md (the team). $p" ) ;;
+                      "First read $ROOT/agents/$name/AGENT.md (your identity and role)$([ "$CODE" != "$ROOT" ] && echo ", $ROOT/AGENTS.md (the team's rules)") and $ROOT/.agent_sync/TEAM.md (the team). $p" ) ;;
         *) echo "Unknown tool '$tool' in agent.json"; sleep 30; exit 1 ;;
     esac
 }

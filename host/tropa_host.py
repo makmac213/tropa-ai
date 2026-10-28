@@ -19,6 +19,7 @@ import argparse, glob, json, os, re, shutil, signal, subprocess, sys, threading,
 
 TROPA_HOME = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TROPA = os.path.join(TROPA_HOME, "tropa")
+WORKSPACES = os.path.expanduser("~/.tropa/workspaces")   # team folders of projects whose own folder is left untouched
 VERSION = open(os.path.join(TROPA_HOME, "VERSION")).read().strip() if os.path.exists(os.path.join(TROPA_HOME, "VERSION")) else "dev"
 CLIS = ["claude", "opencode", "qwen", "codex", "gemini"]
 
@@ -487,6 +488,19 @@ class Host:
         except Exception as e:
             log(f"could not pre-trust the Gemini folder: {e}")
 
+    def kept_teams(self):
+        """{code folder: (slug, team folder)} for projects left untouched: their team lives in a folder of its own."""
+        out = {}
+        for slug, root in self.registry().items():
+            try:
+                with open(os.path.join(root, ".agent_sync", "settings.json")) as f:
+                    code = json.load(f).get("code_dir") or ""
+            except (OSError, ValueError):
+                continue
+            if code:
+                out[os.path.realpath(code)] = (slugify(slug), root)
+        return out
+
     def folders(self):
         """Top-level folders in projects_dir that the chat may adopt as existing projects."""
         now = time.time()
@@ -497,13 +511,17 @@ class Host:
             names = sorted(os.listdir(self.projects_dir), key=str.lower)
         except OSError:
             names = []
+        kept_teams = self.kept_teams()
         for n in names[:500]:
             p = os.path.join(self.projects_dir, n)
             if n.startswith(".") or not os.path.isdir(p) or not re.fullmatch(r"[A-Za-z0-9._-]{1,60}", n):
                 continue
             kit = os.path.exists(os.path.join(p, ".agent_sync", "config.py"))
             slug = ""
-            if kit:
+            kept = kept_teams.get(os.path.realpath(p))   # left untouched, with its team kept elsewhere
+            if kept:
+                kit, slug = True, kept[0]
+            elif kit:
                 try:
                     with open(os.path.join(p, ".agent_sync", "settings.json")) as f:
                         slug = json.load(f).get("project") or ""
@@ -682,12 +700,18 @@ class Host:
         for r in self.scan_roots():
             walk(r, 1)
         self.blocked = sorted(blocked)
+        kept_teams = self.kept_teams()
         for p in sorted(seen, key=str.lower)[:200]:
+            if p.startswith(os.path.realpath(WORKSPACES) + os.sep):
+                continue   # a team folder of a project left untouched: listed as that project's folder instead
             if os.path.dirname(p) == self.projects_dir:
                 continue
             kit = os.path.exists(os.path.join(p, ".agent_sync", "config.py"))
             slug = ""
-            if kit:
+            kept = kept_teams.get(os.path.realpath(p))   # left untouched, with its team kept elsewhere
+            if kept:
+                kit, slug = True, kept[0]
+            elif kit:
                 try:
                     slug = json.load(open(os.path.join(p, ".agent_sync", "settings.json"))).get("project") or ""
                 except Exception:
@@ -833,13 +857,25 @@ class Host:
         if existing:
             if not os.path.isdir(root):
                 raise RuntimeError(f"{root} doesn't exist")
-        elif os.path.exists(root) and os.listdir(root) and not os.path.exists(os.path.join(root, ".agent_sync")):
+        # "leave the folder untouched": the team's own files (kit, agents, skills, docs) live in a team folder of their
+        # own, and the project folder is only where the agents work on the code. Nothing is added to it.
+        code_dir = ""
+        kept = self.kept_teams().get(os.path.realpath(root)) if existing else None
+        if kept:   # a folder left untouched before: its team (in its own folder) gets the new agents
+            root = kept[1]
+        elif existing and job.get("untouched") and not os.path.isdir(os.path.join(root, ".agent_sync")):
+            code_dir, root, existing = root, os.path.join(WORKSPACES, job["slug"]), False
+            job["git"] = False   # the team folder holds no code: no repo, no branches or worktrees in yours
+        elif not existing and os.path.exists(root) and os.listdir(root) and not os.path.exists(os.path.join(root, ".agent_sync")):
             raise RuntimeError(f"{root} already exists and isn't empty — pick another folder name, or choose it as an existing folder")
         os.makedirs(self.projects_dir, exist_ok=True)
         os.makedirs(root, exist_ok=True)
         self._folders_at = 0; self._elsewhere_at = 0
         self.remember(job["slug"], root)
-        self.report(job, f"📁 {'Adding the team kit to' if existing else 'Setting up'} `{root}` …", status="running", folder=root)
+        if code_dir:
+            self.report(job, f"📁 Leaving `{code_dir}` untouched: the team's files go in `{root}`, and the agents work on the code in your folder …", status="running", folder=root)
+        else:
+            self.report(job, f"📁 {'Adding the team kit to' if existing else 'Setting up'} `{root}` …", status="running", folder=root)
 
         # new projects start as a git repo on `main`, so developers can work on branches/worktrees
         if job.get("git", True) and not existing and not os.path.isdir(os.path.join(root, ".git")):
@@ -855,6 +891,9 @@ class Host:
         room = self.cfg(root, "room")
         if room != job["room_id"]:
             raise RuntimeError(f"room mismatch: {room} vs {job['room_id']}")
+        if code_dir:
+            self.setc(root, "code_dir", code_dir)
+            self.setc(root, "git_workflow", "off")   # branches/worktrees would add to your repo; agents edit the code directly
 
         brief_file = ""
         if job.get("brief"):
@@ -887,6 +926,18 @@ class Host:
             self.report(job, "📝 " + msg[:1].upper() + msg[1:] + ".")
 
         agents = job.get("agents") or []
+        if not agents:   # an existing folder added without a team: it gets its lead orchestrator (every room keeps one)
+            did = self.ensure_lead(root, job["room_id"], trust=bool(job.get("trust")))
+            if did:
+                self.report(job, f"🧭 Every project room keeps a lead: {did}.")
+            agents = []
+            for f in sorted(glob.glob(os.path.join(root, "agents", "*", "agent.json"))):
+                try:
+                    agents.append(json.load(open(f)))
+                except (OSError, ValueError):
+                    pass
+            job["agents"] = agents
+            job["lead"] = job.get("lead") or self.cfg(root, "lead")
         if not agents:
             self.initial_commit(job, root, existing)
             self.report(job, f"✅ Project ready at `{root}`. No agents yet — add them with `tropa panel {root}`.", status="done")

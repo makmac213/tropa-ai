@@ -196,6 +196,7 @@
   .bd-pick { display: flex; gap: 8px; margin-top: 4px; } .bd-pick .tbtn { white-space: nowrap; }
   .bd-par { align-items: center; flex-wrap: wrap; margin: -2px 0 10px 26px; } .bd-par .linkbtn { margin-left: 0; font-size: 13px; }
   .bd-par + .bd-pick { margin: -4px 0 10px 26px; }
+  .bd-untouched { margin: 6px 0 0 26px; font-size: 13px; color: var(--muted); }
   #npWhere { margin-left: 0; font-size: inherit; }
   .bd-warn { background: var(--mention); border-left: 3px solid var(--human); padding: 10px 12px; border-radius: 6px; font-size: 13.5px; }
   .bd-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: flex-end; position: sticky; bottom: 0; background: var(--bg); padding: 14px 0 18px; border-top: 1px solid var(--line); }
@@ -1184,11 +1185,12 @@
     <h3>New project <button type="button" class="linkbtn np-switch" id="npToChat" hidden>💬 Set it up by chatting with Claude</button></h3>
     <div class="np-host" id="npHost"></div>
     <div class="np-mode" id="npMode"><label><input type="radio" name="npMode" value="new" checked> New folder</label><label><input type="radio" name="npMode" value="existing"> Existing project folder</label></div>
-    <div id="npExisting" hidden><label class="f" for="npFolderPick">Folder <small>the code is left as it is; the team kit is added next to it</small></label>
+    <div id="npExisting" hidden><label class="f" for="npFolderPick">Folder <small>the team works on what's in it</small></label>
       <div class="np-pick"><select id="npFolderPick"></select><button type="button" class="tbtn" id="npBrowse" hidden title="Pick the folder with your computer's own folder window">📂 Browse…</button></div>
       <div class="np-hint np-blocked" id="npBlocked" hidden></div>
       <div id="npPathBox" hidden><input id="npPath" placeholder="~/work/my-app" spellcheck="false" autocomplete="off">
-        <div class="np-hint">Any folder in your home folder or on an external drive (not hidden or system folders). To allow other places, set <code>TROPA_PROJECT_ROOTS</code> before starting the host helper.</div></div></div>
+        <div class="np-hint">Any folder in your home folder or on an external drive (not hidden or system folders). To allow other places, set <code>TROPA_PROJECT_ROOTS</code> before starting the host helper.</div></div>
+      <label class="set-radio"><input type="checkbox" id="npUntouched" checked><span>Leave the folder untouched<small>Nothing is added to it: the team's own files (setup, agents, docs, plan) are kept in a team folder of their own, and the agents work on the code in your folder. Untick to put the team kit inside the folder, which the branch and review workflow needs.</small></span></label></div>
     <div class="np-grid">
       <div><label class="f" for="npName">Name</label><input id="npName" placeholder="e.g. Recipe Finder" autocomplete="off"></div>
       <div id="npFolderBox"><label class="f" for="npFolder">Folder <small>created inside <button type="button" class="linkbtn" id="npWhere" title="Choose where the new folder is created">change where…</button></small></label><div class="np-folder"><span id="npBase">~/projects/</span><input id="npFolder" placeholder="recipe-finder" autocomplete="off" spellcheck="false"></div></div>
@@ -4580,7 +4582,7 @@
       for (const f of np.files) { btn.textContent = `Uploading ${f.name}…`; files.push((await uploadFile(f, room.id)).id); }
       btn.textContent = 'Creating…';
       const made = await api('/projects', { method: 'POST', body: {
-        name: name || slug, slug, existing: ex, path: path || undefined, parent: (!ex && newParent()) || undefined, folder: ex ? (v.startsWith('f:') ? v.slice(2) : slug) : ($('#npFolder').value.trim() || slugOf(name)), topic: name || slug, brief: $('#npBrief').value,
+        name: name || slug, slug, existing: ex, untouched: ex && $('#npUntouched').checked, path: path || undefined, parent: (!ex && newParent()) || undefined, folder: ex ? (v.startsWith('f:') ? v.slice(2) : slug) : ($('#npFolder').value.trim() || slugOf(name)), topic: name || slug, brief: $('#npBrief').value,
         files, agents: np.team.map((a) => ({ name: a.name, tool: a.tool, model: a.model, role: a.role, prompt: jobFor(a) })), lead: np.lead,
         kickoff: $('#npKickoff').value.trim(), tools: selectedTools(), design_system: np.design, git: $('#npGit').checked, auto_approve: $('#npAuto').checked, start: $('#npStart').checked, trust: $('#npTrust').checked, keys } });
       $('#projDlg').close(); state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
@@ -4673,7 +4675,8 @@
           ${newParent() ? `<span class="mut">·</span><button type="button" class="linkbtn" data-bd="pdefault">back to ${esc(defaultParent())}</button>` : ''}</div>
           ${bt.ptype || !h.picker ? `<div class="bd-pick"><input id="bdParent" class="bd-in" value="${esc(base)}" placeholder="~/Documents" spellcheck="false" aria-label="Where to create the folder"></div>` : ''}` : ''}
         <label class="bd-r"><input type="radio" name="bdWhere" value="existing" ${bt.where === 'existing' ? 'checked' : ''}> A folder I already have</label>
-        ${bt.where === 'existing' ? `<div class="bd-pick"><input id="bdPath" class="bd-in" value="${esc(bt.path)}" placeholder="~/work/my-project" spellcheck="false" aria-label="Folder">${h.picker ? '<button type="button" class="tbtn" data-bd="browse">📂 Browse…</button>' : ''}</div>` : ''}</section>
+        ${bt.where === 'existing' ? `<div class="bd-pick"><input id="bdPath" class="bd-in" value="${esc(bt.path)}" placeholder="~/work/my-project" spellcheck="false" aria-label="Folder">${h.picker ? '<button type="button" class="tbtn" data-bd="browse">📂 Browse…</button>' : ''}</div>
+          <label class="bd-r bd-untouched"><input type="checkbox" id="bdUntouched" ${bt.untouched !== false ? 'checked' : ''}> Leave this folder untouched: the team's files are kept elsewhere, and the agents work on what's in it</label>` : ''}</section>
       <div class="bd-foot"><span class="err" id="bdErr" role="alert"></span><span class="mut">Runs on Claude Code. Other models and CLIs: switch to Advanced.</span>
         <button type="button" class="send" data-bd="create" ${h.connected ? '' : 'disabled'}>Create team and start</button></div>
     </div>`;
@@ -4686,6 +4689,7 @@
     else if (t.id === 'bdName') { bt.name = t.value; const sl = $('#bdSlug'); if (sl) sl.textContent = sl.textContent.replace(/[^/]*$/, slugOf(t.value) || '…'); }
     else if (t.id === 'bdBrief') bt.brief = t.value;
     else if (t.id === 'bdPath') bt.path = t.value;
+    else if (t.id === 'bdUntouched') bt.untouched = t.checked;
     else if (t.id === 'bdParent') { setNewParent(t.value); const sl = $('#bdSlug'); if (sl) sl.textContent = `${t.value.trim().replace(/\/+$/, '') || '…'}/${slugOf(bt.name) || '…'}`; }
   });
   $('#build').addEventListener('toggle', (e) => { const card = e.target.closest?.('.bd-mem'); if (card && e.target.tagName === 'DETAILS') bt.members[Number(card.dataset.i)].open = e.target.open; }, true);
@@ -4757,7 +4761,7 @@
     try {
       const slug = slugOf(name), room = await ensureRoomFor(name);
       const made = await api('/projects', { method: 'POST', body: {
-        name, slug, existing, path: path || undefined, parent: parent || undefined, folder: slug, topic: name, brief: bt.brief.trim(), files: [],
+        name, slug, existing, untouched: existing && bt.untouched !== false, path: path || undefined, parent: parent || undefined, folder: slug, topic: name, brief: bt.brief.trim(), files: [],
         agents: bt.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: m.role, prompt: [m.prompt, how].filter(Boolean).join('\n\n') })),
         lead, kickoff: `@${lead} The work is described in the brief in docs/. Plan it with the team, tell me the plan in a few lines, and ask me anything that's unclear.`,
         tools: [], design_system: '', git: bt.git && !!state.host?.git, auto_approve: false, start: true, trust: true, keys: {} } });

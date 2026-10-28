@@ -15,6 +15,15 @@
 ### Where new projects go
 - **Choose where a new project folder is created,** not only `~/projects`. **Change where…** in Simple mode's *Build your team* and in the New project form opens your computer's own folder window, or you can type a path. Any folder in your home or on an external drive works, and a missing one is created. The place is remembered for the next project. Hidden and system folders are refused.
 
+### Add an existing project without changing it
+- **Leave the folder untouched** (ticked by default when you add a folder you already have, in Simple and Advanced mode, and for rooms agents create in an existing folder). TropaAI adds nothing to your folder:
+  - no `.agent_sync/`, `agents/`, skills, `AGENTS.md` changes, `.gitignore` lines, `docs/`, git hooks, branches or worktrees;
+  - the team's own files live in `~/.tropa/workspaces/<room>`;
+  - the agents work on the code in your folder. Claude Code also reads the project's own `CLAUDE.md`; Codex and OpenCode run in your folder and get the team's rules added; Qwen and Gemini include it.
+- Without branches and worktrees, there's no branch-and-review workflow in this mode: agents edit the code directly. Untick the box to put the team kit inside the folder, as before.
+- Adding the same folder again adds agents to its existing team. The New project form lists the folder as already having a team.
+- Fixed: adding an existing folder with no agents chosen now gives it its lead, and adding agents to an existing team keeps its lead.
+
 ### Smaller sessions, cheaper turns
 - **Sessions are compacted automatically, for every CLI** (Claude Code, Codex and OpenCode `/compact`; Gemini CLI and Qwen Code `/compress`), with no one at the terminal. TropaAI reads each agent's current context size from its CLI's logs. An agent past **150k tokens** is compacted:
   - when it hands a card on (to review, QA or done);
