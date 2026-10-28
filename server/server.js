@@ -716,6 +716,7 @@ const tools = () => [
       brief: { type: 'string', description: 'What the room is for: the goal, what done looks like, anything its team must know. Saved as its brief in docs/ and given to its lead.' },
       team: { type: 'string', description: 'Optional: a ready-made team id (e.g. "seo", "recruitment", "small-dev-team"). Default: just a lead orchestrator, who asks for teammates as the work needs.' },
       path: { type: 'string', description: 'Optional: an existing folder for the project, as a full path (e.g. the repo you\'re in, "~/work/site"). Default: a new folder in the projects folder.' },
+      untouched: { type: 'boolean', description: 'With path: leave that folder untouched (default true). The team\'s own files go in a team folder of their own and the agents work on the code in the given folder. false: put the team kit into the folder itself (needed for the branch/worktree review workflow).' },
       room: { type: 'string', description: 'Only if you lead a project room: that room, "project:<slug>" (the request is shown there and the new room reports back to it).' },
       reason: { type: 'string', description: 'Why, in one sentence (shown to the human).' },
     }, required: ['agent', 'name', 'brief'] },
@@ -926,7 +927,7 @@ async function callTool(name, args, ctx) {
         const lead = String(wakeSettings(roomId).lead || '');
         if (lead && lead.toLowerCase() !== a.name.toLowerCase()) return `Only the lead (@${lead}) can start new rooms from ${roomId}. Ask @${lead} in the room if the work needs one.`;
       }
-      const res = requestRoom(roomId, { name: args.name, brief: args.brief, team: args.team, path: args.path }, { by: a.name, reason: args.reason });
+      const res = requestRoom(roomId, { name: args.name, brief: args.brief, team: args.team, path: args.path, untouched: args.untouched !== false }, { by: a.name, reason: args.reason });
       return res.status === 'created'
         ? `Created #${res.request.slug}: its folder${res.request.path ? ` (${res.request.path})` : ''} and team start in a minute, with a lead orchestrator running it. Post to it with send_message (room "project:${res.request.slug}"); its lead answers there.`
         : `Asked @${HUMAN_NAME} to approve the new room #${res.request.slug} (request #${res.request.id}) in ${roomId}. You'll be told the answer; carry on meanwhile.`;
@@ -2380,7 +2381,8 @@ function createProject(b) {
     if (a.tool === 'gemini' && /^(ollama|openrouter)\//.test(a.model)) throw new UserError(`${a.name}: Gemini CLI only runs Google's Gemini models`);
     if (a.model && !/^[A-Za-z0-9._:/@-]{1,80}$/.test(a.model)) throw new UserError(`${a.name}: invalid model id`);
   }
-  const lead = (b.lead ? cleanName(b.lead) : '') || agents[0]?.name || '';
+  // no lead picked: an existing team keeps its lead; a new one is led by its first agent
+  const lead = (b.lead ? cleanName(b.lead) : '') || (existing && String(wakeSettings(roomId).lead || '')) || agents[0]?.name || '';
   // this project's own API keys (optional): checked and saved by the host helper outside the project folder
   const projectKeys = {};
   for (const [prov, v] of Object.entries(b.keys && typeof b.keys === 'object' ? b.keys : {})) {
@@ -2407,7 +2409,7 @@ function createProject(b) {
     }
     return { id: c.id, agents: who, params };
   });
-  if (lead && !seen.has(lead.toLowerCase())) throw new UserError('the lead must be one of the agents');
+  if (b.lead && !seen.has(lead.toLowerCase())) throw new UserError('the lead must be one of the agents');
   // Agent names are unique across TropaAI. A name another project already uses (lead, qa, backend… from the presets)
   // gets this project's name added instead of taking over that agent: lead → lead-<slug>.
   const renamed = uniqueTeamNames(slug, agents);
@@ -2432,7 +2434,7 @@ function createProject(b) {
     files.length ? `\nFiles are saved in \`${ATT_DIR}/\`.` : ''].filter(Boolean).join('\n').trim();
   const msg = postMessage({ room: roomId, sender: HUMAN_NAME, kind: 'human', content: intro, attachments: files });
   const job = { id: require('node:crypto').randomUUID(), type: 'create_project', room_id: roomId, slug, name: name || slug, folder,
-    brief: brief_, agents, lead: lead_, existing, path, parent, tools, design_system: design, auto_approve: b.auto_approve === true, git: b.git !== false, start: b.start !== false, trust: b.trust !== false, kickoff: String(b.kickoff || '').slice(0, 4000),
+    brief: brief_, agents, lead: lead_, existing, path, parent, untouched: existing && b.untouched === true, tools, design_system: design, auto_approve: b.auto_approve === true, git: b.git !== false, start: b.start !== false, trust: b.trust !== false, kickoff: String(b.kickoff || '').slice(0, 4000),
     human: HUMAN_NAME, status: 'queued', log: [], message_id: msg.id };
   jobs.set(job.id, job);
   host.queue.push({ ...job, log: undefined, keys: projectKeys });   // the keys only travel in the queue, never kept in `jobs`
@@ -3277,7 +3279,7 @@ function requestRoom(roomId, spec, { by, reason }) {
   if (team && !(host.info.teams || []).some((t) => t.id === team)) throw new UserError(`no ready-made team "${team}"; teams: ${(host.info.teams || []).map((t) => t.id).join(', ') || 'none listed'}`);
   const dup = [...roomReqs.values()].find((r) => r.status === 'requested' && r.slug === slug);
   if (dup) return { status: 'requested', request: dup };
-  const r = { id: ++roomReqSeq, room_id: roomId, slug, name, brief, team, path, by, reason: String(reason || '').slice(0, 300), status: 'requested', created_at: Date.now() };
+  const r = { id: ++roomReqSeq, room_id: roomId, slug, name, brief, team, path, untouched: spec.untouched !== false, by, reason: String(reason || '').slice(0, 300), status: 'requested', created_at: Date.now() };
   roomReqs.set(r.id, r);
   if ((s.room_growth || 'ask') === 'auto') {
     try { createRequestedRoom(r, true); } catch (e) { roomReqs.delete(r.id); throw e; }
@@ -3298,7 +3300,7 @@ function createRequestedRoom(r, auto = false) {
   const agents = t ? t.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: human(m.role), prompt: human(m.prompt) + how })) : [];
   const lead = t ? t.lead : '';
   const res = createProject({ name: r.name, slug: r.slug, folder: r.slug, topic: r.name, brief: r.brief, agents, lead, git: t ? t.git !== false : true,
-    path: r.path || undefined, existing: !!r.path,
+    path: r.path || undefined, existing: !!r.path, untouched: !!r.path && r.untouched !== false,
     origin: `_Created by @${r.by}${from ? ` from ${from}` : ` at ${HUMAN_NAME}'s request`}${r.reason ? `: ${r.reason}` : ''}._`,
     // no @mention: a message from the human without one goes to the lead, whatever its name turns out to be
     kickoff: `You lead this new room, created by @${r.by}${from ? ` from ${from}` : ''}. Read the brief in docs/, plan the work, and post the plan here in a few lines.` +
