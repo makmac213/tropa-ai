@@ -124,8 +124,9 @@ def is_app(cmd):
     return ".app/" in cmd or cmd.startswith("/System/")
 
 
-def find(cfg, agent=None, orphans_only=False):
-    """Processes that belong to `agent` (or to any agent of the project), as {pid: proc}."""
+def find(cfg, agent=None, orphans_only=False, loose=True):
+    """Processes that belong to `agent` (or to any agent of the project), as {pid: proc}.
+    loose=False: only tagged ones and those under the agents' panes (no look at every other process's folder)."""
     session = cfg["tmux_session"]
     procs = processes()
     keep = protected(procs)
@@ -139,7 +140,7 @@ def find(cfg, agent=None, orphans_only=False):
     # kits from before the tag: orphans working inside the agent's folder (or anywhere in the project)
     folder = os.path.join(cfg["root"], "agents", agent) if agent else cfg["root"]
     loose = [pid for pid, p in procs.items() if p["ppid"] == 1 and not p["tag"] and not is_app(p["cmd"])
-             and not p["cmd"].split(" ")[0].endswith("tmux")]
+             and not p["cmd"].split(" ")[0].endswith("tmux")] if loose else []
     for pid, cwd in cwds(loose).items():
         if inside(cwd, folder):
             hit |= descendants(procs, [pid])
@@ -218,7 +219,7 @@ def background(cfg, min_age=30):
     [{pid, agent, cmd, age, ports}]. Not the CLIs themselves, their helpers or the shells around commands."""
     session = cfg["tmux_session"]
     procs = processes()
-    found = find(cfg)
+    found = find(cfg, loose=False)   # every 15 s: never the other apps' processes (their folders, via lsof on a Mac)
     top = set(pane_pids(session))
     keep = []
     for pid in found:
