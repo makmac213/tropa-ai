@@ -1414,6 +1414,11 @@ const WAKE_DEFAULTS = { lead: '', wake: 'auto', wake_rules: 'smart', max_wakes_p
   auto_compact: true, compact_at_k: 150, compact_idle_min: 10,
   // the lead removing teammates (remove_agents): done at once ('auto'), only with the human's OK ('ask'), or not allowed ('off')
   team_shrink: 'auto',
+  // auto-heal: keep the room moving on its own. Wakes for an agent at its usage limit wait until it's back, a teammate
+  // stands in for a lead at its limit, a quiet card in Doing gets a nudge, then a restart, then the lead; a room gone
+  // quiet with unfinished cards gets the lead going again. The watcher tries an agent again once its limit resets and
+  // interrupts a step that hangs. (The host helper restarts agents whose CLI stopped, auto-heal or not.)
+  auto_heal: true,
   // "needs attention" limits in minutes (0 = don't flag): quiet in Doing, waiting in Review, on an approval prompt, Blocked, idle with ready work
   attention: { doing_quiet: 15, review_wait: 45, approval_wait: 5, blocked_wait: 60, idle_ready: 20 } };
 const EVERYONE = new Set(['all', 'here', 'team', 'everyone']);
@@ -1438,6 +1443,7 @@ function cleanWake(patch) {
     if (!['ask', 'auto', 'off'].includes(patch.team_shrink)) throw new UserError('team_shrink must be "ask", "auto" or "off"');
     out.team_shrink = patch.team_shrink;
   }
+  if ('auto_heal' in patch) out.auto_heal = patch.auto_heal === true || patch.auto_heal === 'true';
   if ('auto_compact' in patch) out.auto_compact = patch.auto_compact === true || patch.auto_compact === 'true';
   if ('compact_at_k' in patch) out.compact_at_k = Math.min(Math.max(Math.round(Number(patch.compact_at_k) || 150), 20), 2000);
   if ('compact_idle_min' in patch) out.compact_idle_min = Math.min(Math.max(Math.round(Number(patch.compact_idle_min) || 10), 2), 240);
@@ -1537,6 +1543,37 @@ function wakeText(roomId, agent, reason, s) {
     'If it assigns you work: post a one-line plan, do it, and finish with a message that @mentions who is next (result, blocker or done). ' +
     'If it doesn\'t concern you, or it only acknowledges something or says someone is standing by, end your turn without posting: don\'t reply to acknowledgements, and don\'t @mention anyone just to say you\'re idle (a mention wakes them).';
 }
+const sameName = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+/** Out of credits or at its usage limit (a rate limit retries by itself): it can't work until that changes. */
+function limitOf(w, a) {
+  const l = a && w?.panes?.[a]?.limit;
+  return l && (l.kind === 'credits' || l.kind === 'limit') ? l : null;
+}
+/** A teammate that can take over for a while: not at a limit, not excluded; an idle one first. */
+function standIn(w, except = []) {
+  const ok = (w?.agents || []).filter((a) => !except.some((x) => sameName(x, a)) && !limitOf(w, a));
+  return ok.find((a) => w.panes[a]?.state === 'idle') || ok[0] || '';
+}
+/** An agent just hit its usage limit or ran out of credits: whoever runs the team hears it, with the agent's open cards. */
+function healLimit(roomId, a) {
+  const w = watcherFor(roomId), s = wakeSettings(roomId);
+  if (!w || !s.auto_heal || s.wake === 'paused') return;
+  const l = limitOf(w, a);
+  if (!l) return;
+  const lead = w.agents.find((x) => sameName(x, s.lead)) || '';
+  const isLead = sameName(a, lead);
+  const helper = !isLead && lead && !limitOf(w, lead) ? lead : standIn(w, [a]);
+  if (!helper) return;   // the whole team is out: the human was told on screen; nothing anyone can do until a reset
+  const open = taskViews(roomId).filter((t) => sameName(t.assignee, a) && t.status !== 'done');
+  if (!isLead && !open.length) return;   // nothing waits on it
+  const what = l.kind === 'credits' ? 'is out of credits' : `reached its usage limit${l.resets ? ` (it resets ${l.resets})` : ''}`;
+  const cards = open.length ? ` Its open cards: ${open.slice(0, 6).map((t) => `#${t.id} "${t.title}" (${t.status})`).join('; ')}.` : '';
+  const ask = isLead
+    ? `You stand in for the lead until it's back: answer ${HUMAN_NAME}, keep the cards moving and hand off with @mentions.`
+    : `Move what's urgent to a teammate who can work now (update the card's assignee and @mention them), or leave it if it can wait for the reset.`;
+  fireWake(roomId, helper, { manual: true, reason: `\`${a}\` ${what}, so it can't work for now.${cards} ${ask}` });
+  watcherSay(roomId, `🩹 \`${a}\` can't work for now, so \`${helper}\` ${isLead ? 'stands in as lead' : 'is looking after its cards'} until it's back.`);
+}
 /** Who a message wakes: @all → everyone but the sender; @name → those agents; human with no
  *  agent mention → the lead (if running) else everyone; agent with no mention → nobody. */
 function pickTargets(s, m, agents) {
@@ -1590,6 +1627,11 @@ function fireWake(roomId, agent, { manual = false, reason } = {}) {
     return false;
   }
   st.capped = false;
+  const w = watcherFor(roomId);
+  if (!manual && s.auto_heal && limitOf(w, agent) && st.pending.length) {   // at its usage limit: typing into it is lost; wait until it's back
+    st.timer = setTimeout(() => fireWake(roomId, agent), 60e3);
+    return false;
+  }
   const msgs = st.pending; st.pending = [];
   if (!manual && !msgs.length) return false;
   let why = reason;
@@ -1597,6 +1639,10 @@ function fireWake(roomId, agent, { manual = false, reason } = {}) {
     const ids = msgs.map((m) => m.id).sort((a, b) => a - b);
     const who = [...new Set(msgs.map((m) => m.sender))].sort().join(', ');
     why = `New message(s) #${ids[0]}${ids.length > 1 ? `-#${ids[ids.length - 1]}` : ''} from ${who}.`;
+  }
+  if (st.standingIn) {
+    why += ` You're standing in for the lead \`${st.standingIn}\`, which is at its usage limit: answer ${HUMAN_NAME} and keep the team moving until it's back (it reads the room then).`;
+    st.standingIn = '';
   }
   st.last = now; st.history.push(now);
   pushEvent(roomId, { type: 'wake', agent, reason: why, message_ids: msgs.map((m) => m.id), text: wakeText(roomId, agent, why, s) });
@@ -1621,7 +1667,11 @@ bus.on('message', (m) => {
   const s = wakeSettings(m.room_id);
   if (s.wake === 'paused') return;
   if (m.sender_kind === 'agent' && isAck(m.content)) return;   // an agent's "thanks / standing by" wakes nobody
-  for (const a of pickTargets(s, m, w.agents)) scheduleWake(m.room_id, a, m);
+  for (const a of pickTargets(s, m, w.agents)) {
+    const sub = s.auto_heal && m.sender_kind === 'human' && sameName(a, s.lead) && limitOf(w, a) ? standIn(w, [a]) : '';
+    if (sub) { wakeEntry(m.room_id, sub).standingIn = a; scheduleWake(m.room_id, sub, m); }
+    scheduleWake(m.room_id, a, m);   // the lead still gets it once it's back (held until then)
+  }
 });
 const roomOf = (req) => requireRoom(normalizeRoomId(req.params.id)).id;
 const pickWakeKeys = (o) => Object.fromEntries(Object.keys(WAKE_DEFAULTS).filter((k) => o && k in o).map((k) => [k, o[k]]));
@@ -1860,12 +1910,16 @@ api.post('/watch/panes', wrap((req) => {
     const n = cleanName(name) && shownName(w, cleanName(name));
     if (!n || !p) continue;
     w.approvalSince ||= {};
+    const was = limitOf(w, n);
     if (p.state === 'approval') w.approvalSince[n] ||= Date.now(); else delete w.approvalSince[n];
     w.panes[n] = { text: String(p.text || '').slice(-8000), state: ['working', 'idle', 'approval', 'stopped'].includes(p.state) ? p.state : 'idle',
       prompt: String(p.prompt || '').slice(0, 300), changed_at: Number(p.changed_at) || Date.now(), at: Date.now(),
       // out of credits / usage limit / rate-limited, read off the agent's screen by the watcher
       limit: p.limit && ['credits', 'limit', 'rate'].includes(p.limit.kind)
         ? { kind: p.limit.kind, text: String(p.limit.text || '').slice(0, 200), resets: String(p.limit.resets || '').slice(0, 60) } : null };
+    const now = limitOf(w, n);
+    if (!was && now) setTimeout(() => { try { healLimit(roomId, n); } catch (e) { console.error('heal', e); } }, 0);
+    if (was && !now && wakeSettings(roomId).auto_heal) watcherSay(roomId, `✅ \`${n}\` is working again.`);
   }
   broadcast({ type: 'panes', room_id: roomId, panes: w.panes });
   return { ok: true };
@@ -3082,6 +3136,61 @@ function attention(roomId) {
   out.items.sort((x, y) => order[x.kind] - order[y.kind] || x.since - y.since);
   return out;
 }
+// ---------- auto-heal: the steps TropaAI takes by itself when work stops moving ----------
+// A card in Doing whose agent went quiet: a nudge, then a restart (it resumes its conversation), then the lead is asked
+// to reassign it. A room where nobody has done anything for a while though cards are unfinished: the lead is woken.
+// Never while the room is paused, an agent is at its limit or on a prompt, or the human owes an answer.
+const HEAL_GAP = 10;      // minutes each step gets to work before the next
+const ROOM_QUIET = 20;    // minutes of a silent, idle room with unfinished cards before the lead is woken
+const healSteps = new Map();   // roomId -> Map(key -> { step, at })
+const lastTalk = db.prepare("SELECT max(created_at) AS t FROM messages WHERE room_id = ? AND sender_kind != 'system'");
+function autoHeal(roomId) {
+  const s = wakeSettings(roomId), w = watcherFor(roomId);
+  if (!w || !s.auto_heal || s.wake === 'paused') return;
+  const lim = { ...WAKE_DEFAULTS.attention, ...(s.attention || {}) };
+  const now = Date.now(), min = 60e3;
+  const steps = healSteps.get(roomId) || new Map(); healSteps.set(roomId, steps);
+  const tasks = taskViews(roomId);
+  const agentOf = (n) => n && w.agents.find((a) => sameName(a, n));
+  const lead = agentOf(s.lead);
+  const owesHuman = (a) => qq.openFrom.all(roomId, a).length > 0;
+  for (const k of steps.keys()) {   // a card that left Doing (or the room got going again) starts over
+    const id = Number(k.split(':')[1]);
+    if (k.startsWith('doing:') && !tasks.some((t) => t.id === id && t.status === 'doing')) steps.delete(k);
+  }
+  if (lim.doing_quiet) for (const t of tasks) {
+    const a = agentOf(t.assignee), p = a && w.panes[a];
+    if (t.status !== 'doing' || !p || p.state !== 'idle' || limitOf(w, a) || owesHuman(a)) continue;
+    const quiet = now - Math.max(p.changed_at || 0, t.updated_at);
+    const key = `doing:${t.id}`, h = steps.get(key) || { step: 0, at: 0 };
+    if (quiet < lim.doing_quiet * min || now - h.at < HEAL_GAP * min || h.step > 2) continue;
+    const mins = Math.round(quiet / min);
+    if (h.step === 0) {
+      fireWake(roomId, a, { manual: true, reason: `Your card #${t.id} "${t.title}" is in Doing, but you've been quiet for ${mins} min. Carry on with it, or move it on: blocked (say what you need, and from whom), review or done (say so and @mention who's next).` });
+    } else if (h.step === 1) {
+      pushEvent(roomId, { type: 'restart', agent: a, quiet: true });
+      watcherSay(roomId, `🩹 \`${a}\` stopped moving on #${t.id} "${t.title}", even after a nudge, so it's being restarted (it picks up where it left off).`);
+    } else {
+      const helper = lead && !sameName(lead, a) && !limitOf(w, lead) ? lead : '';
+      if (helper) fireWake(roomId, helper, { manual: true, reason: `\`${a}\` has been stuck on card #${t.id} "${t.title}" for ${mins} min, even after a nudge and a restart. Look at what it has done so far, then reassign the card to someone else, split it, or ask ${HUMAN_NAME} if it needs a decision.` });
+      watcherSay(roomId, `@${HUMAN_NAME} 🩹 \`${a}\` is stuck on #${t.id} "${t.title}" (nudged and restarted).${helper ? ` \`${helper}\` is looking into it.` : ' Have a look at its screen in the team panel.'}`);
+    }
+    steps.set(key, { step: h.step + 1, at: now });
+  }
+  // the whole room went quiet with work left: the lead gets it going again (twice at most until someone talks)
+  const left = tasks.filter((t) => ['todo', 'doing', 'review', 'qa'].includes(t.status));
+  const talked = lastTalk.get(roomId)?.t || 0;
+  const busy = w.agents.some((a) => !w.panes[a] || w.panes[a].state !== 'idle' || now - (w.panes[a].changed_at || 0) < ROOM_QUIET * min);
+  const q = steps.get('quiet');
+  if (q && q.talked !== talked) steps.delete('quiet');
+  const h = steps.get('quiet') || { step: 0, at: 0, talked };
+  if (!left.length || busy || now - talked < ROOM_QUIET * min || qq.openIn.all(roomId).length || h.step >= 2 || now - h.at < 60 * min) return;
+  const who = lead && !limitOf(w, lead) ? lead : standIn(w, lead ? [lead] : []);
+  if (!who) return;
+  const list = left.slice(0, 8).map((t) => `#${t.id} "${t.title}" (${t.status}${t.assignee ? `, ${t.assignee}` : ''})`).join('; ');
+  fireWake(roomId, who, { manual: true, reason: `The room has been quiet for ${Math.round((now - talked) / min)} min, but ${left.length} card${left.length === 1 ? ' is' : 's are'} unfinished: ${list}. Check the board and get the next one moving (assign it with an @mention), or tell ${HUMAN_NAME} what's blocking.` });
+  steps.set('quiet', { step: h.step + 1, at: now, talked });
+}
 const attnSig = new Map();
 function refreshAttention(roomId) {
   const a = attention(roomId);
@@ -3091,7 +3200,12 @@ function refreshAttention(roomId) {
   broadcast({ type: 'attention', attention: a });
   return a;
 }
-setInterval(() => { for (const roomId of watchers.keys()) try { refreshAttention(roomId); } catch (e) { console.error('attention', e); } }, 10000).unref();
+setInterval(() => {
+  for (const roomId of watchers.keys()) {
+    try { refreshAttention(roomId); } catch (e) { console.error('attention', e); }
+    try { autoHeal(roomId); } catch (e) { console.error('heal', e); }
+  }
+}, 10000).unref();
 api.get('/attention', wrap(() => [...watchers.keys()].map((r) => attention(r))));
 api.get('/rooms/:id/attention', wrap((req) => attention(roomOf(req))));
 api.post('/rooms/:id/attention/snooze', wrap((req) => {
