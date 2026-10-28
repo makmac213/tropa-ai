@@ -1269,7 +1269,8 @@ class Host:
     # ---------- self-healing: keep running teams running (and the chat's "Fix the team" button) ----------
     HEAL_EVERY = 30       # seconds between automatic checks
     HEAL_QUIET = 90       # after any team job (create, add, remove, rename…): leave the team alone this long
-    HEAL_LIMIT = {"watcher": 3, "agent": 2}   # automatic restarts per hour; after that, say so once and stop trying
+    HEAL_LIMIT = {"watcher": 3, "agent": 2}   # automatic restarts per hour; after that, say so once and slow down
+    HEAL_RETRY = 1800     # ...to one more try every half hour
 
     def team_roots(self):
         """slug -> folder for every project on this machine that has a team kit."""
@@ -1287,13 +1288,24 @@ class Host:
 
     def watcher_alive(self, session):
         """Is room_watcher.py running in the team's watcher window? The window runs it through a shell
-        (`python3 room_watcher.py; read -p …`) that outlives it, so look for the python process itself."""
+        (`python3 room_watcher.py; read -p …`) that outlives it, so look for the python process itself, anywhere
+        under the window: on a Mac, python3 may start Python.app's "Python" as a child rather than replacing itself."""
         pid = (self.run(["tmux", "list-panes", "-t", f"={session}:=watcher", "-F", "#{pane_pid}"], check=False).stdout.split() or [""])[0]
         if not pid.isdigit():
             return False
+        kids, args = {}, {}
         for line in self.run(["ps", "-ax", "-o", "pid=,ppid=,args="], check=False).stdout.splitlines():
             f = line.split(None, 2)
-            if len(f) == 3 and pid in (f[0], f[1]) and "room_watcher.py" in f[2] and "python" in f[2].split()[0] and "read -p" not in f[2]:
+            if len(f) == 3 and f[0].isdigit():
+                kids.setdefault(f[1], []).append(f[0]); args[f[0]] = f[2]
+        todo, seen = [pid], set()
+        while todo:
+            p = todo.pop()
+            if p in seen:
+                continue
+            seen.add(p); todo += kids.get(p, [])
+            a = args.get(p, "")
+            if "room_watcher.py" in a and "read -p" not in a and "python" in os.path.basename(a.split()[0]).lower():
                 return True
         return False
 
@@ -1307,7 +1319,8 @@ class Host:
         now, hist = time.time(), self._heals.setdefault(slug, {})
         def allowed(key, kind):
             hist[key] = [t for t in hist.get(key, []) if now - t < 3600]
-            if force or len(hist[key]) < self.HEAL_LIMIT[kind]:
+            # past the hourly limit, still one more try every half hour: nobody may be there to press Fix the team
+            if force or len(hist[key]) < self.HEAL_LIMIT[kind] or now - max(hist[key]) > self.HEAL_RETRY:
                 hist[key].append(now)
                 return True
             return False
@@ -1353,9 +1366,9 @@ class Host:
             hist["warned:" + n] = time.time()
         if new_stuck:
             many = len(new_stuck) > 1
-            lines.append(f"@{human} ⚠️ " + ", ".join(who(n) for n, _ in new_stuck) + (" keep" if many else " keeps") + " stopping, so I've stopped "
-                         + ("restarting them" if many else "restarting it") + " for now. "
-                         "In Advanced mode, ▦ Team shows its screen with the error; or press **Fix the team** to try again.")
+            lines.append(f"@{human} ⚠️ " + ", ".join(who(n) for n, _ in new_stuck) + (" keep" if many else " keeps") + " stopping. "
+                         "I'll try again by myself every half hour; press **Fix the team** to try now. "
+                         "If it keeps happening, switch to Advanced mode: ▦ Team shows the error on its screen.")
         if force and not lines:
             lines.append("🩺 Checked the team: everyone is running.")
         if lines:
