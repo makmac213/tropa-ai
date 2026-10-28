@@ -41,13 +41,15 @@ CHATROOM = os.path.join(HERE, "chatroom")
 BROADCAST = os.path.join(CHATROOM, "broadcast.txt")
 SYNC = os.path.join(CHATROOM, ".wake_sync.json")
 SKIP_WINDOWS = {"ControlCenter", "watcher"}
-ROUTING = ["lead", "wake", "wake_rules", "max_wakes_per_agent_per_hour", "auto_approve", "auto_compact", "compact_at_k", "compact_idle_min",
+ROUTING = ["lead", "wake", "wake_rules", "max_wakes_per_agent_per_hour", "auto_approve", "auto_heal", "auto_compact", "compact_at_k", "compact_idle_min",
            "cooldown_seconds", "debounce_seconds", "history_limit", "attention"]
 PANE_EVERY = 2.0          # seconds between screen captures
 PANE_LINES = 60
 WORKING_FOR = 6.0         # screen changed within this many seconds -> "working"
 SILENT_AFTER = 45.0       # idle this long after working, with an unanswered assignment -> nudge
 MAX_NUDGES = 2            # per assignment; then tell the human
+PROBE_EVERY = 30 * 60     # at a usage limit with no reset time on screen: check again this often
+HUNG_MIN = 30             # minutes "working" with nothing on screen changing but timers: interrupt the step (settings: hung_minutes)
 BOX = re.compile(r"[│┃║╭╮╰╯─━═┌┐└┘]+")
 
 
@@ -210,6 +212,24 @@ def resets_text(m):
     if when.count("(") > when.count(")"):
         when += ")"
     return ((m.group(1) or "").strip() + " " + when).strip()
+
+
+def resets_at(text, now=None):
+    """When a limit resets, as a timestamp, from "in 2 hours 13 minutes", "in 45m", "at 3pm", "3:30 PM (Asia/Manila)"; else None."""
+    now = now or time.time()
+    t = (text or "").lower()
+    m = re.search(r"\bin\s+(?:(\d+)\s*(?:hours?|hrs?|h)(?![a-z]))?\s*(?:(\d+)\s*(?:minutes?|mins?|m)(?![a-z]))?", t)
+    if m and (m.group(1) or m.group(2)):
+        return now + int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60
+    m = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", t) or re.search(r"\b(\d{1,2}):(\d{2})\b()", t)
+    if not m:
+        return None
+    h, mi = int(m.group(1)) % (12 if m.group(3) else 24), int(m.group(2) or 0)
+    if m.group(3) == "pm":
+        h += 12
+    lt = time.localtime(now)
+    at = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, h, mi, 0, 0, 0, -1))
+    return at + 86400 if at <= now else at
 
 
 def limit_in(rows):
@@ -411,6 +431,48 @@ DOC_LIMIT = 3000
 DOC_SKIP = {"node_modules", "__pycache__"}
 
 
+# ---------- the chat's side panel: what's running, what changed ----------
+ACTIVITY_EVERY = 15.0     # seconds between looks at the team's background commands and recently changed files
+FILES_SKIP = {"node_modules", "__pycache__", "agents", "dist", "build", "out", "target", "venv", "env", "coverage", "vendor", "attachments"}
+FILES_MAX_SEEN = 20000
+
+
+def recent_files(cfg, n=12, within=3 * 86400):
+    """The project files changed most recently (last 3 days): [{path, mtime, doc}] newest first. doc: the path inside
+    the docs folder when it's there (the chat opens those), else ''. Hidden folders, dependencies and secrets are left out."""
+    root = os.path.realpath(cfg.get("code_dir") or cfg["root"])
+    try:
+        docs = docs_base(cfg)
+    except ValueError:
+        docs = ""
+    now, seen, out = time.time(), 0, []
+    for cur, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in FILES_SKIP]
+        for f in files:
+            seen += 1
+            if f.startswith(".") or seen > FILES_MAX_SEEN:
+                continue
+            p = os.path.join(cur, f)
+            rel = os.path.relpath(p, root).replace(os.sep, "/")
+            if BLOCKED.search(rel):
+                continue
+            try:
+                m = os.stat(p).st_mtime
+            except OSError:
+                continue
+            if now - m < within:
+                out.append((m, p, rel))
+        if seen > FILES_MAX_SEEN:
+            break
+    out.sort(reverse=True)
+    res = []
+    for m, p, rel in out[:n]:
+        rp = os.path.realpath(p)
+        doc = os.path.relpath(rp, docs).replace(os.sep, "/") if docs and rp.startswith(docs + os.sep) else ""
+        res.append({"path": rel, "mtime": int(m * 1000), "doc": doc})
+    return res
+
+
 def docs_rel(cfg):
     return os.path.relpath(cfg["docs_path"], cfg["root"]).replace(os.sep, "/")
 
@@ -533,6 +595,11 @@ class Watcher:
         self.last_skills_post = 0
         self.slash_busy = {}    # agent -> [lock, commands queued] while slash commands run in its terminal
         self.slash_mu = threading.Lock()
+        self.probe_at = {}      # agent -> when to check again whether its usage limit has reset
+        self.real = {}          # agent -> (screen without digits and spinners, when that last changed)
+        self.unhung = {}        # agent -> times a hung step was interrupted
+        self.last_activity = 0  # last look at background commands and changed files (the chat's side panel)
+        self.activity_sig = None
 
     @staticmethod
     def mtime(p):
@@ -549,7 +616,7 @@ class Watcher:
         r = http(self.cfg, "/watch/poll", {"room": self.cfg["room"], "agents": agents,
                                            "tmux_session": self.cfg["tmux_session"],
                                            "settings": local, "settings_changed": changed,
-                                           "timeout": timeout, "caps": ["rename_agent", "keys"] + (["slash"] if slash else []) + (["skills"] if team_skills else [])}, timeout=timeout + 10)
+                                           "timeout": timeout, "caps": ["rename_agent", "keys", "activity"] + (["slash"] if slash else []) + (["skills"] if team_skills else [])}, timeout=timeout + 10)
         server = routing(r.get("settings") or {})
         if changed:
             log(f"pushed settings to TropaAI: {local}")
@@ -611,6 +678,15 @@ class Watcher:
             log(f"removed {name}: {out}")
             say(self.cfg, f"🗑 Removed @{name}: {out}. TEAM.md is updated." if r.returncode == 0 else f"@{self.cfg['human']} couldn't fully remove `{name}`: {out}")
             return
+        if ev.get("type") == "stop_proc":   # Stop on a "Running now" row
+            try:
+                pid = int(ev.get("pid") or 0)
+            except (TypeError, ValueError):
+                pid = 0
+            ok = pid > 1 and hasattr(reap, "stop_one") and reap.stop_one(self.cfg, pid)
+            log(f"stop {pid}: {'stopped' if ok else 'not one of the team’s commands'}")
+            self.last_activity = 0; self.activity_sig = None
+            return
         if ev.get("type") == "doc_read":
             self.send_doc(ev); return
         if ev.get("type") == "set_docs_dir":
@@ -618,7 +694,7 @@ class Watcher:
         if ev.get("type") == "write_plan":
             self.write_plan(ev); return
         if ev.get("type") == "restart":
-            self.restart(a or str(ev.get("agent", ""))); return
+            self.restart(a or str(ev.get("agent", "")), quiet=bool(ev.get("quiet"))); return
         if ev.get("type") == "keys":   # the human typing into the agent's terminal from the Team view
             if not a:
                 say(self.cfg, f"@{self.cfg['human']} no running agent named `{ev.get('agent')}`; nothing typed."); return
@@ -692,6 +768,11 @@ class Watcher:
         if first_run(pane_rows(self.cfg, a)) or (not approval_prompt(self.cfg, a) and stuck_menu(pane_rows(self.cfg, a))):   # some other question: don't answer it by accident
             self.held[a] = text
             log(f"{a} is waiting on a question in its terminal; wake held")
+            return
+        lim = limit_in(pane_rows(self.cfg, a))
+        if lim and lim[0] in ("credits", "limit") and self.heal_on():   # typed into a CLI at its limit, the wake is lost
+            self.held[a] = text
+            log(f"{a} can't work ({lim[0]}); wake held until it can again")
             return
         prompt = approval_prompt(self.cfg, a)
         if prompt:
@@ -849,6 +930,16 @@ class Watcher:
         return "\n".join(lines)[-3000:].replace("```", "ˋˋˋ")
 
     # -- docs viewer --
+    def post_activity(self, force=False):
+        """The team's background commands (dev servers…) and the recently changed files, for the chat's side panel."""
+        procs = reap.background(self.cfg) if hasattr(reap, "background") else []
+        files = recent_files(self.cfg)
+        sig = json.dumps([[(p["pid"], p["ports"]) for p in procs], files])
+        if sig == self.activity_sig and not force and time.time() - getattr(self, "activity_sent", 0) < 120:
+            return
+        http(self.cfg, "/watch/activity", {"room": self.cfg["room"], "procs": procs, "files": files})
+        self.activity_sig, self.activity_sent = sig, time.time()
+
     def post_docs(self, force=False):
         now = time.time()
         self.last_docs = now
@@ -1011,7 +1102,11 @@ class Watcher:
                     say(self.cfg, limit_alert(self.cfg, a, *lim))
                     log(f"{a}: {lim[0]} limit on screen; posted to room")
             else:
-                self.limit_since.pop(a, None); self.limit_alerted.pop(a, None)
+                self.limit_since.pop(a, None); self.limit_alerted.pop(a, None); self.probe_at.pop(a, None)
+            if lim and lim[0] in ("credits", "limit") and state == "idle" and not popup:
+                self.probe(a, lim, now)
+            if self.unhang(a, text, now, state == "working" and not prompt and not popup):
+                continue
             bad = auth_error(rows)
             if bad and self.auth_alerted.get(a) != bad:
                 say(self.cfg, auth_alert(self.cfg, a, bad))
@@ -1080,7 +1175,7 @@ class Watcher:
                 log(f"could not send screens: {e}")
 
     # -- model switch: live for Claude (/model), otherwise a restart that resumes the conversation --
-    def restart(self, a):
+    def restart(self, a, quiet=False):
         """Relaunch an agent's CLI in its tmux window (start_agent.sh replaces a running or dead window)."""
         if not re.fullmatch(r"[A-Za-z0-9._-]{1,40}", a or "") or not os.path.isfile(os.path.join(self.cfg["root"], "agents", a, "agent.json")):
             say(self.cfg, f"@{self.cfg['human']} there's no agent named `{a}` in this project."); return
@@ -1092,7 +1187,10 @@ class Watcher:
             say(self.cfg, f"@{self.cfg['human']} couldn't restart `{a}`:\n```\n{err or 'start_agent.sh failed'}\n```"); return
         how = "it picks up its conversation where it left off" if self.cfg.get("resume_sessions", True) not in (False, "false", 0) else "with a fresh session"
         log(f"restarted {a}")
-        say(self.cfg, f"↻ Restarted `{a}`: {how}.")
+        if not quiet:
+            say(self.cfg, f"↻ Restarted `{a}`: {how}.")
+        for d in (self.real, self.probe_at):
+            d.pop(a, None)
         self.last_capture = 0
 
     def rename(self, old, new):
@@ -1198,6 +1296,55 @@ class Watcher:
         self.lead_asked[a] = (time.time(), tokens)
         return (f" Also: your session is large (~{tokens // 1000}k tokens), so every turn re-sends all of it. When you're at a good "
                 f"stopping point (not mid-task), call tropa compact_me (room \"{self.cfg['room']}\"): your conversation is replaced by a summary.")
+
+    # -- auto-heal: usage limits that reset, steps that hang (the host helper restarts CLIs that stopped) --
+    def heal_on(self):
+        return self.cfg.get("auto_heal", True) not in (False, "false", 0, "0")
+
+    def probe(self, a, lim, now):
+        """At a usage limit or out of credits: once it should have reset (or every half hour), try again."""
+        if a not in self.probe_at:
+            at = resets_at(lim[2], now)
+            self.probe_at[a] = min(at + 60, now + 6 * 3600) if at else now + PROBE_EVERY
+            return
+        if now < self.probe_at[a] or not self.heal_on() or self.cfg.get("wake") == "paused":
+            return
+        self.probe_at[a] = now + PROBE_EVERY
+        text = self.held.pop(a, None) or (f"[tropa] Checking whether you can work again after your {'credits ran out' if lim[0] == 'credits' else 'usage limit'}. "
+                                          f"If you can, carry on where you stopped: post a one-line status in {self.cfg['room']} first.")
+        log(f"{a}: trying again after its {'credits ran out' if lim[0] == 'credits' else 'usage limit'}")
+        type_into(self.cfg, a, text)
+
+    def unhang(self, a, text, now, working):
+        """A step that has run for HUNG_MIN with only timers and spinners changing: interrupt it, and say why.
+        A second hang within the hour restarts the agent. True when it acted."""
+        norm = re.sub(r"[^A-Za-z]+", " ", text)
+        prev = self.real.get(a)
+        if not prev or prev[0] != norm or not working:
+            self.real[a] = (norm, now); return False
+        mins = self.cfg.get("hung_minutes", HUNG_MIN)
+        try:
+            mins = float(mins)
+        except (TypeError, ValueError):
+            mins = HUNG_MIN
+        if not mins or not self.heal_on() or now - prev[1] < mins * 60:
+            return False
+        self.real[a] = (norm, now)
+        hist = [t for t in self.unhung.get(a, []) if now - t < 3600]
+        self.unhung[a] = hist + [now]
+        if hist:
+            log(f"{a}: hung again; restarting it")
+            say(self.cfg, f"🩹 `{a}` got stuck on one step again (nothing changed for {int(mins)} min), so it was restarted.")
+            self.restart(a, quiet=True)
+            return True
+        log(f"{a}: nothing changed for {int(mins)} min while working; interrupting the step")
+        press(self.cfg, a, ["Escape"]); time.sleep(1.5)
+        type_into(self.cfg, a, f"[tropa] Your last step ran for {int(mins)} minutes without any progress on screen, so it was interrupted. "
+                               f"Carry on with your task another way (run long commands in the background, with a timeout), "
+                               f"and post a one-line status in {self.cfg['room']}.")
+        say(self.cfg, f"🩹 `{a}` was stuck on one step for {int(mins)} min, so that step was interrupted and it carries on.")
+        self.last_capture = 0
+        return True
 
     # -- silent stops: an agent finished a turn on assigned work without reporting in the room --
     def owed(self, a, msgs):
@@ -1344,6 +1491,12 @@ class Watcher:
                     self.post_skills()
                 except Exception as e:
                     log(f"could not send the skills list: {e}")
+            if time.time() - self.last_activity >= ACTIVITY_EVERY:
+                self.last_activity = time.time()
+                try:
+                    self.post_activity()
+                except Exception as e:
+                    log(f"could not send what's running: {e}")
             if time.time() - self.last_docs >= DOCS_EVERY:
                 try:
                     self.post_docs()

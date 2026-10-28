@@ -2,6 +2,21 @@
 
 ## 0.5.1 (October 2026)
 
+### Simple mode, chat-first
+- **Simple mode works like a chat app now.** One conversation in the middle with a large message box. Your messages are bubbles. Replies meant for you (the lead answering you, @mentions of you, questions) show with the agent's name and face. The team's talk among itself and TropaAI's setup notes fold into *N team updates*. Message numbers, times and tags are gone.
+- **Questions are cards with a button per answer** (or type your own); answered ones say what you chose.
+- **A new side panel shows what the team is doing:** each member's status in plain words, the commands running in the background (dev servers, with **Open** and **Stop**), the decisions made so far and what still needs you, and the files changed lately. On a phone it opens from the team's faces at the top.
+- **New project is one question:** *What should your team work on?* TropaAI picks the team from what you write, or you click one of the suggested teams. *See all teams* still opens the full team builder.
+- **The header is the project's name, a ⋯ menu and the panel switch.** The sidebar lists your projects with **New project** on top.
+
+### Auto-heal
+- **Teams no longer stall when an agent can't work.** With *Auto-heal* (on by default, ▦ Team bar), TropaAI keeps the room moving by itself and says what it did with a 🩹:
+  - **Usage limits and credits:** wakes for an agent at its limit wait until it's back instead of being lost; the lead (or a teammate) hears it with the agent's open cards; a lead at its limit gets a teammate standing in, so your messages are still answered; and the agent is tried again once its limit should have reset, then carries on.
+  - **A quiet card in Doing:** a nudge, then a restart that resumes its conversation, then the lead is asked to reassign it and you're told.
+  - **A quiet room with unfinished cards:** the lead is woken to get the next card moving.
+  - **A step that hangs for 30 minutes:** interrupted, and the agent carries on another way; a second hang restarts it.
+- Nothing happens while the room is paused, an agent waits on an approval, or a question waits on you.
+
 ### Install
 - **The installer is friendlier and checks everything before installing TropaAI.** It runs in 4 numbered steps: check the computer (✅/❌ for git, Python, tmux, Node.js and an AI agent), install what's missing after asking once, install TropaAI, open it. New: it installs Apple's Command Line Tools (and waits for Apple's window to finish), Homebrew when a Mac needs it for tmux, and an AI agent (Claude Code, OpenCode or both; `TROPA_CLI` chooses up front). It warns before anything asks for a password, and adds what it installed to your PATH. If something can't be installed it stops before installing TropaAI and says exactly what to do, so there's never a half-working install.
 - **Windows setup for everyone:** download **TropaAI-Setup.cmd** and double-click it (or paste the PowerShell line). It turns on WSL with one Windows permission prompt and, if Windows needs a restart, **carries on by itself after it**; installs Ubuntu and walks you through creating your Linux user in the same run (no more "open Ubuntu, then run the installer again"); installs Linux tools without asking for a password; lets the Linux installer add Node.js and an AI agent; adds **TropaAI shortcuts** to the Desktop and Start menu (and, if you like, starts it when you sign in); and offers to sign you in to Claude Code or OpenCode right there. Problems such as virtualization being off are explained in plain words, and each run is logged to `%TEMP%\tropa-install.log`.

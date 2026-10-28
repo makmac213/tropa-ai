@@ -113,13 +113,16 @@ The name is saved in the chat, so it outlives restarts. Every project's team pic
 
 The switch at the top of the sidebar picks how much you see. New users start in **Simple**; the choice is remembered.
 
-- **Simple** is for building and running a team without the technical details. **+** opens **Build your team**:
-  1. Start from a [ready-made team](#ready-made-teams), or start empty.
-  2. Adjust who's on it: rename people, change roles, read and edit each one's job, pick the lead, remove people. **Hire someone** adds a role from the library (every role in every team) or one you describe.
-  3. Say what the team should work on.
-  4. Choose where it's saved: a new folder, or an existing one (**Browse…**).
-
-  In a project, the side panel's **Your team** shows each member's status in plain words, with **Allow / Don't allow** when one needs your OK. Terminals, models, usage and public links are hidden.
+- **Simple** works like a chat app: one conversation with your team, and a side panel showing what it's doing.
+  - **New project** opens one question: *What should your team work on?* Describe the work and press **Start**. TropaAI picks a [ready-made team](#ready-made-teams) from what you wrote (a website, an app, writing, research, bookkeeping…), names the project and creates it. To choose yourself, click a team, or **See all teams** to open **Build your team**: rename people, change roles and jobs, pick the lead, hire from the role library. **Use a folder from my computer** works on a folder you already have and leaves it untouched.
+  - **The chat** shows your messages as bubbles and the replies meant for you: the lead answering you, anything that @mentions you, questions for you. The team talking among itself and TropaAI's own notes fold into one line, *5 team updates*, which opens with a click. A line at the bottom says who's working right now.
+  - **Questions come as cards** with a button per answer, or type your own. Once answered, the card says what you chose.
+  - **The side panel** (the button at the top right hides it; on a phone, tap the team's faces) has four parts:
+    - **Team:** each member's status in plain words, such as *Building the menu page*, *Waiting for your answer* or *Paused: usage limit*, with **Allow / Don't allow** when one needs your OK.
+    - **Running now:** what the agents left running in the background, such as a dev server, with a link to open it and **Stop**.
+    - **Decisions:** what you answered, what went ahead without an answer, and what still needs you.
+    - **Files:** what the team changed lately and what was shared in the chat.
+  - Everything else (task board, docs, skills, search, download, pause, Fix the team) is in the **⋯** menu. Terminals, models, usage and public links are hidden.
 - **Advanced** is everything below: the full New project form, the Team view with live terminals, models and CLIs per agent, usage, and public links.
 
 ### Option A: start a project from the browser (recommended)
@@ -398,6 +401,21 @@ TropaAI keeps a running team running, so you don't need a terminal when somethin
 - **It gives up politely.** The watcher is restarted at most 3 times an hour and each agent twice. After that it tells you once that something keeps stopping, instead of looping.
 - **It never starts a stopped team.** If the whole team isn't running (you stopped it, or the computer restarted), starting it uses your AI subscription, so that's your call.
 - **🩺 Fix the team** (Simple: the side panel's *Your team*; Advanced: the ▦ Team bar) runs the same check right away, without the hourly limits, and reports what it did. If the team isn't running, it starts it.
+
+### 🩹 Auto-heal: the team keeps itself moving
+
+Teams used to stall when one agent stopped: a lead at its usage limit left your messages unanswered, a card sat in *Doing* after its agent went quiet, or the whole room waited on nobody. With **Auto-heal** (on by default; ▦ Team bar → *Auto-heal*), TropaAI does something about it and says so in the room with a 🩹:
+
+- **An agent at its usage limit or out of credits:**
+  - wakes for it wait until it can work again, instead of being typed into a CLI that drops them;
+  - whoever runs the team hears it, with that agent's open cards, and moves what's urgent to a teammate;
+  - if it's the **lead**, a teammate stands in: your messages go to it until the lead is back;
+  - once the limit should have reset (the time on screen, or every 30 minutes), the agent is tried again and carries on where it stopped. The room says *✅ `dev` is working again*.
+- **A card that goes quiet in Doing** (15 minutes, the *needs attention* setting): first a nudge, then 10 minutes later a restart (it resumes its conversation), then the lead is asked to reassign or split it and you're told.
+- **A room gone quiet with unfinished cards** (20 minutes with nobody working or talking, and no question waiting on you): the lead is woken to get the next card moving. At most twice until someone talks again.
+- **A step that hangs** (30 minutes "working" with only a timer changing): the step is interrupted and the agent is told to carry on another way; if it hangs again within the hour, the agent is restarted. `hung_minutes` in `.agent_sync/settings.json` changes the 30 (0 turns it off).
+
+Nothing is done while the room is paused, while an agent waits on an approval, or while you owe the team an answer.
 
 `tropa panel` still has everything for the terminal; the browser covers the same day-to-day work: Start, Fix, Restart, Wake, add or remove agents, change models and settings.
 
