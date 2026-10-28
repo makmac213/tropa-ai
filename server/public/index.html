@@ -881,6 +881,142 @@
     .card pre.screen, .grid.cols-1 pre.screen, .graph-side pre.screen { height: 240px; }
     .grid.cols-2, .grid.cols-3 { grid-template-columns: minmax(0, 1fr); }
   }
+
+  /* Simple's New project: one box, like starting a chat */
+  .np-start { max-width: 700px; margin: 0 auto; min-height: 100%; padding: 9vh 24px 40px; display: flex; flex-direction: column; gap: 22px; position: relative; }
+  .np-start .bd-x { position: absolute; top: 16px; right: 12px; }
+  .np-hi { text-align: center; color: var(--muted); font-size: 15px; margin-bottom: -12px; }
+  .np-start h1 { margin: 0; text-align: center; font-size: 32px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+  .np-box { border: 1px solid var(--line); border-radius: 24px; background: var(--panel); padding: 16px 12px 10px 20px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 2px 14px var(--shadow); }
+  .np-box:focus-within { border-color: var(--accent); }
+  .np-box textarea { border: 0; background: none; padding: 0; min-height: 76px; font-size: 16px; line-height: 1.5; }
+  .np-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .np-folder { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 13px; cursor: pointer; max-width: 100%; }
+  .np-folder:hover { border-color: var(--accent); } .np-folder .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: none; }
+  .np-clear { background: none; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 6px; height: 40px; }
+  .np-go { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 12px; border: 0; background: var(--fill-accent); color: var(--on-accent); font-weight: 600; cursor: pointer; }
+  .np-go:disabled { opacity: .55; cursor: default; }
+  .np-q { text-align: center; color: var(--muted); font-size: 13.5px; margin-bottom: 10px; }
+  .np-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .np-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 14px; cursor: pointer; }
+  .np-chip:hover { border-color: var(--accent); } .np-chip[aria-pressed="true"] { border: 2px solid var(--accent); background: var(--accent-weak); padding: 0 15px; font-weight: 600; }
+  .np-chip svg { color: var(--accent); }
+  .np-more { background: none; border: 0; color: var(--accent); font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px; padding: 0 8px; }
+  .np-who { display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text); text-align: center; flex-wrap: wrap; }
+  .np-who .s-avs .sav { width: 24px; height: 24px; font-size: 10px; border-color: var(--bg); }
+  .np-who .linkbtn { margin: 0; }
+  .np-start .err { color: var(--danger); text-align: center; font-size: 13.5px; min-height: 18px; }
+  @media (max-width: 760px) { .np-start { padding: 56px 16px 24px; } .np-start h1 { font-size: 26px; } .np-chips { justify-content: flex-start; } .np-q, .np-who { justify-content: flex-start; text-align: left; } }
+  /* ---------- Simple mode, chat-first: one conversation, a side panel with what the team is doing ---------- */
+  .hbtn { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px; background: none; color: var(--muted); cursor: pointer; flex: none; }
+  .hbtn:hover, .hbtn[aria-expanded="true"] { background: var(--panel2); color: var(--text); }
+  .hbtn.on { background: var(--panel2); color: var(--text); }
+  .s-team-btn { width: auto; padding: 0 4px; }
+  .s-avs { display: flex; } .s-avs .sav { margin-left: -7px; border: 2px solid var(--panel); } .s-avs .sav:first-child { margin-left: 0; }
+  .sav { position: relative; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; flex: none; }
+  .sav i { position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--panel); background: var(--idle); }
+  .sav i.busy { background: var(--ok); } .sav i.wait { background: var(--fill-warn); } .sav i.lim { background: var(--fill-lim); } .sav i.bg { background: var(--run); }
+  .more-menu { position: absolute; right: 12px; top: 54px; z-index: 30; min-width: 230px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 30px var(--shadow); padding: 6px; display: flex; flex-direction: column; }
+  .more-menu button { display: flex; align-items: center; gap: 10px; text-align: left; background: none; border: 0; border-radius: 8px; padding: 9px 10px; cursor: pointer; color: var(--text); font-size: 14px; }
+  .more-menu button:hover, .more-menu button:focus-visible { background: var(--panel2); }
+  .more-menu button .k { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .more-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+  #newProjBtn { display: none; }
+  body.simple #newProjBtn { display: flex; align-items: center; gap: 10px; margin: 10px 12px 6px; width: calc(100% - 24px); height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-weight: 600; cursor: pointer; }
+  body.simple #newProjBtn:hover { border-color: var(--accent); }
+  body.simple #secFeeds, body.simple #feeds, body.simple #secAgents, body.simple #agents, body.simple #newRoom { display: none !important; }
+  body.simple .room { padding: 9px 14px; margin: 1px 8px; width: calc(100% - 16px); border-radius: 10px; color: var(--text); }
+  body.simple .room .hash { display: none; }
+  body.simple .room.active { background: var(--panel2); font-weight: 600; }
+  body.simple .me input { color: var(--text); }
+  body.simple main > header { min-height: 64px; gap: 6px; }
+  body.simple #roomTopic { visibility: hidden; }
+  body.simple header .dl-btn:not(#backBtn), body.simple header .dl-wrap, body.simple header .search:not(.show) { display: none !important; }
+  body.simple header .search.show { display: block; }
+  body.simple .msgs { padding: 24px 0 8px; }
+  body.simple .composer { border-top: 0; background: none; padding: 8px 20px 18px; }
+  body.simple .composer > * { max-width: 720px; margin-left: auto; margin-right: auto; }
+  body.simple .composer .row { border: 1px solid var(--line); border-radius: 24px; background: var(--panel); padding: 8px 8px 8px 6px; align-items: flex-end; gap: 4px; box-shadow: 0 2px 12px var(--shadow); }
+  body.simple .composer .row:focus-within { border-color: var(--accent); }
+  body.simple .composer textarea { border: 0; background: none; padding: 9px 4px; min-height: 40px; font-size: 15px; }
+  body.simple .composer .attach { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
+  body.simple .composer .send { width: 40px; height: 40px; padding: 0; border-radius: 12px; display: grid; place-items: center; }
+  body.simple .hint-row .hint { visibility: hidden; }
+  .sconv { max-width: 720px; margin: 0 auto; padding: 0 24px; display: flex; flex-direction: column; gap: 18px; }
+  .sm { position: relative; }
+  .sm .actions { top: -14px; right: 0; }
+  .sm:hover .actions, .sm:focus-within .actions { display: flex; }
+  .sm-me { align-self: flex-end; max-width: 80%; display: flex; flex-direction: column; align-items: flex-end; }
+  .sm-me .quote { max-width: 100%; align-self: stretch; text-align: right; }
+  .sm-me .sb { background: var(--panel2); border: 1px solid var(--line); border-radius: 20px 20px 6px 20px; padding: 10px 15px; font-size: 15px; line-height: 1.55; }
+  .sm-ag { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
+  .sm-ag.cont { margin-top: -10px; } .sm-ag.cont .sav { visibility: hidden; height: 0; }
+  .sm-ag .sn { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
+  .sm-ag .body, .sm-note .body { font-size: 15px; line-height: 1.6; }
+  .sm .quote { margin-bottom: 6px; }
+  .sm-note { display: flex; gap: 10px; align-items: flex-start; justify-content: center; font-size: 13px; color: var(--muted); padding: 0 12px; }
+  .sm-note .body { font-size: 13.5px; color: var(--text); text-align: left; } .sm-note svg { flex: none; margin-top: 3px; }
+  .sm-note .body p:last-child { margin-bottom: 0; }
+  .sfold { align-self: flex-start; margin-left: 42px; display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 13px; cursor: pointer; }
+  .sfold:hover { color: var(--text); border-color: var(--accent); }
+  .sfold svg { transition: transform .15s; } .sfold[aria-expanded="true"] svg { transform: rotate(90deg); }
+  .sfold-list { margin-left: 42px; border-left: 2px solid var(--line); padding: 2px 0 2px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .sfold-list .su { font-size: 13.5px; } .sfold-list .su .who { font-weight: 600; margin-right: 6px; } .sfold-list .su .body { display: inline; color: var(--text); }
+  .sfold-list .su .body p { display: inline; margin: 0; } .sfold-list .su.k-system .body { color: var(--muted); }
+  .sworking { margin-left: 42px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+  .sdots { display: flex; gap: 4px; } .sdots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: sdot 1.2s infinite ease-in-out; }
+  .sdots i:nth-child(2) { animation-delay: .15s; } .sdots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes sdot { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .sdots i { animation: none; } }
+  .sq { margin-top: 8px; border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--panel); }
+  .sq-h { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .sq-q { font-size: 15.5px; font-weight: 600; line-height: 1.45; } .sq-q p { margin: 0 0 4px; }
+  .sq-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sq-opts .qopt { min-height: 44px; border-radius: 22px; padding: 8px 16px; font-size: 14px; font-weight: 500; background: var(--panel); }
+  .sq-opts .qopt.rec { background: var(--accent-weak); }
+  .sq .qother input { border-radius: 22px; padding: 9px 14px; } .sq .qother .tbtn { border-radius: 22px; padding: 0 16px; }
+  .sq-done { font-size: 13.5px; color: var(--ok); font-weight: 600; } .sq-f { display: flex; gap: 12px; font-size: 12.5px; color: var(--muted); align-items: center; }
+  .sempty { text-align: center; color: var(--muted); padding: 60px 24px; font-size: 15px; } .sempty b { color: var(--text); display: block; font-size: 18px; margin-bottom: 6px; }
+  /* the side panel in Simple mode */
+  body.simple .rside { max-width: 340px; min-width: 300px; background: var(--bg); padding-bottom: 20px; }
+  body.simple .rside .rs-top { padding: 14px 12px 4px 18px; }
+  body.simple .rside details { padding: 0 0 10px; }
+  body.simple .rside summary { font-size: 12.5px; text-transform: none; letter-spacing: 0; color: var(--text); padding: 12px 18px 6px; }
+  .sp-row { display: flex; gap: 10px; align-items: flex-start; padding: 7px 18px; }
+  .sp-row .bd { min-width: 0; flex: 1; } .sp-row .t { font-size: 14px; font-weight: 600; display: flex; gap: 6px; align-items: baseline; }
+  .sp-row .t .lab { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .sp-row .s { font-size: 13px; color: var(--muted); line-height: 1.4; } .sp-row .s.warn { color: var(--human); font-weight: 600; } .sp-row .s.lim { color: var(--lim); font-weight: 600; }
+  .sp-row .s.now { color: var(--text); }
+  .sp-row .dotx { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-top: 7px; flex: none; }
+  .sp-row .mini { height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 12.5px; cursor: pointer; flex: none; }
+  .sp-row .mini:hover { border-color: var(--danger); color: var(--danger); }
+  .sp-row a { font-size: 12.5px; color: var(--accent); }
+  .sp-dec { display: flex; gap: 8px; padding: 6px 18px; font-size: 13px; line-height: 1.45; } .sp-dec svg { flex: none; margin-top: 2px; }
+  .sp-dec .who { color: var(--muted); } .sp-dec.open { cursor: pointer; } .sp-dec.open .who { color: var(--human); font-weight: 600; }
+  .sp-dec.open:hover { background: var(--panel2); }
+  .sp-file { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 2px 18px; font-size: 13.5px; color: var(--text); text-decoration: none; }
+  .sp-file .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .sp-file .ago { font-size: 12px; color: var(--muted); flex: none; }
+  .sp-file[data-rs-doc], a.sp-file { cursor: pointer; } .sp-file[data-rs-doc]:hover, a.sp-file:hover { background: var(--panel2); }
+  .sp-file svg { flex: none; color: var(--muted); }
+  .sp-empty { padding: 2px 18px 6px; color: var(--muted); font-size: 13px; }
+  .sp-fix { padding: 6px 18px 2px; font-size: 13px; color: var(--muted); } .sp-fix .linkbtn { margin: 0; }
+  .rs-back { display: none; }
+  body.simple .rs-top .rs-back { margin: 0 4px 0 -8px; } body.simple .rs-top span { flex: 1; }
+  button.sp-file, button.sp-dec { width: 100%; background: none; border: 0; text-align: left; font: inherit; color: var(--text); }
+  @media (max-width: 760px) {
+    body.simple .rside { position: fixed; inset: 0; z-index: 25; max-width: none; min-width: 0; width: 100%; border: 0; display: none; transform: none; box-shadow: none; transition: none; }
+    body.simple.sheet-open .rside { display: block; }
+    body.simple .rside .rs-top [data-rs-toggle] { display: none; }
+    body.simple .rs-back { display: grid; }
+    body.simple .rside.off > :not(.rs-top) { display: block; }
+    .sconv { padding: 0 14px; } .sm-me { max-width: 88%; }
+    .sfold, .sfold-list, .sworking, .sq-wrap { margin-left: 0; }
+    .sq-opts { flex-direction: column; } .sq-opts .qopt { border-radius: 12px; }
+    body.simple .composer { padding: 6px 10px 12px; }
+    body.simple .hint-row { display: none; }
+  }
+  @media (min-width: 761px) { body.simple #sTeamBtn { display: none !important; } }
+  @media (max-width: 760px) { body.simple #panelBtn { display: none !important; } }
 </style>
 </head>
 <body>
@@ -892,14 +1028,15 @@
       <button type="button" role="radio" data-mode="advanced" aria-checked="false" title="Everything: terminals, models, CLIs, usage">Advanced</button>
     </div>
     <div class="side-scroll">
-      <div class="sec">Feeds</div>
+      <button type="button" id="newProjBtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>New project</button>
+      <div class="sec" id="secFeeds">Feeds</div>
       <div id="feeds"></div>
-      <div class="sec">Projects <button id="newRoom" title="New project room">+</button></div>
+      <div class="sec" id="secProjects"><span id="secProjectsLabel">Projects</span> <button id="newRoom" title="New project room">+</button></div>
       <div id="projects"></div>
-      <div class="sec">Agents <span id="agentCount" style="margin-left:6px"></span><button id="agentScope" hidden style="font-size:11px;text-transform:none;letter-spacing:0"></button></div>
+      <div class="sec" id="secAgents">Agents <span id="agentCount" style="margin-left:6px"></span><button id="agentScope" hidden style="font-size:11px;text-transform:none;letter-spacing:0"></button></div>
       <div id="agents"></div>
     </div>
-    <div class="me">You are <input id="myName" spellcheck="false"><button class="gear" id="bellBtn" title="Notifications"></button><button class="gear" id="themeBtn" title="Theme"></button><button class="gear" id="settingsBtn" title="Settings">⚙</button></div>
+    <div class="me">You are <input id="myName" spellcheck="false" aria-label="Your name"><button class="gear" id="bellBtn" title="Notifications"></button><button class="gear" id="themeBtn" title="Theme"></button><button class="gear" id="settingsBtn" title="Settings">⚙</button></div>
   </aside>
   <main>
     <header>
@@ -926,6 +1063,11 @@
       <button class="dl-btn" id="usageBtn" hidden title="Tokens and API-equivalent cost for this project">📊 Usage</button>
       <button class="dl-btn" id="teamBtn" hidden title="See every agent's screen live">▦ Team</button>
       <input class="search" id="search" placeholder="Search…">
+      <button type="button" class="dl-btn" id="backBtn" hidden>← Back to the chat</button>
+      <button type="button" class="hbtn s-team-btn" id="sTeamBtn" hidden aria-label="What your team is doing"><span class="s-avs" id="sTeamAvs"></span></button>
+      <button type="button" class="hbtn" id="moreBtn" hidden aria-label="More options" aria-haspopup="menu" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+      <button type="button" class="hbtn" id="panelBtn" hidden aria-label="Hide the side panel" aria-pressed="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path></svg></button>
+      <div class="more-menu" id="moreMenu" role="menu" hidden></div>
     </header>
     <div class="room-note" id="roomNote" hidden></div>
     <div class="chatrow" id="chatRow"><div class="msgs" id="msgs"></div><button type="button" class="newmsgs" id="newMsgs" hidden>↓ New messages</button><aside class="rside" id="rside" hidden aria-label="Background tasks, files and docs"></aside></div>
@@ -1273,6 +1415,8 @@
   const myName = () => ($('#myName').value.trim() || state.human);
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const roomLabel = (id) => id === ALL ? 'All activity' : id === USAGE ? 'Usage' : id === 'general' ? '#general' : '#' + id.replace(/^project:/, '');
+  // Simple mode names a project in words: its topic when that's a short name ("Bakery website"), else "Bakery website" from bakery-website
+  const projectTitle = (r) => { const tp = String(r?.topic || '').trim(); if (tp && tp.length <= 48 && !/\n/.test(tp)) return tp; const s = String(r?.project || r?.id || '').replace(/^project:/, '').replace(/[-_]+/g, ' '); return s.charAt(0).toUpperCase() + s.slice(1); };
 
   function hslToRgb(h, s, l) {
     const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
@@ -1340,7 +1484,7 @@
     const projects = state.rooms.filter((r) => r.kind === 'project');
     const pbadges = (id) => { const nq = openQs(id).length, na = (state.attention[id]?.items || []).length;
       return `${nq ? `<span class="pb q" title="${nq} question${nq === 1 ? '' : 's'} waiting on you">${nq}?</span>` : ''}${na ? `<span class="pb a" title="${na} item${na === 1 ? '' : 's'} need attention">${na}!</span>` : ''}`; };
-    $('#projects').innerHTML = projects.length ? projects.map((r) => btn(r.id, r.project, `${pbadges(r.id)}<span class="del" data-del-project="${esc(r.project)}" title="Delete project">×</span>`)).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">No project rooms yet</span></div>`;
+    $('#projects').innerHTML = projects.length ? projects.map((r) => btn(r.id, simple() ? projectTitle(r) : r.project, `${pbadges(r.id)}<span class="del" data-del-project="${esc(r.project)}" title="Delete project">×</span>`)).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">No project rooms yet</span></div>`;
     const proj = projectOf(state.current);
     const scoped = proj && state.agentScope === 'project';
     const list = scoped ? state.agents.filter((a) => (a.project || '').toLowerCase() === proj) : state.agents;
@@ -1405,7 +1549,7 @@
   function renderHeader() {
     renderRoomNote();
     const r = state.rooms.find((x) => x.id === state.current);
-    $('#roomTitle').textContent = state.searching ? `Search: “${state.searching}”` : roomLabel(state.current);
+    $('#roomTitle').textContent = state.searching ? `Search: “${state.searching}”` : simple() && projectOf(state.current) ? projectTitle(r) : roomLabel(state.current);
     $('#roomTopic').textContent = state.searching ? '' : state.current === ALL ? 'Every room, newest at the bottom' : (r?.topic || '');
     const proj = projectOf(state.current);
     $('#teamBtn').hidden = !proj || !!state.searching;
@@ -1434,6 +1578,8 @@
     $('#teamBtn').title = state.view === 'team' && proj ? 'Back to the chat' : "See every agent's screen live";
     const readOnly = state.current === ALL || !!state.searching;
     $('#input').placeholder = readOnly ? 'Read-only view — pick a room to post (slash commands still work)' : `Message ${roomLabel(state.current)}  —  @agent to mention, / for commands`;
+    $('#secProjectsLabel').textContent = simple() ? 'Your projects' : 'Projects';
+    renderSimpleHeader();
   }
 
   function msgHtml(m, prev, showRoom) {
@@ -1455,8 +1601,11 @@
         ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
         <div class="body">${md(m.content)}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}${oq ? `<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} — answer</button>` : ''}
       </div>
-      <div class="actions"><button data-react="up" data-rxmsg="${m.id}" class="${myRx(m) === 'up' ? 'on' : ''}" title="Approve (👍)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} to go ahead` : ''}" aria-label="Thumbs up">👍</button><button data-react="down" data-rxmsg="${m.id}" class="${myRx(m) === 'down' ? 'on' : ''}" title="Disapprove (👎)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} not to go ahead` : ''}" aria-label="Thumbs down">👎</button><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? '■ Stop' : '▶ Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>
+      ${actsHtml(m)}
     </div>`;
+  }
+  function actsHtml(m) {
+    return `<div class="actions"><button data-react="up" data-rxmsg="${m.id}" class="${myRx(m) === 'up' ? 'on' : ''}" title="Approve (👍)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} to go ahead` : ''}" aria-label="Thumbs up">👍</button><button data-react="down" data-rxmsg="${m.id}" class="${myRx(m) === 'down' ? 'on' : ''}" title="Disapprove (👎)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} not to go ahead` : ''}" aria-label="Thumbs down">👎</button><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? '■ Stop' : '▶ Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>`;
   }
   // 👍 / 👎: a quick approve or disapprove. An agent whose message you react to is told; on its question, it's the answer.
   const myRx = (m) => (m.reactions || []).find((r) => r.who.toLowerCase() === myName().toLowerCase())?.kind || '';
@@ -1556,19 +1705,25 @@
     const prevHeight = box.scrollHeight;
     const list = state.searching ? (state.messages.get('__search__') || []) : (state.messages.get(state.current) || []);
     const showRoom = state.current === ALL || !!state.searching;
+    if (!list.length && simpleChat()) { box.innerHTML = `<div class="sempty"><b>Say hello to your team</b>Tell the lead what you'd like done. It plans the work with the team and asks you when something needs your say.</div>`; return; }
     if (!list.length) {
       box.innerHTML = state.searching ? `<div class="empty">No matches.</div>` : `<div class="empty">No messages in ${esc(roomLabel(state.current))} yet.<br><br>
         Agents join with the MCP tool <code>register</code> and post with <code>send_message</code>.<br>You can type below to start the conversation.</div>`;
       return;
     }
     let html = list.length >= 100 && !state.searching ? `<button class="older" id="older">Load older messages</button>` : '';
-    let prev = null, lastDay = '';
-    for (const m of list) {
-      const day = fmtDay(m.created_at);
-      if (day !== lastDay) { html += `<div class="day">${day}</div>`; lastDay = day; prev = null; }
-      html += msgHtml(m, prev, showRoom); prev = m;
+    if (simpleChat()) html += simpleConv(list);
+    else {
+      let prev = null, lastDay = '';
+      for (const m of list) {
+        const day = fmtDay(m.created_at);
+        if (day !== lastDay) { html += `<div class="day">${day}</div>`; lastDay = day; prev = null; }
+        html += msgHtml(m, prev, showRoom); prev = m;
+      }
     }
+    const typed = [...box.querySelectorAll('form[data-qform] input')].filter((i) => i.value).map((i) => [i.closest('form').dataset.qform, i.value, i === document.activeElement]);
     box.innerHTML = html;
+    for (const [id, v, f] of typed) { const i = box.querySelector(`form[data-qform="${id}"] input`); if (i) { i.value = v; if (f) i.focus(); } }
     if (tts.current) document.getElementById('m' + tts.current)?.classList.add('speaking');
     if (keepScroll) box.scrollTop = box.scrollHeight - prevHeight;
     else if (bottom || (stick && autoScroll && atBottom)) toBottom();
@@ -1649,7 +1804,7 @@
     ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
     ws.onopen = async () => {
       retry = 0; $('#conn').classList.add('on'); $('#conn').title = 'live';
-      await refreshState(); await loadRoom(state.current).catch(() => {}); renderMessages({ bottom: true }); applyView();
+      await refreshState(); await loadRoom(state.current).catch(() => {}); renderMessages({ bottom: true }); applyView(); simpleHome();
     };
     ws.onclose = () => { $('#conn').classList.remove('on'); $('#conn').title = 'reconnecting…'; setTimeout(connect, Math.min(10000, 500 * 2 ** retry++)); };
     ws.onmessage = (ev) => {
@@ -1689,10 +1844,14 @@
       else if (e.type === 'agent_deleted') { state.agents = state.agents.filter((a) => a.name !== e.name); renderSidebar(); }
       else if (e.type === 'docs') docsChanged(e.docs);
       else if (e.type === 'team') { state.team[e.team.room_id] = e.team; if (e.team.room_id === state.current) { renderSidebar(); if (state.view === 'team') renderTeam(); } }
+      else if (e.type === 'activity') {
+        const t = state.team[e.room_id]; if (t) t.activity = e.activity;
+        if (e.room_id === state.current) renderRside();
+      }
       else if (e.type === 'panes') {
         const t = state.team[e.room_id] || (state.team[e.room_id] = { room_id: e.room_id, watching: true, agents: Object.keys(e.panes), panes: {}, settings: {} });
         t.watching = true; t.panes = { ...t.panes, ...e.panes };
-        if (e.room_id === state.current) { renderSidebar(); if (state.view === 'team') updateCards(); }
+        if (e.room_id === state.current) { renderSidebar(); renderSimpleHeader(); if (state.view === 'team') updateCards(); if (simpleChat()) renderWorking(); }
       }
       else if (e.type === 'attachment') {
         const a = e.attachment; let hit = false;
@@ -2699,50 +2858,40 @@
     if (state.files[room] === undefined) { state.files[room] = null; loadFiles(room); }
     if (proj && state.docs[room] === undefined && !state.docsAsked[room]) { state.docsAsked[room] = true; loadDocs(room).then(() => { if (room === state.current) renderRside(); }); }
     const sec = (key, title, n, body) => `<details data-rs="${key}" ${rsOpen(key) ? 'open' : ''}><summary>${title}${n ? `<span class="n">${n}</span>` : ''}</summary>${body}</details>`;
-    let html = `<div class="rs-top"><span>Room</span><button type="button" data-rs-toggle title="${off ? 'Show' : 'Hide'} this panel">${off ? '⟨' : '⟩'}</button></div>`;
-    if (proj && simple()) {
-      const t = state.team[room], lead = String(t?.settings?.lead || '').toLowerCase();
-      const body = !t?.watching ? `<div class="rs-empty">The team isn't running.</div><div class="rs-ask" style="padding: 0 14px 6px">${state.host?.connected ? '<button type="button" class="tbtn pri" data-fixteam>▶ Start the team</button>' : helperOff('it can\'t be started yet')}</div>`
-        : (t.agents || []).map((n) => {
-          const p = t.panes?.[n] || {}, a = state.agents.find((x) => x.name.toLowerCase() === n.toLowerCase());
-          const st = p.state === 'approval' ? ['wait', 'Needs your OK'] : p.limit ? ['lim', `Paused: ${limitLabel(p)}${p.limit.kind === 'credits' ? ' (top up the account)' : ''}`] : p.state === 'working' ? ['busy', 'Working'] : bgTasks(p) ? ['bg', 'Running a long task'] : p.state ? ['idle', 'Waiting for work'] : ['', 'Not started'];
-          return `<div class="rs-item" style="cursor:default"><span class="dot ${st[0]}"></span><div class="bd">
-            <div class="t"><b>${esc(n)}</b>${n.toLowerCase() === lead ? '<span class="lab" style="color:var(--muted)">lead</span>' : ''}</div>
-            <div class="s">${esc(st[1])}${a?.status && p.state === 'working' ? ` · ${esc(a.status)}` : a?.description ? ` · ${esc(a.description)}` : ''}</div>
-            ${p.state === 'approval' ? `<div class="s" style="white-space:normal">${esc(p.prompt || 'wants to do something that needs your permission')}</div>
-              <div class="rs-ask"><button type="button" class="tbtn pri" data-approve="${esc(n)}" data-act="yes">Allow</button><button type="button" class="tbtn" data-approve="${esc(n)}" data-act="no">Don't allow</button></div>` : ''}</div></div>`;
-        }).join('');
-      const fix = t?.watching ? `<div class="rs-empty" style="padding-top: 6px">Something not working? <button type="button" class="linkbtn" data-fixteam style="margin: 0">🩺 Fix the team</button></div>` : '';
-      html += sec('who', 'Your team', t?.watching ? (t.agents || []).length : '', body + fix);
-    }
-    if (proj && !simple()) {
-      const t = state.team[room];
-      const rows = (t?.agents || []).map((n) => ({ n, p: t.panes?.[n], bg: bgTasks(t.panes?.[n]) })).filter((x) => x.bg);
-      const body = !t?.watching ? `<div class="rs-empty">The team isn't running.</div>`
-        : !rows.length ? `<div class="rs-empty">No agent is running a background task.</div>`
-        : rows.map(({ n, p, bg }) => {
-          const a = state.agents.find((x) => x.name.toLowerCase() === n.toLowerCase());
-          const how = p.state === 'working' ? 'working' : p.state === 'approval' ? 'needs approval' : (agoText(p.changed_at) || 'idle').replace('quiet', 'idle');
-          return `<div class="rs-item" data-rs-agent="${esc(n)}" title="Open ${esc(n)}'s terminal in the Team view"><span class="dot ${p.state === 'working' ? 'busy' : p.state === 'approval' ? 'wait' : 'bg'}"></span>
-            <div class="bd"><div class="t"><b>${esc(n)}</b><span class="lab">${esc(bg)}</span></div><div class="s">${esc(how)}${a?.status ? ` · “${esc(a.status)}”` : ''}</div></div><span class="go">▦</span></div>`;
-        }).join('');
-      html += sec('bg', 'Background tasks', rows.length ? `${rows.length} running` : '', body);
-    }
-    const files = state.files[room];
-    html += sec('files', 'Files shared', files?.length || '', files === null ? '<div class="rs-empty">Loading…</div>' : !files?.length ? '<div class="rs-empty">No files shared in this room yet. Drop or paste one into the chat.</div>'
-      : files.slice(0, 60).map((a) => `<a class="rs-item" href="${a.stored ? a.url : '#'}" target="_blank" rel="noopener" title="${esc(a.stored ? `Open ${a.name}` : 'Still uploading')}${a.path && proj ? ` · ${esc(a.path)}` : ''}">
-          <span class="ic">${a.is_image && a.stored ? `<img src="${a.url}" alt="" loading="lazy">` : a.stored ? fileIcon(a.mime) : '⏳'}</span>
-          <div class="bd"><span class="nm">${esc(a.name)}</span><div class="s">${esc([a.uploader, a.created_at ? fmtTime(a.created_at) : '', a.size ? fmtSize(a.size) : ''].filter(Boolean).join(' · '))}</div></div>
-          ${a.message_id ? `<button type="button" class="go" data-jump="${a.message_id}" title="Jump to the message">↪</button>` : ''}</a>`).join(''));
-    if (proj) {
-      const d = state.docs[room], docs = docsMentioned(room);
-      html += sec('docs', 'Docs mentioned', docs.length || '', !d ? '<div class="rs-empty">Loading…</div>'
-        : d.watching === false && !d.tree?.length ? `<div class="rs-empty">The team isn't running, so the docs folder can't be read.</div>`
-        : !docs.length ? `<div class="rs-empty">Files in <code>${esc(d.dir || 'docs')}/</code> mentioned in the chat show up here.</div>`
-        : docs.map((e) => `<div class="rs-item ${e.exists ? '' : 'missing'}" ${e.exists ? `data-rs-doc="${esc(e.path)}" title="Open in Docs"` : `title="Not in ${esc(d.dir || 'docs')}/ yet"`}>
-            <span class="ic">${e.exists ? (DOC_IMG.includes(docExt(e.path)) ? '🖼' : docExt(e.path) === 'pdf' ? '📕' : DOC_MD.includes(docExt(e.path)) ? '📝' : '📄') : '⏳'}</span>
-            <div class="bd"><span class="nm">${esc(e.path)}</span><div class="s">${esc([[...e.who].join(', '), e.count > 1 ? `${e.count} mentions` : '', e.exists ? (e.at ? fmtTime(e.at) : '') : 'not written yet'].filter(Boolean).join(' · '))}</div></div>
-            ${e.exists ? '<span class="go">📄</span>' : ''}</div>`).join(''));
+    let html = simple() && proj
+      ? `<div class="rs-top"><button type="button" class="hbtn rs-back" data-rs-back aria-label="Back to the chat">${SICON.back}</button><span>What your team is doing</span>${off ? `<button type="button" data-rs-toggle title="Show this panel" aria-label="Show this panel">⟨</button>` : ''}</div>`
+      : `<div class="rs-top"><span>Room</span><button type="button" data-rs-toggle title="${off ? 'Show' : 'Hide'} this panel">${off ? '⟨' : '⟩'}</button></div>`;
+    if (proj && simple()) html += simplePanel(room);
+    else {
+      if (proj && !simple()) {
+        const t = state.team[room];
+        const rows = (t?.agents || []).map((n) => ({ n, p: t.panes?.[n], bg: bgTasks(t.panes?.[n]) })).filter((x) => x.bg);
+        const body = !t?.watching ? `<div class="rs-empty">The team isn't running.</div>`
+          : !rows.length ? `<div class="rs-empty">No agent is running a background task.</div>`
+          : rows.map(({ n, p, bg }) => {
+            const a = state.agents.find((x) => x.name.toLowerCase() === n.toLowerCase());
+            const how = p.state === 'working' ? 'working' : p.state === 'approval' ? 'needs approval' : (agoText(p.changed_at) || 'idle').replace('quiet', 'idle');
+            return `<div class="rs-item" data-rs-agent="${esc(n)}" title="Open ${esc(n)}'s terminal in the Team view"><span class="dot ${p.state === 'working' ? 'busy' : p.state === 'approval' ? 'wait' : 'bg'}"></span>
+              <div class="bd"><div class="t"><b>${esc(n)}</b><span class="lab">${esc(bg)}</span></div><div class="s">${esc(how)}${a?.status ? ` · “${esc(a.status)}”` : ''}</div></div><span class="go">▦</span></div>`;
+          }).join('');
+        html += sec('bg', 'Background tasks', rows.length ? `${rows.length} running` : '', body);
+      }
+      const files = state.files[room];
+      html += sec('files', 'Files shared', files?.length || '', files === null ? '<div class="rs-empty">Loading…</div>' : !files?.length ? '<div class="rs-empty">No files shared in this room yet. Drop or paste one into the chat.</div>'
+        : files.slice(0, 60).map((a) => `<a class="rs-item" href="${a.stored ? a.url : '#'}" target="_blank" rel="noopener" title="${esc(a.stored ? `Open ${a.name}` : 'Still uploading')}${a.path && proj ? ` · ${esc(a.path)}` : ''}">
+            <span class="ic">${a.is_image && a.stored ? `<img src="${a.url}" alt="" loading="lazy">` : a.stored ? fileIcon(a.mime) : '⏳'}</span>
+            <div class="bd"><span class="nm">${esc(a.name)}</span><div class="s">${esc([a.uploader, a.created_at ? fmtTime(a.created_at) : '', a.size ? fmtSize(a.size) : ''].filter(Boolean).join(' · '))}</div></div>
+            ${a.message_id ? `<button type="button" class="go" data-jump="${a.message_id}" title="Jump to the message">↪</button>` : ''}</a>`).join(''));
+      if (proj) {
+        const d = state.docs[room], docs = docsMentioned(room);
+        html += sec('docs', 'Docs mentioned', docs.length || '', !d ? '<div class="rs-empty">Loading…</div>'
+          : d.watching === false && !d.tree?.length ? `<div class="rs-empty">The team isn't running, so the docs folder can't be read.</div>`
+          : !docs.length ? `<div class="rs-empty">Files in <code>${esc(d.dir || 'docs')}/</code> mentioned in the chat show up here.</div>`
+          : docs.map((e) => `<div class="rs-item ${e.exists ? '' : 'missing'}" ${e.exists ? `data-rs-doc="${esc(e.path)}" title="Open in Docs"` : `title="Not in ${esc(d.dir || 'docs')}/ yet"`}>
+              <span class="ic">${e.exists ? (DOC_IMG.includes(docExt(e.path)) ? '🖼' : docExt(e.path) === 'pdf' ? '📕' : DOC_MD.includes(docExt(e.path)) ? '📝' : '📄') : '⏳'}</span>
+              <div class="bd"><span class="nm">${esc(e.path)}</span><div class="s">${esc([[...e.who].join(', '), e.count > 1 ? `${e.count} mentions` : '', e.exists ? (e.at ? fmtTime(e.at) : '') : 'not written yet'].filter(Boolean).join(' · '))}</div></div>
+              ${e.exists ? '<span class="go">📄</span>' : ''}</div>`).join(''));
+      }
     }
     if (html === rsLast) return;
     rsLast = html;
@@ -2750,7 +2899,13 @@
   }
   $('#rside').addEventListener('toggle', (e) => { const k = e.target.dataset?.rs; if (k) localSet('airc.rs.' + k, e.target.open ? 'open' : 'closed'); }, true);
   $('#rside').addEventListener('click', async (e) => {
-    if (e.target.closest('[data-rs-toggle]')) { localSet('airc.rside', localGet('airc.rside') === 'off' ? 'on' : 'off'); rsLast = ''; renderRside(); return; }
+    if (e.target.closest('[data-rs-toggle]')) { localSet('airc.rside', localGet('airc.rside') === 'off' ? 'on' : 'off'); rsLast = ''; renderRside(); renderSimpleHeader(); return; }
+    if (e.target.closest('[data-rs-back]')) { document.body.classList.remove('sheet-open'); $('#sTeamBtn').focus(); return; }
+    if (e.target.closest('[data-sdocs]')) { document.body.classList.remove('sheet-open'); $('#docsBtn').click(); return; }
+    const sg = e.target.closest('[data-sgo]');
+    if (sg) { document.body.classList.remove('sheet-open'); const el = document.getElementById('m' + sg.dataset.sgo); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('flash'); } else openQPanel(); return; }
+    const sp = e.target.closest('[data-stopproc]');
+    if (sp) { sp.disabled = true; sp.textContent = 'Stopping…'; try { await api(`/rooms/${encodeURIComponent(state.current)}/procs/${sp.dataset.stopproc}/stop`, { method: 'POST', body: {} }); } catch (err) { alertInline(err.message); sp.disabled = false; sp.textContent = 'Stop'; } return; }
     if (e.target.closest('[data-jump]')) { e.preventDefault(); return; }   // the global handler scrolls to the message
     const a = e.target.closest('a.rs-item'); if (a && a.getAttribute('href') === '#') { e.preventDefault(); return; }
     const ag = e.target.closest('[data-rs-agent]');
@@ -2761,7 +2916,7 @@
       return;
     }
     const doc = e.target.closest('[data-rs-doc]');
-    if (doc) { const room = state.current; state.docOpen[room] = doc.dataset.rsDoc; localSet('airc.doc.' + room, doc.dataset.rsDoc); state.view = 'docs'; localSet('airc.view', 'docs'); await applyView(); }
+    if (doc) { document.body.classList.remove('sheet-open'); const room = state.current; state.docOpen[room] = doc.dataset.rsDoc; localSet('airc.doc.' + room, doc.dataset.rsDoc); state.view = 'docs'; localSet('airc.view', 'docs'); await applyView(); }
   });
   function openDoc(p) {
     const room = state.current;
@@ -2962,7 +3117,7 @@
   document.addEventListener('click', async (e) => {
     if (e.target.closest('#askBtn')) { state.qOpen ? (state.qOpen = false, renderQPanel(), renderHeader()) : openQPanel(); return; }
     const ob = e.target.closest('[data-openq]'); if (ob) { openQPanel(Number(ob.dataset.openq)); return; }
-    if (!e.target.closest('#qPanel')) return;
+    if (!e.target.closest('#qPanel, .sq')) return;
     if (e.target.closest('#qClose')) { state.qOpen = false; renderQPanel(); renderHeader(); return; }
     const da = e.target.closest('#qDismissAll');
     if (da) {
@@ -4603,20 +4758,254 @@
     if (!simple()) closeBuild();
     if (simple() && state.current === USAGE) { selectRoom('general'); return; }
     if (simple() && ['team', 'usage'].includes(state.view)) { state.view = 'chat'; localSet('airc.view', 'chat'); }
+    document.body.classList.remove('sheet-open');
     rsLast = ''; renderSidebar(); renderHeader(); applyView(); renderMessages({ stick: false });
+    simpleHome();
   }
   if (state.mode) setMode(state.mode, false, false);
   $('#modeSw').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
 
+  // ---------- Simple mode, chat-first: your messages and what's for you; the team's chatter folded away ----------
+  const simpleChat = () => simple() && !!projectOf(state.current) && !state.searching && state.current !== ALL;
+  state.unfold = new Set();   // "N team updates" folds you opened
+  const SICON = {
+    check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>',
+    info: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.5"/></svg>',
+    need: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--human)" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>',
+    chev: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+    file: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>',
+    send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+    clip: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.3 3.3 0 014.7 4.7L10 17.7a1.7 1.7 0 01-2.4-2.4l7.9-7.9"/></svg>',
+    back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
+  };
+  const sameName = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+  const avInitials = (n) => { const x = String(n).replace(/[^A-Za-z0-9]/g, ''); return (x.slice(0, 1).toUpperCase() + x.slice(1, 2).toLowerCase()) || '?'; };
+  const sav = (n, dot) => `<span class="sav" style="background:${colorFor(n)}" aria-hidden="true">${esc(avInitials(n))}${dot !== undefined ? `<i class="${dot}"></i>` : ''}</span>`;
+  const paneDot = (p) => (!p ? '' : p.state === 'approval' ? 'wait' : p.limit ? 'lim' : p.state === 'working' ? 'busy' : bgTasks(p) ? 'bg' : '');
+  function roomAgents(room) {
+    const t = state.team[room] || {}, slug = projectOf(room);
+    return new Set([...(t.agents || []), ...state.agents.filter((a) => sameName(a.project, slug)).map((a) => a.name)].map((x) => x.toLowerCase()));
+  }
+  /** mine: you wrote it · agent: for you (to you, a question, the lead talking to you, a reply to you) · note: TropaAI to you · quiet: the team's chatter */
+  function simpleKind(m, me, lead, agents) {
+    if (m.sender_kind === 'human') return 'mine';
+    const ments = (m.mentions || []).map((x) => String(x).toLowerCase());
+    const toMe = !!me && ments.includes(me);
+    if (m.sender_kind === 'system') return toMe || shareActs(m) || agentReqActs(m) || roomReqActs(m) || rmReqActs(m) ? 'note' : 'quiet';
+    if (toMe || state.questions.some((q) => q.message_id === m.id)) return 'agent';
+    const toAgents = ments.some((x) => agents.has(x) && x !== m.sender.toLowerCase());
+    if (lead && m.sender.toLowerCase() === lead && !toAgents) return 'agent';
+    const parent = m.reply_to ? findMsg(m.reply_to) : null;
+    if (parent?.sender_kind === 'human' && !toAgents) return 'agent';
+    return 'quiet';
+  }
+  function simpleConv(list) {
+    const room = state.current, t = state.team[room] || {};
+    const agents = roomAgents(room), me = myName().toLowerCase(), lead = String(t.settings?.lead || (agents.has('lead') ? 'lead' : '')).toLowerCase();
+    let out = '', run = [], prev = null;
+    const flush = () => {
+      if (!run.length) return;
+      const key = String(run[0].id), open = state.unfold.has(key);
+      out += `<button type="button" class="sfold" data-fold="${key}" aria-expanded="${open}">${SICON.chev}${run.length} team update${run.length === 1 ? '' : 's'}</button>`;
+      if (open) out += `<div class="sfold-list">${run.map((m) => `<div class="su k-${m.sender_kind}" id="m${m.id}" data-id="${m.id}"><span class="who">${esc(m.sender_kind === 'system' ? 'TropaAI' : m.sender)}</span><span class="body">${md(m.content)}</span>${attsHtml(m)}</div>`).join('')}</div>`;
+      run = []; prev = null;
+    };
+    let owed = false;   // the lead's first message after yours answers you, even when it also hands out work
+    for (const m of list) {
+      let k = simpleKind(m, me, lead, agents);
+      if (k === 'mine') owed = true;
+      else if (owed && m.sender_kind === 'agent' && m.sender.toLowerCase() === lead) { k = 'agent'; owed = false; }
+      if (k === 'quiet') { run.push(m); continue; }
+      flush();
+      out += simpleMsg(m, k, prev); prev = k === 'agent' ? m : null;
+    }
+    flush();
+    return `<div class="sconv">${out}${simpleWorking(room)}</div>`;
+  }
+  function simpleMsg(m, k, prev) {
+    const parent = m.reply_to ? findMsg(m.reply_to) : null;
+    const quote = m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : 'an earlier message'}</div>` : '';
+    const extras = `${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}`;
+    if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div>${extras}${actsHtml(m)}</div>`;
+    if (k === 'note') return `<div class="sm sm-note" id="m${m.id}" data-id="${m.id}">${SICON.info}<div><div class="body">${md(m.content)}</div>${extras}</div></div>`;
+    const q = state.questions.find((x) => x.message_id === m.id);
+    const cont = prev && prev.sender === m.sender && m.created_at - prev.created_at < 10 * 60e3 && !m.reply_to && !q;
+    return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? '' : `<div class="sn">${esc(m.sender)}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;
+  }
+  const ansText = (q) => String(q.answer || '').replace(new RegExp('^@' + q.agent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').replace(/^\d+\.\s+/, '');
+  function sqCard(q) {
+    const open = q.status === 'open';
+    return `<div class="sq" role="group" aria-label="Question from ${esc(q.agent)}">
+      <div class="sq-h">${open ? `${esc(q.agent)} is asking you` : `${esc(q.agent)} asked`}</div>
+      <div class="sq-q">${md(q.question)}</div>
+      ${open ? `${q.options.length ? `<div class="sq-opts">${q.options.map((o, i) => `<button type="button" class="qopt ${i + 1 === q.recommended ? 'rec' : ''}" data-qans="${q.id}" data-ans="${esc(`${i + 1}. ${o}`)}">${esc(o)}${i + 1 === q.recommended ? ' <span class="mut">· suggested</span>' : ''}</button>`).join('')}</div>` : ''}
+        <form class="qother" data-qform="${q.id}"><input aria-label="Answer ${esc(q.agent)}" placeholder="${q.options.length ? 'Or type your own answer…' : 'Your answer…'}"><button type="submit" class="tbtn">Send</button></form>
+        <div class="sq-f">${q.fallback ? `<span>${q.deadline_at ? `Goes with “${esc(q.fallback)}” in ${untilShort(q.deadline_at)}` : `If you don't answer: ${esc(q.fallback)}`}</span>` : ''}<span class="sp"></span><button type="button" class="lnk mutl" data-qdismiss="${q.id}">Not now</button></div>`
+      : `<div class="sq-done">${q.status === 'answered' ? `${SICON.check} ${sameName(q.answered_by, myName()) ? 'You answered' : `${esc(q.answered_by)} answered`}: ${esc(ansText(q).slice(0, 200))}` : q.status === 'assumed' ? `No answer, so it went with: ${esc(q.fallback || ansText(q))}` : 'Skipped'}</div>`}
+    </div>`;
+  }
+  function simpleWorking(room) {
+    const t = state.team[room] || {};
+    const busy = (t.agents || []).filter((n) => t.panes?.[n]?.state === 'working');
+    if (!busy.length) return '';
+    const st = busy.length === 1 ? state.agents.find((a) => sameName(a.name, busy[0]))?.status : '';
+    const who = busy.length === 1 ? busy[0] : busy.length === 2 ? `${busy[0]} and ${busy[1]}` : `${busy.slice(0, -1).join(', ')} and ${busy[busy.length - 1]}`;
+    return `<div class="sworking" aria-live="polite"><span class="sdots" aria-hidden="true"><i></i><i></i><i></i></span>${esc(who)} ${busy.length === 1 ? (st ? `is ${/^[a-z]+ing\b/i.test(st) ? esc(st.charAt(0).toLowerCase() + st.slice(1)) : `working: ${esc(st)}`}` : 'is working') : 'are working'}</div>`;
+  }
+  function renderWorking() {   // just the "dev is working" line, as screens change (not the whole chat)
+    const conv = $('#msgs .sconv'); if (!conv) return;
+    const html = simpleWorking(state.current), cur = conv.querySelector('.sworking');
+    if ((cur?.outerHTML || '') === html) return;
+    const box = $('#msgs'), stick = atBottomOf(box);
+    if (cur) cur.remove();
+    if (html) conv.insertAdjacentHTML('beforeend', html);
+    if (stick && autoScroll) box.scrollTop = box.scrollHeight;
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('sheet-open')) document.body.classList.remove('sheet-open'); });
+  document.addEventListener('click', (e) => {
+    const f = e.target.closest('[data-fold]'); if (!f) return;
+    const k = f.dataset.fold; state.unfold.has(k) ? state.unfold.delete(k) : state.unfold.add(k);
+    renderMessages({ stick: false });
+  });
+
+  // the header in Simple mode: the project's name, then a ⋯ menu, the side panel's switch (and on a phone, the team)
+  function renderSimpleHeader() {
+    const proj = projectOf(state.current), on = simple() && !!proj && !state.searching;
+    const t = state.team[state.current] || {};
+    $('#moreBtn').hidden = !simple() || !proj;
+    $('#panelBtn').hidden = !on || state.view !== 'chat';
+    const off = localGet('airc.rside') === 'off';
+    $('#panelBtn').setAttribute('aria-pressed', String(!off)); $('#panelBtn').classList.toggle('on', !off);
+    $('#panelBtn').setAttribute('aria-label', off ? 'Show what your team is doing' : 'Hide the side panel');
+    $('#backBtn').hidden = !simple() || !proj || state.view === 'chat';
+    $('#sTeamBtn').hidden = !on || state.view !== 'chat' || !(t.agents || []).length;
+    if (on) {
+      const ags = t.agents || [];
+      $('#sTeamAvs').innerHTML = ags.slice(0, 3).map((n) => sav(n, paneDot(t.panes?.[n]))).join('') + (ags.length > 3 ? `<span class="sav" style="background:var(--idle)" aria-hidden="true">+${ags.length - 3}</span>` : '');
+      $('#input').placeholder = 'Message your team';
+    }
+    if (!simple()) $('#search').classList.remove('show');
+    $('#sendBtn').innerHTML = simple() ? SICON.send : 'Send'; $('#sendBtn').setAttribute('aria-label', 'Send');
+    $('#attachBtn').innerHTML = simple() ? SICON.clip : '📎'; $('#attachBtn').setAttribute('aria-label', 'Attach files');
+  }
+  function moreItems() {
+    const proj = projectOf(state.current), t = state.team[state.current] || {};
+    const open = (state.tasks[state.current] || []).filter((x) => x.status !== 'done').length, oq = openQs(state.current).length;
+    const paused = t.settings?.wake === 'paused';
+    return [
+      ['tasks', 'Task board', open ? `${open} open` : ''], ['docs', 'Docs', ''], ['skills', 'Skills', ''], ['questions', 'Questions', oq ? `${oq} waiting` : ''],
+      ['search', 'Search this chat', ''], ['transcript', 'Download the chat', ''], '-',
+      ['pause', paused ? 'Resume the room' : 'Pause the room', ''], ['fix', 'Fix the team', ''], ['autoscroll', autoScroll ? 'Keep the chat still' : 'Follow new messages', ''], '-',
+      ['advanced', 'Switch to Advanced', ''],
+    ].filter((x) => x === '-' || proj || ['advanced'].includes(x[0]));
+  }
+  function openMore(on) {
+    const m = $('#moreMenu'), b = $('#moreBtn');
+    if (!on) { m.hidden = true; b.setAttribute('aria-expanded', 'false'); return; }
+    m.innerHTML = moreItems().map((x) => (x === '-' ? '<hr>' : `<button type="button" role="menuitem" data-more="${x[0]}">${esc(x[1])}${x[2] ? `<span class="k">${esc(x[2])}</span>` : ''}</button>`)).join('');
+    m.hidden = false; b.setAttribute('aria-expanded', 'true');
+    m.querySelector('button')?.focus();
+  }
+  $('#moreBtn').addEventListener('click', () => openMore($('#moreMenu').hidden));
+  document.addEventListener('click', (e) => { if (!$('#moreMenu').hidden && !e.target.closest('#moreMenu, #moreBtn')) openMore(false); });
+  $('#moreMenu').addEventListener('keydown', (e) => {
+    const items = [...$('#moreMenu').querySelectorAll('button')], i = items.indexOf(document.activeElement);
+    if (e.key === 'Escape') { openMore(false); $('#moreBtn').focus(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length]?.focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length]?.focus(); }
+  });
+  $('#moreMenu').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-more]'); if (!b) return;
+    openMore(false);
+    switch (b.dataset.more) {
+      case 'tasks': $('#tasksBtn').click(); break;
+      case 'docs': $('#docsBtn').click(); break;
+      case 'skills': $('#skillsBtn').click(); break;
+      case 'questions': openQPanel(); break;
+      case 'search': $('#search').classList.add('show'); $('#search').focus(); break;
+      case 'transcript': downloadTranscript('md'); break;
+      case 'pause': setPaused((state.team[state.current]?.settings?.wake) !== 'paused'); break;
+      case 'fix': { const x = document.createElement('button'); x.dataset.fixteam = '1'; x.hidden = true; document.body.append(x); x.click(); setTimeout(() => x.remove(), 5000); infoInline('Checking the team… what was fixed shows in the chat.'); break; }
+      case 'autoscroll': $('#asBtn').click(); break;
+      case 'advanced': setMode('advanced'); break;
+    }
+  });
+  $('#search').addEventListener('blur', () => { if (!$('#search').value) $('#search').classList.remove('show'); });
+  $('#backBtn').addEventListener('click', () => { state.view = 'chat'; localSet('airc.view', 'chat'); applyView(); renderHeader(); renderMessages({ bottom: true }); });
+  $('#panelBtn').addEventListener('click', () => { localSet('airc.rside', localGet('airc.rside') === 'off' ? 'on' : 'off'); rsLast = ''; renderRside(); renderSimpleHeader(); });
+  $('#sTeamBtn').addEventListener('click', () => { document.body.classList.add('sheet-open'); rsLast = ''; renderRside(); $('#rside').querySelector('.rs-back')?.focus(); });
+  $('#newProjBtn').addEventListener('click', () => openBuild());
+  // Simple mode lands in a project (the latest), or on the new-project page when there's none
+  function simpleHome() {
+    if (!simple() || projectOf(state.current) || state.searching) return;
+    const p = state.rooms.filter((r) => r.kind === 'project').sort((a, b) => (b.last_message_at || b.created_at || 0) - (a.last_message_at || a.created_at || 0))[0];
+    if (p) selectRoom(p.id); else openBuild();
+  }
+
+  // the side panel in Simple mode: who's doing what, what's running, what was decided, what changed
+  const ageText = (s) => (s < 90 ? 'just started' : s < 3600 ? `for ${Math.round(s / 60)} min` : `for ${(s / 3600).toFixed(s < 36000 ? 1 : 0)} h`);
+  const shortText = (s, n = 90) => { s = String(s || '').replace(/\s+/g, ' ').replace(/[*_`#>]/g, '').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const previewUrl = (port) => `${location.protocol}//${location.hostname}:${port}/`;
+  function simplePanel(room) {
+    const t = state.team[room] || {}, lead = String(t.settings?.lead || '').toLowerCase();
+    if (state.tasks[room] === undefined && !(state.tasksAsked ||= {})[room]) { state.tasksAsked[room] = true; loadTasks(room).then(() => { if (room === state.current) { rsLast = ''; renderRside(); } }).catch(() => {}); }
+    const tasks = state.tasks[room] || [];
+    const qs = state.questions.filter((q) => q.room_id === room);
+    const sec = (key, title, n, body) => `<details data-rs="${key}" ${rsOpen(key) ? 'open' : ''}><summary>${title}${n ? `<span class="n">${n}</span>` : ''}</summary>${body}</details>`;
+    let team;
+    if (!t.watching) team = `<div class="sp-empty">The team isn't running.</div><div class="sp-fix">${state.host?.connected ? '<button type="button" class="tbtn pri" data-fixteam>Start the team</button>' : helperOff("it can't be started yet")}</div>`;
+    else {
+      const rank = (n) => { const p = t.panes?.[n] || {}; return p.state === 'approval' ? 0 : qs.some((q) => q.status === 'open' && sameName(q.agent, n)) ? 1 : p.state === 'working' ? 2 : n.toLowerCase() === lead ? 3 : 4; };
+      team = [...(t.agents || [])].sort((a, b) => rank(a) - rank(b)).map((n) => {
+        const p = t.panes?.[n] || {}, a = state.agents.find((x) => sameName(x.name, n));
+        const card = tasks.find((x) => x.status === 'doing' && sameName(x.assignee, n));
+        const oq = qs.find((q) => q.status === 'open' && sameName(q.agent, n));
+        let s, cls = '';
+        if (p.state === 'approval') { s = 'Needs your OK'; cls = 'warn'; }
+        else if (p.limit) { s = `Paused: ${limitLabel(p)}${p.limit.kind === 'credits' ? ' (top up the account)' : ''}`; cls = 'lim'; }
+        else if (oq) { s = 'Waiting for your answer'; cls = 'warn'; }
+        else if (p.state === 'working') { s = a?.status || (card ? card.title : 'Working'); cls = 'now'; }
+        else if (bgTasks(p)) s = 'Running a long task';
+        else if (card) s = `Has “${card.title}” in progress`;
+        else s = p.state ? 'Waiting for work' : 'Not started';
+        return `<div class="sp-row">${sav(n, paneDot(p))}<div class="bd"><div class="t">${esc(n)}${n.toLowerCase() === lead ? '<span class="lab">lead</span>' : ''}</div><div class="s ${cls}">${esc(s)}</div>
+          ${p.state === 'approval' ? `<div class="s" style="white-space:normal">${esc(p.prompt || 'wants to do something that needs your permission')}</div>
+            <div class="rs-ask"><button type="button" class="tbtn pri" data-approve="${esc(n)}" data-act="yes">Allow</button><button type="button" class="tbtn" data-approve="${esc(n)}" data-act="no">Don't allow</button></div>` : ''}</div></div>`;
+      }).join('') + `<div class="sp-fix">Something not working? <button type="button" class="linkbtn" data-fixteam>Fix the team</button></div>`;
+    }
+    const procs = t.activity?.procs || [];
+    const run = !t.watching ? '<div class="sp-empty">Nothing, the team isn\'t running.</div>' : !procs.length ? '<div class="sp-empty">Nothing running in the background.</div>'
+      : procs.map((p) => `<div class="sp-row"><span class="dotx" aria-hidden="true"></span><div class="bd"><div class="t" style="font-weight:500;font-size:13.5px;overflow-wrap:anywhere">${esc(p.cmd)}</div>
+          <div class="s">${esc([p.agent, ageText(p.age)].filter(Boolean).join(' · '))}${p.ports.length ? ` · <a href="${esc(previewUrl(p.ports[0]))}" target="_blank" rel="noopener">Open :${p.ports[0]}</a>` : ''}</div></div>
+          <button type="button" class="mini" data-stopproc="${p.pid}" aria-label="Stop ${esc(p.cmd)}">Stop</button></div>`).join('');
+    const decs = qs.filter((q) => q.status !== 'dismissed').sort((a, b) => (b.status === 'open') - (a.status === 'open') || (b.closed_at || b.created_at) - (a.closed_at || a.created_at)).slice(0, 8);
+    const dec = !decs.length ? '<div class="sp-empty">Choices you make for the team show up here.</div>'
+      : decs.map((q) => (q.status === 'open'
+        ? `<button type="button" class="sp-dec open" data-sgo="${q.message_id || 0}">${SICON.need}<span>${esc(shortText(q.question))} <span class="who">· needs you</span></span></button>`
+        : `<div class="sp-dec">${SICON.check}<span>${esc(shortText(q.question, 70))}: <b>${esc(shortText(q.status === 'assumed' ? q.fallback : ansText(q), 60))}</b> <span class="who">· ${q.status === 'assumed' ? 'no answer, went ahead' : sameName(q.answered_by, myName()) ? 'you' : esc(q.answered_by)}</span></span></div>`)).join('');
+    const files = [...(t.activity?.files || []).map((f) => ({ name: f.path, at: f.mtime, doc: f.doc })),
+      ...(state.files[room] || []).filter((a) => a.stored).map((a) => ({ name: a.name, at: a.created_at, url: a.url }))].sort((a, b) => b.at - a.at).slice(0, 8);
+    const base = (n) => String(n).split('/').pop();
+    const fl = !files.length ? '<div class="sp-empty">Files the team changes or you share show up here.</div>'
+      : files.map((f) => {
+        const inner = `${SICON.file}<span class="nm">${esc(base(f.name))}</span><span class="ago">${esc(agoShort(f.at))}</span>`;
+        return f.doc ? `<button type="button" class="sp-file" data-rs-doc="${esc(f.doc)}" title="${esc(f.name)} · open">${inner}</button>`
+          : f.url ? `<a class="sp-file" href="${f.url}" target="_blank" rel="noopener" title="${esc(f.name)}">${inner}</a>` : `<div class="sp-file" title="${esc(f.name)}">${inner}</div>`;
+      }).join('') + '<div class="sp-fix"><button type="button" class="linkbtn" data-sdocs>Browse the docs</button></div>';
+    const openDecs = decs.filter((q) => q.status === 'open').length;
+    return sec('who', 'Team', t.watching ? (t.agents || []).length : '', team) + sec('run', 'Running now', procs.length || '', run)
+      + sec('dec', 'Decisions', openDecs ? `${openDecs} need you` : '', dec) + sec('chg', 'Files', '', fl);
+  }
+
   // Build your team: pick a ready-made team (teams/), adjust who's on it and their jobs, say what they work on
   const bt = { teamId: null, how: '', git: true, members: [], lead: '', hiring: false, name: '', brief: '', where: 'new', path: '' };
   const initialsOf = (n) => { const x = String(n).replace(/[^A-Za-z0-9]/g, ''); return (x.slice(0, 1).toUpperCase() + x.slice(1, 2).toLowerCase()) || '?'; };
-  function btPick(id) {
+  function btPick(id, render = true) {
     const t = teamTemplates().find((x) => x.id === id);
     bt.teamId = t ? t.id : ''; bt.how = t?.how || ''; bt.git = t ? t.git !== false : true;
     bt.members = t ? t.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: forHuman(m.role), prompt: forHuman(m.prompt), open: false })) : [{ ...leadMember(), open: false }];
     bt.lead = t ? t.lead : 'lead'; bt.hiring = false;
-    renderBuild();
+    if (render) renderBuild();
   }
   function roleLibrary() {   // every member of every ready-made team, once, minus those already on this team
     const have = new Set(bt.members.map((m) => m.name.toLowerCase())), seen = new Set(), out = [];
@@ -4628,7 +5017,7 @@
     return out.sort((a, b) => a.name.localeCompare(b.name));
   }
   function openBuild() {
-    if (bt.teamId === null) { const ts = teamTemplates(); bt.teamId = ''; btPick(ts.find((t) => t.id === 'website-studio')?.id || ts[0]?.id || ''); }
+    if (bt.teamId === null) { bt.step = 'start'; bt.chosen = false; btPick(guessTeam(bt.brief), false); }
     $('#build').hidden = false; renderBuild(); $('#build').scrollTop = 0; $('#app').classList.remove('nav');
     api('/host').then((h) => { state.host = h; if (!$('#build').hidden && !$('#build').contains(document.activeElement)) renderBuild(); }).catch(() => {});
   }
@@ -4644,10 +5033,11 @@
         <button type="button" class="tbtn pri" data-bd="addnew">Add to the team</button></div></div>`;
   }
   function renderBuild() {
+    if (bt.step !== 'full') { renderNpStart(); return; }
     const h = state.host || {}, ts = teamTemplates();
     const base = parentBase();
     $('#build').innerHTML = `<div class="bd-wrap">
-      <div class="bd-top"><h1>Build your team</h1><button type="button" class="bd-x" data-bd="close" aria-label="Close">×</button></div>
+      <div class="bd-top"><button type="button" class="linkbtn" data-bd="start" style="margin:0">← Back</button><h1>Build your team</h1><button type="button" class="bd-x" data-bd="close" aria-label="Close">×</button></div>
       <p class="bd-lead">Hire the roles you need, the way you'd staff a small office. Each one gets a job you can read and change.</p>
       ${h.connected ? '' : `<div class="bd-warn">${helperOff('the team can\'t be created yet')}</div>`}
       ${h.connected && !(h.clis || []).includes('claude') ? `<div class="bd-warn">Claude Code isn't installed on this computer, and your team runs on it. Open <b>⚙ Settings → Setup</b> to install it.</div>` : ''}
@@ -4682,6 +5072,93 @@
         <button type="button" class="send" data-bd="create" ${h.connected ? '' : 'disabled'}>Create team and start</button></div>
     </div>`;
   }
+  // Simple's New project: describe the work in one box; the team is picked from what you write (or choose one)
+  const NP_CHIPS = [
+    ['website-studio', 'Website', '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>'],
+    ['small-dev-team', 'App or tool', '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13 6l-2 12"/>'],
+    ['research-publishing', 'Writing', '<path d="M4 20h4L19 9l-4-4L4 16z"/>'],
+    ['market-research', 'Research', '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'],
+    ['bookkeeping', 'Bookkeeping', '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'],
+  ];
+  const NP_GUESS = [
+    ['website-studio', /\b(web ?site|web ?app|landing page|online (shop|store)|e-?commerce|homepage|web page|portfolio site)\b/i],
+    ['small-dev-team', /\b(app|application|tool|script|bot|api|software|program|plugin|extension|dashboard|game|code|bug|feature|automat\w*)\b/i],
+    ['bookkeeping', /\b(book-?keep\w*|books|invoices?|expenses?|receipts?|tax(es)?|accounting|reconcil\w*|payroll|bank statements?)\b/i],
+    ['customer-support', /\b(customer (support|service|questions)|support tickets?|help ?desk|faqs?|complaints?|inbox)\b/i],
+    ['email-marketing', /\b(newsletters?|email (campaigns?|marketing|list)|mailchimp|drip)\b/i],
+    ['grant-writing', /\b(grants?|funding application|funders?)\b/i],
+    ['paid-ads', /\b(ads|advert\w*|google ads|facebook ads|meta ads|ppc|ad campaigns?)\b/i],
+    ['recruitment', /\b(hire|hiring|recruit\w*|job (ad|post\w*)|candidates?|interviews?)\b/i],
+    ['seo', /\b(seo|search engines?|rank(ing)? on google|keywords?|backlinks?)\b/i],
+    ['social-media', /\b(social media|instagram|tiktok|linkedin|twitter|facebook page|posts? (on|for))\b/i],
+    ['sales-outreach', /\b(sales|prospects?|outreach|cold (emails?|calls?)|book meetings|lead gen\w*)\b/i],
+    ['market-research', /\b(market|competitors?|industry|customer research|surveys?|pricing research)\b/i],
+    ['research-publishing', /\b(research|article|report|blog|essay|write( up)?|publish\w*|guide|ebook|book)\b/i],
+  ];
+  function guessTeam(text) {
+    const ids = new Set(teamTemplates().map((t) => t.id));
+    let best = '', score = 0;
+    for (const [id, rx] of NP_GUESS) {
+      if (!ids.has(id)) continue;
+      const n = (String(text).match(new RegExp(rx.source, 'gi')) || []).length;
+      if (n > score) { best = id; score = n; }
+    }
+    return best;
+  }
+  function npAutoPick(force) {
+    if (bt.chosen) return;
+    const id = guessTeam(bt.brief);
+    if (id === bt.teamId && !force) return;
+    btPick(id, false);
+    const who = $('#npWho'); if (who) who.innerHTML = npWho();
+    document.querySelectorAll('[data-np-team]').forEach((c) => c.setAttribute('aria-pressed', 'false'));
+  }
+  function npName(text) {   // "Build a website for my bakery…" → "Website bakery", unique among the projects
+    const stop = new Set('a an the and or for of to in on with my our me us we i i\'d id i\'m want would like please help need needs make build create set up setup start new some that this it is are be can could should will from about into using use do get'.split(' '));
+    const words = String(text).split(/[.\n!?]/)[0].toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter((w) => w && !stop.has(w));
+    let name = words.slice(0, 3).join(' ') || 'my project';
+    name = name.charAt(0).toUpperCase() + name.slice(1);
+    const taken = new Set(state.rooms.map((r) => String(r.project || '').toLowerCase()));
+    let out = name, i = 2;
+    while (taken.has(slugOf(out))) out = `${name} ${i++}`;
+    return out;
+  }
+  function npWho() {
+    const t = teamTemplates().find((x) => x.id === bt.teamId);
+    if (!t) return bt.brief.trim() ? `<span>A lead plans the work with you and adds teammates when they're needed.</span> <button type="button" class="linkbtn" data-bd="full">Choose a team</button>` : '';
+    const ms = bt.members;
+    return `<span class="s-avs">${ms.slice(0, 4).map((m) => sav(m.name)).join('')}</span><span><b>${esc(t.name)}:</b> ${esc(ms.map((m) => m.name).join(', '))}</span> <button type="button" class="linkbtn" data-bd="full">Change</button>`;
+  }
+  function renderNpStart() {
+    const h = state.host || {};
+    const hr = new Date().getHours(), hi = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
+    const hasProjects = state.rooms.some((r) => r.kind === 'project');
+    const keep = document.activeElement?.id === 'npGoal' ? [$('#npGoal').selectionStart, $('#npGoal').selectionEnd] : null;
+    $('#build').innerHTML = `<div class="np-start">
+      ${hasProjects ? '<button type="button" class="bd-x" data-bd="close" aria-label="Close">×</button>' : ''}
+      <div class="np-hi">${esc(hi)}${state.human ? `, ${esc(state.human)}` : ''}</div>
+      <h1>What should your team work on?</h1>
+      ${h.connected ? '' : `<div class="bd-warn">${helperOff('the team can\'t be created yet')}</div>`}
+      ${h.connected && !(h.clis || []).includes('claude') ? `<div class="bd-warn">Claude Code isn't installed on this computer, and your team runs on it. Open <b>⚙ Settings → Setup</b> to install it.</div>` : ''}
+      <div class="np-box">
+        <label for="npGoal" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Describe the work</label>
+        <textarea id="npGoal" rows="3" placeholder="For example: build a website for my bakery with our menu and a way to order cakes">${esc(bt.brief)}</textarea>
+        <div class="np-row">
+          <button type="button" class="np-folder" data-bd="npfolder" title="${bt.where === 'existing' && bt.path ? esc(bt.path) : 'Work on a folder you already have (it stays untouched)'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg><span class="nm">${bt.where === 'existing' && bt.path ? esc(baseName(bt.path)) : 'Use a folder from my computer'}</span></button>
+          ${bt.where === 'existing' && bt.path ? '<button type="button" class="np-clear" data-bd="npclear" aria-label="Don\'t use this folder">×</button>' : ''}
+          <button type="button" class="np-go" data-bd="create" ${h.connected ? '' : 'disabled'}>Start <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+      </div>
+      <div class="err" id="bdErr" role="alert"></div>
+      <div>
+        <div class="np-q">${bt.chosen ? 'Your team:' : "We'll pick the right team from what you write. Or choose one:"}</div>
+        <div class="np-chips">${NP_CHIPS.filter(([id]) => teamTemplates().some((t) => t.id === id)).map(([id, label, path]) => `<button type="button" class="np-chip" data-np-team="${id}" aria-pressed="${bt.chosen && bt.teamId === id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>${esc(label)}</button>`).join('')}
+          <button type="button" class="np-more" data-bd="full">See all teams ›</button></div>
+      </div>
+      <div class="np-who" id="npWho" aria-live="polite">${npWho()}</div>
+    </div>`;
+    if (keep) { const g = $('#npGoal'); g.focus(); g.setSelectionRange(keep[0], keep[1]); }
+  }
   $('#build').addEventListener('input', (e) => {
     const t = e.target, card = t.closest('.bd-mem'), m = card && bt.members[Number(card.dataset.i)];
     if (m && t.classList.contains('bd-name')) { if (bt.lead === m.name) bt.lead = t.value; m.name = t.value; }
@@ -4689,14 +5166,20 @@
     else if (m && t.classList.contains('bd-job')) m.prompt = t.value;
     else if (t.id === 'bdName') { bt.name = t.value; const sl = $('#bdSlug'); if (sl) sl.textContent = sl.textContent.replace(/[^/]*$/, slugOf(t.value) || '…'); }
     else if (t.id === 'bdBrief') bt.brief = t.value;
+    else if (t.id === 'npGoal') { bt.brief = t.value; npAutoPick(); }
     else if (t.id === 'bdPath') bt.path = t.value;
     else if (t.id === 'bdUntouched') bt.untouched = t.checked;
     else if (t.id === 'bdParent') { setNewParent(t.value); const sl = $('#bdSlug'); if (sl) sl.textContent = `${t.value.trim().replace(/\/+$/, '') || '…'}/${slugOf(bt.name) || '…'}`; }
   });
   $('#build').addEventListener('toggle', (e) => { const card = e.target.closest?.('.bd-mem'); if (card && e.target.tagName === 'DETAILS') bt.members[Number(card.dataset.i)].open = e.target.open; }, true);
   $('#build').addEventListener('change', (e) => { if (e.target.name === 'bdWhere') { bt.where = e.target.value; renderBuild(); } });
-  $('#build').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBuild(); });
+  $('#build').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.rooms.some((r) => r.kind === 'project')) closeBuild();
+    if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'npGoal' && !e.isComposing) { e.preventDefault(); $('#build .np-go')?.click(); }
+  });
   $('#build').addEventListener('click', async (e) => {
+    const chip = e.target.closest('[data-np-team]');
+    if (chip) { const id = chip.dataset.npTeam; if (bt.chosen && bt.teamId === id) { bt.chosen = false; npAutoPick(true); } else { bt.chosen = true; btPick(id, false); } renderNpStart(); return; }
     const tpl = e.target.closest('[data-bd-team]');
     if (tpl) { btPick(tpl.dataset.bdTeam); return; }
     const hire = e.target.closest('[data-bd-hire]');
@@ -4710,6 +5193,19 @@
     const card = b.closest('.bd-mem'), i = card ? Number(card.dataset.i) : -1;
     switch (b.dataset.bd) {
       case 'close': closeBuild(); return;
+      case 'full': bt.step = 'full'; renderBuild(); $('#build').scrollTop = 0; return;
+      case 'start': bt.step = 'start'; break;
+      case 'npclear': bt.where = 'new'; bt.path = ''; break;
+      case 'npfolder': {
+        if (!state.host?.picker) { bt.step = 'full'; bt.where = 'existing'; break; }
+        b.disabled = true;
+        try {
+          const r = await api('/host/pick-folder', { method: 'POST', body: {} });
+          if (r.ok && r.path) { const home = state.host?.home; bt.path = home && r.path.startsWith(home + '/') ? '~' + r.path.slice(home.length) : r.path; bt.where = 'existing'; bt.untouched = true; }
+          else if (!r.cancelled) { renderBuild(); $('#bdErr').textContent = r.error || "Couldn't open the folder window."; return; }
+        } catch (err) { renderBuild(); $('#bdErr').textContent = err.message; return; }
+        break;
+      }
       case 'lead': bt.lead = bt.members[i].name; break;
       case 'rm': if (bt.members.length === 1) { $('#bdErr').textContent = 'Every project room keeps at least one agent, its lead.'; return; } { const [gone] = bt.members.splice(i, 1); if (gone?.name === bt.lead) bt.lead = bt.members[0]?.name || ''; break; }
       case 'hire': bt.hiring = !bt.hiring; break;
@@ -4738,7 +5234,7 @@
         } catch (err) { renderBuild(); $('#bdErr').textContent = err.message; return; }
         break;
       }
-      case 'create': await btCreate(b); return;
+      case 'create': if (bt.step !== 'full' && bt.brief.trim()) bt.name = bt.where === 'existing' && bt.path ? baseName(bt.path) : npName(bt.brief); await btCreate(b); return;
       default: return;
     }
     renderBuild();
@@ -4751,13 +5247,14 @@
     if (bt.members.some((m) => !/^[A-Za-z0-9._-]{1,40}$/.test(m.name))) return fail('Names can use letters, digits, - _ and . (no spaces).');
     const low = bt.members.map((m) => m.name.toLowerCase());
     if (new Set(low).size !== low.length) return fail('Each member needs a different name.');
-    if (!name) { $('#bdName').focus(); return fail('Give the work a name.'); }
-    if (!bt.brief.trim()) { $('#bdBrief').focus(); return fail('Say what the team should work on.'); }
+    if (!bt.brief.trim()) { ($('#bdBrief') || $('#npGoal'))?.focus(); return fail('Say what the team should work on.'); }
+    if (!name) { $('#bdName')?.focus(); return fail('Give the work a name.'); }
     if (existing && !/^(~|\/)/.test(path)) return fail('Choose the folder with Browse…, or type its full path, e.g. ~/work/my-app');
     const parent = existing ? '' : newParent();
     if (parent && !/^(~|\/)/.test(parent)) return fail('Type the full path of where to create the folder, e.g. ~/Documents');
     const lead = bt.members.some((m) => m.name === bt.lead) ? bt.lead : bt.members[0].name;
     const how = bt.how ? `## How this team works\n${forHuman(bt.how)}` : '';
+    const label = btn.innerHTML;
     btn.disabled = true; btn.textContent = 'Creating…';
     try {
       const slug = slugOf(name), room = await ensureRoomFor(name);
@@ -4766,11 +5263,11 @@
         agents: bt.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: m.role, prompt: [m.prompt, how].filter(Boolean).join('\n\n') })),
         lead, kickoff: `@${lead} The work is described in the brief in docs/. Plan it with the team, tell me the plan in a few lines, and ask me anything that's unclear.`,
         tools: [], design_system: '', git: bt.git && !!state.host?.git, auto_approve: false, start: true, trust: true, keys: {} } });
-      Object.assign(bt, { teamId: null, members: [], lead: '', name: '', brief: '', path: '', where: 'new', hiring: false });
+      Object.assign(bt, { teamId: null, members: [], lead: '', name: '', brief: '', path: '', where: 'new', hiring: false, step: 'start', chosen: false });
       closeBuild(); state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
       if (Object.keys(made?.renamed || {}).length) infoInline(`Names already used in another project: ${Object.entries(made.renamed).map(([o, n]) => `${o} → @${n}`).join(', ')}.`);
     } catch (err) { fail(err.message); }
-    finally { btn.disabled = false; btn.textContent = 'Create team and start'; }
+    finally { btn.disabled = false; btn.innerHTML = label; }
   }
   // ---------- Setup check: what this computer has (first run, and ⚙ Settings → Setup) ----------
   const CLI_INSTALL = {

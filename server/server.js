@@ -1526,7 +1526,8 @@ function watcherFor(roomId) {
 function teamView(roomId) {
   const w = watcherFor(roomId);
   return { room_id: roomId, watching: !!w, tmux_session: w?.tmux || '', agents: w?.agents || [],
-    panes: w ? w.panes : {}, settings: wakeSettings(roomId), caps: w?.caps || [], commands: w?.commands || {} };
+    panes: w ? w.panes : {}, settings: wakeSettings(roomId), caps: w?.caps || [], commands: w?.commands || {},
+    activity: w?.activity || { procs: [], files: [] } };
 }
 function broadcastTeam(roomId) { broadcast({ type: 'team', team: teamView(roomId) }); }
 function pushEvent(roomId, ev) {
@@ -1922,6 +1923,30 @@ api.post('/watch/panes', wrap((req) => {
     if (was && !now && wakeSettings(roomId).auto_heal) watcherSay(roomId, `✅ \`${n}\` is working again.`);
   }
   broadcast({ type: 'panes', room_id: roomId, panes: w.panes });
+  return { ok: true };
+}));
+// the chat's side panel: commands the agents left running (dev servers…) and the files changed lately, from the watcher
+api.post('/watch/activity', wrap((req) => {
+  const roomId = normalizeRoomId(req.body.room);
+  const w = watcherRecord(roomId);
+  w.seen = Date.now();
+  const str = (v, n) => String(v ?? '').slice(0, n);
+  const procs = (Array.isArray(req.body.procs) ? req.body.procs : []).slice(0, 20).map((p) => ({
+    pid: Math.max(0, Math.floor(Number(p.pid) || 0)), agent: str(p.agent, 40), cmd: str(p.cmd, 120), age: Math.max(0, Number(p.age) || 0),
+    ports: (Array.isArray(p.ports) ? p.ports : []).map(Number).filter((x) => Number.isInteger(x) && x > 0 && x < 65536).slice(0, 4) })).filter((p) => p.pid > 1);
+  const files = (Array.isArray(req.body.files) ? req.body.files : []).slice(0, 20).map((f) => ({ path: str(f.path, 300), mtime: Number(f.mtime) || 0, doc: str(f.doc, 300) })).filter((f) => f.path);
+  w.activity = { procs, files, at: Date.now() };
+  broadcast({ type: 'activity', room_id: roomId, activity: w.activity });
+  return { ok: true };
+}));
+api.post('/rooms/:id/procs/:pid/stop', wrap((req) => {
+  const roomId = roomOf(req);
+  const w = watcherFor(roomId);
+  const pid = Number(req.params.pid);
+  if (!w || !(w.activity?.procs || []).some((p) => p.pid === pid)) throw new UserError("that isn't running any more");
+  pushEvent(roomId, { type: 'stop_proc', pid });
+  w.activity.procs = w.activity.procs.filter((p) => p.pid !== pid);
+  broadcast({ type: 'activity', room_id: roomId, activity: w.activity });
   return { ok: true };
 }));
 api.post('/watch/say', wrap((req) => {

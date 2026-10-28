@@ -431,6 +431,48 @@ DOC_LIMIT = 3000
 DOC_SKIP = {"node_modules", "__pycache__"}
 
 
+# ---------- the chat's side panel: what's running, what changed ----------
+ACTIVITY_EVERY = 15.0     # seconds between looks at the team's background commands and recently changed files
+FILES_SKIP = {"node_modules", "__pycache__", "agents", "dist", "build", "out", "target", "venv", "env", "coverage", "vendor", "attachments"}
+FILES_MAX_SEEN = 20000
+
+
+def recent_files(cfg, n=12, within=3 * 86400):
+    """The project files changed most recently (last 3 days): [{path, mtime, doc}] newest first. doc: the path inside
+    the docs folder when it's there (the chat opens those), else ''. Hidden folders, dependencies and secrets are left out."""
+    root = os.path.realpath(cfg.get("code_dir") or cfg["root"])
+    try:
+        docs = docs_base(cfg)
+    except ValueError:
+        docs = ""
+    now, seen, out = time.time(), 0, []
+    for cur, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in FILES_SKIP]
+        for f in files:
+            seen += 1
+            if f.startswith(".") or seen > FILES_MAX_SEEN:
+                continue
+            p = os.path.join(cur, f)
+            rel = os.path.relpath(p, root).replace(os.sep, "/")
+            if BLOCKED.search(rel):
+                continue
+            try:
+                m = os.stat(p).st_mtime
+            except OSError:
+                continue
+            if now - m < within:
+                out.append((m, p, rel))
+        if seen > FILES_MAX_SEEN:
+            break
+    out.sort(reverse=True)
+    res = []
+    for m, p, rel in out[:n]:
+        rp = os.path.realpath(p)
+        doc = os.path.relpath(rp, docs).replace(os.sep, "/") if docs and rp.startswith(docs + os.sep) else ""
+        res.append({"path": rel, "mtime": int(m * 1000), "doc": doc})
+    return res
+
+
 def docs_rel(cfg):
     return os.path.relpath(cfg["docs_path"], cfg["root"]).replace(os.sep, "/")
 
@@ -556,6 +598,8 @@ class Watcher:
         self.probe_at = {}      # agent -> when to check again whether its usage limit has reset
         self.real = {}          # agent -> (screen without digits and spinners, when that last changed)
         self.unhung = {}        # agent -> times a hung step was interrupted
+        self.last_activity = 0  # last look at background commands and changed files (the chat's side panel)
+        self.activity_sig = None
 
     @staticmethod
     def mtime(p):
@@ -572,7 +616,7 @@ class Watcher:
         r = http(self.cfg, "/watch/poll", {"room": self.cfg["room"], "agents": agents,
                                            "tmux_session": self.cfg["tmux_session"],
                                            "settings": local, "settings_changed": changed,
-                                           "timeout": timeout, "caps": ["rename_agent", "keys"] + (["slash"] if slash else []) + (["skills"] if team_skills else [])}, timeout=timeout + 10)
+                                           "timeout": timeout, "caps": ["rename_agent", "keys", "activity"] + (["slash"] if slash else []) + (["skills"] if team_skills else [])}, timeout=timeout + 10)
         server = routing(r.get("settings") or {})
         if changed:
             log(f"pushed settings to TropaAI: {local}")
@@ -633,6 +677,15 @@ class Watcher:
             out = r.stdout.strip() or r.stderr.strip()[-300:] or "done"
             log(f"removed {name}: {out}")
             say(self.cfg, f"🗑 Removed @{name}: {out}. TEAM.md is updated." if r.returncode == 0 else f"@{self.cfg['human']} couldn't fully remove `{name}`: {out}")
+            return
+        if ev.get("type") == "stop_proc":   # Stop on a "Running now" row
+            try:
+                pid = int(ev.get("pid") or 0)
+            except (TypeError, ValueError):
+                pid = 0
+            ok = pid > 1 and hasattr(reap, "stop_one") and reap.stop_one(self.cfg, pid)
+            log(f"stop {pid}: {'stopped' if ok else 'not one of the team’s commands'}")
+            self.last_activity = 0; self.activity_sig = None
             return
         if ev.get("type") == "doc_read":
             self.send_doc(ev); return
@@ -877,6 +930,16 @@ class Watcher:
         return "\n".join(lines)[-3000:].replace("```", "ˋˋˋ")
 
     # -- docs viewer --
+    def post_activity(self, force=False):
+        """The team's background commands (dev servers…) and the recently changed files, for the chat's side panel."""
+        procs = reap.background(self.cfg) if hasattr(reap, "background") else []
+        files = recent_files(self.cfg)
+        sig = json.dumps([[(p["pid"], p["ports"]) for p in procs], files])
+        if sig == self.activity_sig and not force and time.time() - getattr(self, "activity_sent", 0) < 120:
+            return
+        http(self.cfg, "/watch/activity", {"room": self.cfg["room"], "procs": procs, "files": files})
+        self.activity_sig, self.activity_sent = sig, time.time()
+
     def post_docs(self, force=False):
         now = time.time()
         self.last_docs = now
@@ -1428,6 +1491,12 @@ class Watcher:
                     self.post_skills()
                 except Exception as e:
                     log(f"could not send the skills list: {e}")
+            if time.time() - self.last_activity >= ACTIVITY_EVERY:
+                self.last_activity = time.time()
+                try:
+                    self.post_activity()
+                except Exception as e:
+                    log(f"could not send what's running: {e}")
             if time.time() - self.last_docs >= DOCS_EVERY:
                 try:
                     self.post_docs()

@@ -148,6 +148,106 @@ def find(cfg, agent=None, orphans_only=False):
     return {pid: procs[pid] for pid in hit - keep if pid in procs and not procs[pid]["cmd"].split(" ")[0].endswith("tmux")}
 
 
+# What the "Running now" list leaves out: the agents' CLIs and their helpers, shells, and the tropa kit itself
+CLI_BITS = re.compile(r"(^|/)(claude|codex|opencode|opencode-cli|gemini|qwen|tmux|start_agent\.sh|room_watcher\.py|config\.py|setup_agent\.py)(\s|$)"
+                      r"|@anthropic-ai/claude-code|@openai/codex|@google/gemini-cli|@qwen-code|opencode-ai|\bmcp\b|mcp-server|\bcaffeinate\b|^(\S*/)?sleep\s", re.I)
+SHELLS = {"bash", "-bash", "sh", "zsh", "-zsh", "dash", "fish", "login"}
+
+
+def ages(pids):
+    """{pid: seconds it has been running} (ps etime: [[dd-]hh:]mm:ss)."""
+    if not pids:
+        return {}
+    r = subprocess.run(["ps", "-o", "pid=,etime=", "-p", ",".join(map(str, pids))], capture_output=True, text=True)
+    out = {}
+    for line in r.stdout.splitlines():
+        f = line.split()
+        if len(f) != 2 or not f[0].isdigit():
+            continue
+        d, _, t = f[1].rpartition("-")
+        n = 0
+        for part in t.split(":"):
+            n = n * 60 + int(part or 0)
+        out[int(f[0])] = n + int(d or 0) * 86400
+    return out
+
+
+def ports(pids):
+    """{pid: [ports it listens on]} (best effort: lsof, or /proc on Linux)."""
+    out = {}
+    if not pids:
+        return out
+    if os.path.isdir("/proc/self"):
+        inode_port = {}
+        for f in ("/proc/net/tcp", "/proc/net/tcp6"):
+            try:
+                with open(f) as fh:
+                    for line in fh.readlines()[1:]:
+                        c = line.split()
+                        if len(c) > 9 and c[3] == "0A":   # LISTEN
+                            inode_port[c[9]] = int(c[1].rsplit(":", 1)[1], 16)
+            except OSError:
+                pass
+        for p in pids:
+            try:
+                for fd in os.listdir(f"/proc/{p}/fd"):
+                    link = os.readlink(f"/proc/{p}/fd/{fd}")
+                    if link.startswith("socket:[") and link[8:-1] in inode_port:
+                        out.setdefault(p, []).append(inode_port[link[8:-1]])
+            except OSError:
+                pass
+        return {p: sorted(set(v)) for p, v in out.items()}
+    r = subprocess.run(["lsof", "-nP", "-a", "-iTCP", "-sTCP:LISTEN", "-Fpn", "-p", ",".join(map(str, pids))], capture_output=True, text=True)
+    pid = None
+    for line in r.stdout.splitlines():
+        if line.startswith("p"):
+            pid = int(line[1:])
+        elif line.startswith("n") and pid and line.rsplit(":", 1)[-1].isdigit():
+            out.setdefault(pid, []).append(int(line.rsplit(":", 1)[-1]))
+    return {p: sorted(set(v)) for p, v in out.items()}
+
+
+def label(cmd):
+    """"npm run dev", "python3 -m http.server 8000": the command without its program's folder."""
+    first, _, rest = cmd.partition(" ")
+    return (os.path.basename(first) + (" " + rest if rest else ""))[:90]
+
+
+def background(cfg, min_age=30):
+    """The commands the agents left running (dev servers, watchers, long tests), for the chat's "Running now":
+    [{pid, agent, cmd, age, ports}]. Not the CLIs themselves, their helpers or the shells around commands."""
+    session = cfg["tmux_session"]
+    procs = processes()
+    found = find(cfg)
+    top = set(pane_pids(session))
+    keep = []
+    for pid in found:
+        p = procs.get(pid)
+        if not p or pid in top or CLI_BITS.search(p["cmd"]) or os.path.basename(p["cmd"].split(" ")[0]) in SHELLS:
+            continue
+        keep.append(pid)
+    shown = set(keep)
+    keep = [pid for pid in keep if procs[pid]["ppid"] not in shown]   # a command, not each of its workers
+    age, port = ages(keep), ports(list(descendants(procs, keep)))
+    out = []
+    for pid in keep:
+        if age.get(pid, 0) < min_age:
+            continue
+        tag = procs[pid]["tag"]
+        agent = tag.split("/", 1)[1] if "/" in tag else ""
+        ps = sorted({x for d in descendants(procs, [pid]) for x in port.get(d, [])})
+        out.append({"pid": pid, "agent": agent, "cmd": label(procs[pid]["cmd"]), "age": age.get(pid, 0), "ports": ps[:4]})
+    return sorted(out, key=lambda x: x["age"])[:20]
+
+
+def stop_one(cfg, pid):
+    """Stop one command from the "Running now" list, and what it started. False if it isn't one of the team's."""
+    if not any(b["pid"] == pid for b in background(cfg, 0)):
+        return False
+    stop(sorted(descendants(processes(), [pid]), reverse=True))
+    return True
+
+
 def stop(pids, grace=3.0):
     """SIGTERM, then SIGKILL whatever is still there after `grace` seconds. Returns how many were stopped."""
     pids = [p for p in pids if p > 1]

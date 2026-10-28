@@ -113,13 +113,16 @@ The name is saved in the chat, so it outlives restarts. Every project's team pic
 
 The switch at the top of the sidebar picks how much you see. New users start in **Simple**; the choice is remembered.
 
-- **Simple** is for building and running a team without the technical details. **+** opens **Build your team**:
-  1. Start from a [ready-made team](#ready-made-teams), or start empty.
-  2. Adjust who's on it: rename people, change roles, read and edit each one's job, pick the lead, remove people. **Hire someone** adds a role from the library (every role in every team) or one you describe.
-  3. Say what the team should work on.
-  4. Choose where it's saved: a new folder, or an existing one (**Browse…**).
-
-  In a project, the side panel's **Your team** shows each member's status in plain words, with **Allow / Don't allow** when one needs your OK. Terminals, models, usage and public links are hidden.
+- **Simple** works like a chat app: one conversation with your team, and a side panel showing what it's doing.
+  - **New project** opens one question: *What should your team work on?* Describe the work and press **Start**. TropaAI picks a [ready-made team](#ready-made-teams) from what you wrote (a website, an app, writing, research, bookkeeping…), names the project and creates it. To choose yourself, click a team, or **See all teams** to open **Build your team**: rename people, change roles and jobs, pick the lead, hire from the role library. **Use a folder from my computer** works on a folder you already have and leaves it untouched.
+  - **The chat** shows your messages as bubbles and the replies meant for you: the lead answering you, anything that @mentions you, questions for you. The team talking among itself and TropaAI's own notes fold into one line, *5 team updates*, which opens with a click. A line at the bottom says who's working right now.
+  - **Questions come as cards** with a button per answer, or type your own. Once answered, the card says what you chose.
+  - **The side panel** (the button at the top right hides it; on a phone, tap the team's faces) has four parts:
+    - **Team:** each member's status in plain words, such as *Building the menu page*, *Waiting for your answer* or *Paused: usage limit*, with **Allow / Don't allow** when one needs your OK.
+    - **Running now:** what the agents left running in the background, such as a dev server, with a link to open it and **Stop**.
+    - **Decisions:** what you answered, what went ahead without an answer, and what still needs you.
+    - **Files:** what the team changed lately and what was shared in the chat.
+  - Everything else (task board, docs, skills, search, download, pause, Fix the team) is in the **⋯** menu. Terminals, models, usage and public links are hidden.
 - **Advanced** is everything below: the full New project form, the Team view with live terminals, models and CLIs per agent, usage, and public links.
 
 ### Option A: start a project from the browser (recommended)
