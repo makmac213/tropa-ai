@@ -1462,7 +1462,11 @@ class Watcher:
                     self.slash_sig, self.last_slash = None, 0
                     self.skills_sig = None
                 for ev in events:
-                    self.handle(ev, agents)
+                    try:
+                        self.handle(ev, agents)
+                    except Exception as e:
+                        import traceback
+                        log(f"couldn't handle {ev.get('type')}: {e}\n" + traceback.format_exc()[-1500:])
                 sync_files(self.cfg, getattr(self, "last_resp", {}) or {})
             except Exception as e:
                 if ok is not False:
@@ -1481,7 +1485,13 @@ class Watcher:
                 wake_all(self.cfg, [])
             if time.time() - self.last_capture >= PANE_EVERY:
                 self.last_capture = time.time()
-                self.capture(agents)
+                try:
+                    self.capture(agents)
+                except Exception as e:   # one odd screen must not stop the whole watcher (the room would go deaf)
+                    if getattr(self, "_capture_err", None) != str(e):
+                        self._capture_err = str(e)
+                        import traceback
+                        log("reading the screens failed; carrying on:\n" + traceback.format_exc()[-1500:])
             if time.time() - self.last_slash >= SLASH_EVERY or sorted(agents) != self.slash_agents:
                 try:
                     self.post_slash(agents)

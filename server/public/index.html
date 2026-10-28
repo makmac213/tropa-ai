@@ -4827,7 +4827,10 @@
     const quote = m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : 'an earlier message'}</div>` : '';
     const extras = `${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}`;
     if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div>${extras}${actsHtml(m)}</div>`;
-    if (k === 'note') return `<div class="sm sm-note" id="m${m.id}" data-id="${m.id}">${SICON.info}<div><div class="body">${md(m.content)}</div>${extras}</div></div>`;
+    if (k === 'note') {   // TropaAI telling you something; "press Fix the team" comes with the button
+      const fix = /\*\*Fix the team\*\*/.test(m.content) && Date.now() - m.created_at < 6 * 3600e3 ? '<div class="rs-ask"><button type="button" class="tbtn pri" data-fixteam>Fix the team</button></div>' : '';
+      return `<div class="sm sm-note" id="m${m.id}" data-id="${m.id}">${SICON.info}<div><div class="body">${md(m.content.replace(/ If it keeps happening, switch to Advanced mode:[^\n]*/, ''))}</div>${fix}${extras}</div></div>`;
+    }
     const q = state.questions.find((x) => x.message_id === m.id);
     const cont = prev && prev.sender === m.sender && m.created_at - prev.created_at < 10 * 60e3 && !m.reply_to && !q;
     return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? '' : `<div class="sn">${esc(m.sender)}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;

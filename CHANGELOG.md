@@ -2,6 +2,12 @@
 
 ## 0.5.1 (October 2026)
 
+### Fixed: "the room watcher keeps stopping" on a Mac
+- **The watcher was running all along.** The helper's check looked for a process named `python…`, but on a Mac `python3` can start Apple's `Python` (capital P) as a separate process. The check missed it, so every 30 seconds the helper restarted a healthy watcher, then said it "keeps stopping". It now finds the watcher however Python was started.
+- **Never giving up for good.** After 3 restarts in an hour, the helper still tries again every half hour by itself, instead of waiting for someone to press Fix the team.
+- **Simpler message.** The message no longer sends you to Advanced mode; in Simple mode it comes with a **Fix the team** button.
+- **The watcher keeps going after an error** in reading one agent's screen or handling one request: it logs the error and carries on instead of stopping.
+
 ### Simple mode, chat-first
 - **Simple mode works like a chat app now.** One conversation in the middle with a large message box. Your messages are bubbles. Replies meant for you (the lead answering you, @mentions of you, questions) show with the agent's name and face. The team's talk among itself and TropaAI's setup notes fold into *N team updates*. Message numbers, times and tags are gone.
 - **Questions are cards with a button per answer** (or type your own); answered ones say what you chose.
