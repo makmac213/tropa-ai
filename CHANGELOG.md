@@ -2,6 +2,9 @@
 
 ## 0.5.1 (October 2026)
 
+### @ suggestions
+- **Typing @ in the message box suggests names:** the room's agents (lead first, with what each is doing), the people in the room and `@all`. Typing narrows the list; ↑ ↓ choose; **Tab**, Enter or a click puts the name in. Works mid-sentence and in both modes; an email address doesn't set it off.
+
 ### Fixed: "the room watcher keeps stopping" on a Mac
 - **The watcher was running all along.** The helper's check looked for a process named `python…`, but on a Mac `python3` can start Apple's `Python` (capital P) as a separate process. The check missed it, so every 30 seconds the helper restarted a healthy watcher, then said it "keeps stopping". It now finds the watcher however Python was started.
 - **Never giving up for good.** After 3 restarts in an hour, the helper still tries again every half hour by itself, instead of waiting for someone to press Fix the team.
