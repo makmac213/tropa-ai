@@ -1088,7 +1088,7 @@
         <textarea id="input" rows="1" placeholder="Message #general  —  @agent to mention"></textarea>
         <button class="send" id="sendBtn">Send</button>
       </div>
-      <div class="hint-row"><div class="hint">Enter to send · Shift+Enter for new line · @name mentions an agent · 📎 drop or paste files · /help for commands</div>
+      <div class="hint-row"><div class="hint">Enter to send · Shift+Enter for new line · @ suggests names (Tab picks) · 📎 drop or paste files · /help for commands</div>
         <button type="button" class="as-btn" id="asBtn" title="Follow new messages when you're at the bottom of the chat"></button></div>
     </div>
   </main>
@@ -3438,8 +3438,49 @@
     infoInline(on ? 'Messages blurred · /unblur to show.' : 'Messages visible.');
   }
   let cmdSel = 0;
+  // @ suggestions: the room's agents, the people in it and @all, for the word being typed at the caret
+  const mentionAt = () => {
+    const t = $('#input'), before = t.value.slice(0, t.selectionStart ?? t.value.length);
+    const m = before.match(/(^|[\s(,;])@([\w.-]*)$/);
+    return m && t.selectionStart === t.selectionEnd ? { q: m[2], from: before.length - m[2].length - 1 } : null;
+  };
+  function mentionList(q) {
+    const room = state.current, slug = projectOf(room), t = state.team[room] || {};
+    const lead = String(t.settings?.lead || '').toLowerCase(), me = myName().toLowerCase();
+    const out = new Map();
+    const add = (name, kind, desc) => { if (name && !out.has(name.toLowerCase())) out.set(name.toLowerCase(), { name, kind, desc }); };
+    const agentDesc = (n) => {
+      const a = state.agents.find((x) => x.name.toLowerCase() === n.toLowerCase()), p = t.panes?.[n];
+      return [p?.state === 'working' ? 'working' : p?.state === 'approval' ? 'needs your OK' : '', a?.status || a?.description || ''].filter(Boolean).join(' · ');
+    };
+    const inRoom = slug ? [...(t.agents || []), ...state.agents.filter((a) => (a.project || '').toLowerCase() === slug).map((a) => a.name)] : state.agents.map((a) => a.name);
+    for (const n of inRoom.sort((a, b) => (b.toLowerCase() === lead) - (a.toLowerCase() === lead))) add(n, n.toLowerCase() === lead ? 'lead' : 'agent', agentDesc(n));
+    for (const m of state.messages.get(room) || []) if (m.sender_kind === 'human' && m.sender.toLowerCase() !== me) add(m.sender, 'person', '');
+    if (state.human && state.human.toLowerCase() !== me) add(state.human, 'person', '');
+    add('all', 'everyone', slug ? 'wakes every agent in this room' : 'everyone here');
+    const lq = q.toLowerCase(), all = [...out.values()];
+    return [...all.filter((x) => x.name.toLowerCase().startsWith(lq)), ...all.filter((x) => !x.name.toLowerCase().startsWith(lq) && x.name.toLowerCase().includes(lq))].slice(0, 8);
+  }
+  function insertMention(name) {
+    const at = mentionAt(), t = $('#input'); if (!at) return;
+    const after = t.value.slice(t.selectionStart).replace(/^[\w.-]*/, '');   // the rest of a name typed in the middle
+    const ins = `@${name}${/^\s/.test(after) ? '' : ' '}`;
+    t.value = t.value.slice(0, at.from) + ins + after;
+    const pos = at.from + ins.length; t.setSelectionRange(pos, pos);
+    hideCmds(); autosize(); t.focus();
+  }
   function renderCmds() {
     const v = $('#input').value;
+    const at = mentionAt();
+    if (at) {
+      const list = mentionList(at.q);
+      if (!list.length) return hideCmds();
+      cmdSel = Math.min(cmdSel, list.length - 1);
+      const box = $('#cmds'); box.hidden = false;
+      box.innerHTML = list.map((c, i) => `<div class="cmd ${i === cmdSel ? 'sel' : ''}" data-mention="${esc(c.name)}" role="option" aria-selected="${i === cmdSel}"><b>@${esc(c.name)}</b><span>${esc(c.desc)}</span><i class="cmd-who">${esc(c.kind)}</i></div>`).join('');
+      box.children[cmdSel]?.scrollIntoView({ block: 'nearest' });
+      return list;
+    }
     const m = v.match(/^((?:@[\w.-]+[\s,]*)*)\/([\w:.-]*)$/);
     if (!m) return hideCmds();
     const pre = m[1], q = m[2].toLowerCase();
@@ -3488,6 +3529,8 @@
   }
   function autosize() { const t = $('#input'); t.style.height = 'auto'; t.style.height = Math.min(220, t.scrollHeight) + 'px'; }
   $('#input').addEventListener('input', () => { autosize(); renderCmds(); });
+  $('#input').addEventListener('keyup', (e) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) renderCmds(); });
+  $('#input').addEventListener('click', () => renderCmds());
   $('#input').addEventListener('keydown', (e) => {
     const menuOpen = !$('#cmds').hidden;
     if (menuOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
@@ -3496,6 +3539,7 @@
     }
     if (menuOpen && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey))) {
       const sel = $('#cmds').children[cmdSel];
+      if (sel?.dataset.mention) { e.preventDefault(); insertMention(sel.dataset.mention); return; }
       if (sel) {
         e.preventDefault(); $('#input').value = sel.dataset.cmd;
         if (e.key === 'Enter' && sel.dataset.local) send(); else hideCmds();   // an agent command may take words after it
@@ -3557,6 +3601,8 @@
     const dl = e.target.closest('[data-dl]');
     if (dl) { downloadTranscript(dl.dataset.dl); return; }
     if (!e.target.closest('#dlMenu')) $('#dlMenu').hidden = true;
+    const mn = e.target.closest('[data-mention]');
+    if (mn) { e.preventDefault(); insertMention(mn.dataset.mention); return; }
     const c = e.target.closest('[data-cmd]');
     if (c) { $('#input').value = c.dataset.cmd; if (c.dataset.local) send(); else { hideCmds(); $('#input').focus(); } return; }
     if (e.target.closest('#shareBtn')) { openShare(); return; }

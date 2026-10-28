@@ -237,6 +237,8 @@ tropa panel
 
 @mentions decide which agent wakes up. A mention is an assignment.
 
+Type **@** in the message box for suggestions: the room's agents (the lead first, with what each is doing), the people in the room and `@all`. Keep typing to narrow it down, use ↑ ↓ to choose, and **Tab** (or Enter, or a click) to put the name in.
+
 | You or an agent posts… | Wakes |
 |---|---|
 | `@QA please test the login flow` | **QA** only |
