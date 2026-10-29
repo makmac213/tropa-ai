@@ -963,7 +963,8 @@
   .sfold-list { margin-left: 42px; border-left: 2px solid var(--line); padding: 2px 0 2px 14px; display: flex; flex-direction: column; gap: 8px; }
   .sfold-list .su { font-size: 13.5px; } .sfold-list .su .who { font-weight: 600; margin-right: 6px; } .sfold-list .su .body { display: inline; color: var(--text); }
   .sfold-list .su .body p { display: inline; margin: 0; } .sfold-list .su.k-system .body { color: var(--muted); }
-  .sworking { margin-left: 42px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+  .sworking { margin-left: 42px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; color: var(--text); }
+  .sworking .mut { color: var(--muted); } .sworking svg { flex: none; }
   .sdots { display: flex; gap: 4px; } .sdots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: sdot 1.2s infinite ease-in-out; }
   .sdots i:nth-child(2) { animation-delay: .15s; } .sdots i:nth-child(3) { animation-delay: .3s; }
   @keyframes sdot { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
@@ -1844,6 +1845,10 @@
       else if (e.type === 'agent_deleted') { state.agents = state.agents.filter((a) => a.name !== e.name); renderSidebar(); }
       else if (e.type === 'docs') docsChanged(e.docs);
       else if (e.type === 'team') { state.team[e.team.room_id] = e.team; if (e.team.room_id === state.current) { renderSidebar(); if (state.view === 'team') renderTeam(); } }
+      else if (e.type === 'reads') {
+        const t = state.team[e.room_id]; if (t) { t.reads ||= {}; t.reads[e.agent] = e.last_read; }
+        if (e.room_id === state.current && simpleChat()) renderWorking();
+      }
       else if (e.type === 'activity') {
         const t = state.team[e.room_id]; if (t) t.activity = e.activity;
         if (e.room_id === state.current) renderRside();
@@ -1851,6 +1856,10 @@
       else if (e.type === 'panes') {
         const t = state.team[e.room_id] || (state.team[e.room_id] = { room_id: e.room_id, watching: true, agents: Object.keys(e.panes), panes: {}, settings: {} });
         t.watching = true; t.panes = { ...t.panes, ...e.panes };
+        for (const [n, p] of Object.entries(e.panes)) {
+          const k = `${e.room_id}\0${n.toLowerCase()}`;
+          if (p?.state === 'working') state.workStart[k] ||= Date.now(); else delete state.workStart[k];
+        }
         if (e.room_id === state.current) { renderSidebar(); renderSimpleHeader(); if (state.view === 'team') updateCards(); if (simpleChat()) renderWorking(); }
       }
       else if (e.type === 'attachment') {
@@ -4893,13 +4902,72 @@
       : `<div class="sq-done">${q.status === 'answered' ? `${SICON.check} ${sameName(q.answered_by, myName()) ? 'You answered' : `${esc(q.answered_by)} answered`}: ${esc(ansText(q).slice(0, 200))}` : q.status === 'assumed' ? `No answer, so it went with: ${esc(q.fallback || ansText(q))}` : 'Skipped'}</div>`}
     </div>`;
   }
+  // What an agent is doing right now, read off the bottom of its screen: "Running git push", "Editing menu.html"…
+  const ACT = [
+    [/^(bash|shell|run|ran|running|exec|command)$/i, 'Running'], [/^(read|view|cat|open)$/i, 'Reading'], [/^(edit|update|multiedit|write|create|patch|edited|apply_patch)$/i, 'Editing'],
+    [/^(grep|glob|search|find|list|ls|explored?)$/i, 'Looking through the files'], [/^(webfetch|websearch|fetch|web_search|google_web_search)$/i, 'Looking things up online'],
+    [/^(task|agent)$/i, 'Working with a helper'], [/^(todowrite|todo|plan|update_plan)$/i, 'Planning the next steps'],
+  ];
+  function paneActivity(text) {
+    const rows = String(text || '').split('\n').slice(-60).reverse();
+    for (const r of rows) {
+      const m = r.match(/^\s*[⏺●•✓✔✦→⎿]\s*([A-Za-z_]+)(?:\((.*?)\)?\s*$|\s+(.*)$)/);
+      if (!m) continue;
+      if (/^tropa\b/i.test(m[1]) || /\btropa\b/.test(r)) { if (/read_messages|check_inbox/.test(r)) return 'Reading the chat'; if (/send_message/.test(r)) return 'Writing a message'; continue; }
+      const verb = ACT.find(([rx]) => rx.test(m[1])); if (!verb) continue;
+      let arg = String(m[2] ?? m[3] ?? '').trim().replace(/^(["'`])(.*)\1$/, '$2');
+      if (verb[1] === 'Reading' || verb[1] === 'Editing') arg = arg.split(/[\\/]/).pop();
+      if (verb[1] === 'Running') { const w = arg.replace(/["'`]/g, '').split(/\s+/).filter(Boolean); arg = w.slice(0, 3).join(' ') + (w.length > 3 ? ' …' : ''); }
+      if (verb[1] !== 'Running') arg = arg.length > 50 ? '' : arg;
+      return arg ? `${verb[1]} ${arg.length > 60 ? arg.slice(0, 59) + '…' : arg}` : verb[1];
+    }
+    return '';
+  }
+  state.workStart = {};   // room \0 agent -> when it started working (this page saw it)
+  const minsSince = (t) => Math.max(0, Math.round((Date.now() - t) / 60e3));
+  function workingFor(room, n) { const t = state.workStart[`${room}\0${n.toLowerCase()}`]; return t ? minsSince(t) : 0; }
+  const joinNames = (xs) => (xs.length < 2 ? xs.join('') : xs.length === 2 ? `${xs[0]} and ${xs[1]}` : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+  /** The line at the bottom of the chat: what happened to your last message (seen, being worked on), and who's working */
   function simpleWorking(room) {
-    const t = state.team[room] || {};
-    const busy = (t.agents || []).filter((n) => t.panes?.[n]?.state === 'working');
-    if (!busy.length) return '';
-    const st = busy.length === 1 ? state.agents.find((a) => sameName(a.name, busy[0]))?.status : '';
-    const who = busy.length === 1 ? busy[0] : busy.length === 2 ? `${busy[0]} and ${busy[1]}` : `${busy.slice(0, -1).join(', ')} and ${busy[busy.length - 1]}`;
-    return `<div class="sworking" aria-live="polite"><span class="sdots" aria-hidden="true"><i></i><i></i><i></i></span>${esc(who)} ${busy.length === 1 ? (st ? `is ${/^[a-z]+ing\b/i.test(st) ? esc(st.charAt(0).toLowerCase() + st.slice(1)) : `working: ${esc(st)}`}` : 'is working') : 'are working'}</div>`;
+    const t = state.team[room] || {}, panes = t.panes || {}, reads = t.reads || {};
+    const list = state.messages.get(room) || [], me = myName().toLowerCase();
+    const busy = (t.agents || []).filter((n) => panes[n]?.state === 'working');
+    const act = (n) => { const a = paneActivity(panes[n]?.text); const mins = workingFor(room, n); return [mins ? `${mins} min` : '', a].filter(Boolean).join(' · '); };
+    // your last message, if no agent has answered since
+    let mine = null;
+    for (let i = list.length - 1; i >= 0; i--) { const m = list[i]; if (m.sender_kind === 'agent') break; if (m.sender_kind === 'human' && m.sender.toLowerCase() === me) { mine = m; break; } }
+    let line = '', ask = '';
+    if (mine && Date.now() - mine.created_at < 6 * 3600e3) {
+      const agents = new Set((t.agents || []).map((n) => n.toLowerCase()));
+      const lead = String(t.settings?.lead || '').toLowerCase();
+      const named = (mine.mentions || []).map((x) => String(x).toLowerCase());
+      const to = (named.some((x) => ['all', 'here', 'team', 'everyone'].includes(x)) ? [...agents] : named.filter((x) => agents.has(x))).length
+        ? (named.some((x) => ['all', 'here', 'team', 'everyone'].includes(x)) ? [...agents] : named.filter((x) => agents.has(x))) : lead ? [lead] : [];
+      const name = (x) => (t.agents || []).find((n) => n.toLowerCase() === x) || x;
+      const seen = to.filter((x) => Object.entries(reads).some(([a, id]) => a.toLowerCase() === x && id >= mine.id));
+      const work = to.filter((x) => panes[name(x)]?.state === 'working');
+      if (work.length) {
+        const n = name(work[0]), a = act(n);
+        line = `${esc(joinNames(work.map(name)))} ${work.length === 1 ? 'is' : 'are'} working on it${a && work.length === 1 ? ` <span class="mut">· ${esc(a)}</span>` : ''}`;
+      } else if (seen.length) {
+        const quiet = minsSince(mine.created_at);
+        line = `Seen by ${esc(joinNames(seen.map(name)))}${quiet >= 3 ? ` <span class="mut">· no reply yet</span>` : ''}`;
+        if (quiet >= 3) ask = `<button type="button" class="lnk" data-sask="${esc(name(seen[0]))}">Ask for an update</button>`;
+      } else if (to.length) {
+        const off = to.every((x) => !panes[name(x)]);
+        line = off ? `Sent <span class="mut">· the team isn't running, so nobody has seen it yet</span>` : `Sent <span class="mut">· waiting for ${esc(joinNames(to.map(name)))} to pick it up</span>`;
+      }
+      const others = busy.filter((n) => !work.includes(n.toLowerCase()));
+      if (line && others.length) line += ` <span class="mut">· ${esc(joinNames(others))} ${others.length === 1 ? 'is' : 'are'} working too</span>`;
+    }
+    if (!line && busy.length) {
+      line = `${esc(joinNames(busy))} ${busy.length === 1 ? 'is' : 'are'} working`;
+      const a = busy.length === 1 ? act(busy[0]) : '';
+      if (a) line += ` <span class="mut">· ${esc(a)}</span>`;
+    }
+    if (!line) return '';
+    const dots = busy.length ? '<span class="sdots" aria-hidden="true"><i></i><i></i><i></i></span>' : SICON.check.replace('var(--ok)', 'var(--muted)');
+    return `<div class="sworking" aria-live="polite">${dots}<span>${line}</span>${ask}</div>`;
   }
   function renderWorking() {   // just the "dev is working" line, as screens change (not the whole chat)
     const conv = $('#msgs .sconv'); if (!conv) return;
@@ -4910,6 +4978,13 @@
     if (html) conv.insertAdjacentHTML('beforeend', html);
     if (stick && autoScroll) box.scrollTop = box.scrollHeight;
   }
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-sask]'); if (!b) return;
+    b.disabled = true;
+    try { await api(`/rooms/${encodeURIComponent(state.current)}/messages`, { method: 'POST', body: { sender_kind: 'human', sender: myName(), content: `@${b.dataset.sask} Any update on this? A line on where it stands is enough.` } }); }
+    catch (err) { alertInline(err.message); b.disabled = false; }
+  });
+  setInterval(() => { if (simpleChat() && !document.hidden) renderWorking(); }, 30e3);   // keep "4 min" and "no reply yet" current
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('sheet-open')) document.body.classList.remove('sheet-open'); });
   document.addEventListener('click', (e) => {
     const f = e.target.closest('[data-fold]'); if (!f) return;
@@ -5013,7 +5088,7 @@
         if (p.state === 'approval') { s = 'Needs your OK'; cls = 'warn'; }
         else if (p.limit) { s = `Paused: ${limitLabel(p)}${p.limit.kind === 'credits' ? ' (top up the account)' : ''}`; cls = 'lim'; }
         else if (oq) { s = 'Waiting for your answer'; cls = 'warn'; }
-        else if (p.state === 'working') { s = a?.status || (card ? card.title : 'Working'); cls = 'now'; }
+        else if (p.state === 'working') { s = a?.status || paneActivity(p.text) || (card ? card.title : 'Working'); cls = 'now'; }
         else if (bgTasks(p)) s = 'Running a long task';
         else if (card) s = `Has “${card.title}” in progress`;
         else s = p.state ? 'Waiting for work' : 'Not started';

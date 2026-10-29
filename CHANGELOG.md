@@ -2,6 +2,10 @@
 
 ## 0.5.1 (October 2026)
 
+### See what happens to your message
+- **Simple mode shows the status of your last message** until someone replies: *Sent*, *Seen by lead* (the agent read it), then *lead is working on it · 4 min · Running git push*, with what it's doing read off its screen (running a command, editing a file, reading the chat…). After a few minutes with no reply, **Ask for an update** sends a one-line nudge. The side panel's Team list shows the same live activity.
+- **Agents say "On it" first.** When you write to an agent, it's asked to reply with one line about what it'll do before any work that takes more than a minute.
+
 ### @ suggestions
 - **Typing @ in the message box suggests names:** the room's agents (lead first, with what each is doing), the people in the room and `@all`. Typing narrows the list; ↑ ↓ choose; **Tab**, Enter or a click puts the name in. Works mid-sentence and in both modes; an email address doesn't set it off.
 

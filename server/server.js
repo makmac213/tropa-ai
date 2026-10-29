@@ -267,6 +267,7 @@ const q = {
   dropCursors: db.prepare('DELETE FROM cursors WHERE lower(agent) = lower(?)'),
   renameSender: db.prepare(`UPDATE messages SET sender = ? WHERE sender = ? AND sender_kind = 'agent'`),
   getCursor: db.prepare('SELECT last_read FROM cursors WHERE agent = ? AND room_id = ?'),
+  roomCursors: db.prepare('SELECT agent, last_read FROM cursors WHERE room_id = ?'),
   setCursor: db.prepare(`INSERT INTO cursors (agent, room_id, last_read) VALUES (?,?,?)
     ON CONFLICT(agent, room_id) DO UPDATE SET last_read = MAX(cursors.last_read, excluded.last_read)`),
   agentRooms: db.prepare('SELECT room_id FROM cursors WHERE agent = ?'),
@@ -486,7 +487,10 @@ function agentRoomIds(agent) {
   return [...ids].filter((id) => q.getRoom.get(id));
 }
 function markRead(agentName, roomId, id) {
-  if (id) q.setCursor.run(agentName, roomId, id);
+  if (!id) return;
+  q.setCursor.run(agentName, roomId, id);
+  // the chat shows "Seen by lead" under your message once the agent has read it
+  broadcast({ type: 'reads', room_id: roomId, agent: agentName, last_read: q.getCursor.get(agentName, roomId)?.last_read || id });
 }
 
 // ---------- messages ----------
@@ -1527,7 +1531,7 @@ function teamView(roomId) {
   const w = watcherFor(roomId);
   return { room_id: roomId, watching: !!w, tmux_session: w?.tmux || '', agents: w?.agents || [],
     panes: w ? w.panes : {}, settings: wakeSettings(roomId), caps: w?.caps || [], commands: w?.commands || {},
-    activity: w?.activity || { procs: [], files: [] } };
+    activity: w?.activity || { procs: [], files: [] }, reads: Object.fromEntries(q.roomCursors.all(roomId).map((r) => [r.agent, r.last_read])) };
 }
 function broadcastTeam(roomId) { broadcast({ type: 'team', team: teamView(roomId) }); }
 function pushEvent(roomId, ev) {
@@ -1640,6 +1644,9 @@ function fireWake(roomId, agent, { manual = false, reason } = {}) {
     const ids = msgs.map((m) => m.id).sort((a, b) => a - b);
     const who = [...new Set(msgs.map((m) => m.sender))].sort().join(', ');
     why = `New message(s) #${ids[0]}${ids.length > 1 ? `-#${ids[ids.length - 1]}` : ''} from ${who}.`;
+  }
+  if (msgs.some((m) => m.sender_kind === 'human')) {   // without this, the human sees nothing until the work is done
+    why += ` ${HUMAN_NAME} is waiting on you: if it's work that takes more than a minute, first reply with one line saying what you'll do (e.g. "On it: deploying now, about 5 minutes"), then do it.`;
   }
   if (st.standingIn) {
     why += ` You're standing in for the lead \`${st.standingIn}\`, which is at its usage limit: answer ${HUMAN_NAME} and keep the team moving until it's back (it reads the room then).`;
