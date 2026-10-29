@@ -2,6 +2,9 @@
 
 ## 0.5.1 (October 2026)
 
+### Fixed: lists marked "Waiting on you"
+- **A message that only lists example questions is no longer treated as a question for you.** An agent message that @mentions you counted as a question if it had a "?" anywhere, including inside a numbered list of prompts to try. Now only the agent's own sentences count; a "?" inside a list, a quote, quotation marks, code or a link doesn't. Questions asked with `ask_human` are unchanged.
+
 ### See what happens to your message
 - **Simple mode shows the status of your last message** until someone replies: *Sent*, *Seen by lead* (the agent read it), then *lead is working on it · 4 min · Running git push*, with what it's doing read off its screen (running a command, editing a file, reading the chat…). After a few minutes with no reply, **Ask for an update** sends a one-line nudge. The side panel's Team list shows the same live activity.
 - **Agents say "On it" first.** When you write to an agent, it's asked to reply with one line about what it'll do before any work that takes more than a minute.
