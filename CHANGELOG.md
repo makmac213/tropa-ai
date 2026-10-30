@@ -2,6 +2,9 @@
 
 ## 0.5.1 (October 2026)
 
+### Arrange the team graph
+- **Drag the agents (and you) around the Team graph** to arrange it your way. The layout is kept per project in this browser; **Reset layout** in the graph's legend puts everyone back. A click still opens the agent's terminal.
+
 ### Fixed: adding an agent failed on a Mac
 - **"Couldn't add @agent: SyntaxError: f-string: expecting '}'".** Part of the agent setup used a way of writing text that needs Python 3.12, and a Mac's built-in Python is 3.9. Every TropaAI script is now checked with Python 3.9.
 

@@ -846,7 +846,7 @@
   .edge.recent { stroke: var(--accent); opacity: 1; stroke-width: 2.2; stroke-dasharray: 7 6; animation: flow .9s linear infinite; }
   .ecount { font-size: 11px; fill: var(--muted); }
   @keyframes flow { to { stroke-dashoffset: -26; } }
-  .node { cursor: pointer; }
+  .node { cursor: grab; touch-action: none; } .node:active { cursor: grabbing; }
   .node .core { fill: var(--panel2); stroke: var(--muted); stroke-width: 2; transition: fill .3s, stroke .3s; }
   .node.s-idle .core { fill: var(--idle); stroke: var(--idle); }
   .node.s-working .core { fill: var(--fill-ok); stroke: var(--fill-ok); }
@@ -2442,6 +2442,11 @@
       const ang = (n === 1 ? 90 : -25 + (230 * i) / (n - 1)) * Math.PI / 180;
       pos[a] = { x: cx + R * Math.cos(ang) * 1.12, y: cy + R * Math.sin(ang) * (lead ? 1 : 0.9) };
     });
+    const saved = graphSaved();   // where you dragged them (this browser, per room)
+    for (const [k, p] of Object.entries(pos)) {
+      const sp = saved[k === human ? HUMAN_KEY : k.toLowerCase()];
+      if (sp) pos[k] = clampNode(sp.x, sp.y, W, H);
+    }
     const byLower = new Map(Object.keys(pos).map((k) => [k.toLowerCase(), k]));
     const msgs = (state.messages.get(state.current) || []).filter((m) => m.sender_kind !== 'system').slice(-60);
     const edges = new Map();
@@ -2473,6 +2478,37 @@
     const l = p?.limit; if (!l) return '';
     return l.kind === 'credits' ? 'out of credits' : l.kind === 'limit' ? `usage limit${l.resets ? ` · resets ${l.resets}` : ''}` : 'rate-limited';
   }
+  // Drag a node to arrange the graph; positions are kept per room in this browser
+  const HUMAN_KEY = '\u0000you';
+  const graphKey = () => 'airc.gpos.' + state.current;
+  function graphSaved() { try { return JSON.parse(localGet(graphKey()) || '{}') || {}; } catch { return {}; } }
+  const clampNode = (x, y, W = 800, H = 560) => ({ x: Math.min(W - 40, Math.max(40, x)), y: Math.min(H - 50, Math.max(36, y)) });
+  let gdrag = null, graphMoved = false;
+  function graphPoint(svg, e) { const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; return pt.matrixTransform(svg.getScreenCTM().inverse()); }
+  document.addEventListener('pointerdown', (e) => {
+    const g = e.target.closest?.('#graph [data-gdrag]'); if (!g || e.button > 0) return;
+    const svg = g.ownerSVGElement, m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(g.getAttribute('transform') || ''), p = graphPoint(svg, e);
+    gdrag = { key: g.dataset.gdrag, dx: p.x - Number(m?.[1] || 0), dy: p.y - Number(m?.[2] || 0), x0: e.clientX, y0: e.clientY, moved: false, id: e.pointerId };
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!gdrag || e.pointerId !== gdrag.id) return;
+    if (!gdrag.moved && Math.hypot(e.clientX - gdrag.x0, e.clientY - gdrag.y0) < 5) return;   // a click, so far
+    if (!gdrag.moved) $('#graph')?.setPointerCapture?.(e.pointerId);   // only once it's a drag: a plain click still reaches the node
+    gdrag.moved = true; e.preventDefault();
+    const svg = $('#graph svg'); if (!svg) return;
+    const p = graphPoint(svg, e), saved = graphSaved();
+    saved[gdrag.key] = clampNode(Math.round(p.x - gdrag.dx), Math.round(p.y - gdrag.dy));
+    localSet(graphKey(), JSON.stringify(saved));
+    if (!gdrag.raf) gdrag.raf = requestAnimationFrame(() => { if (gdrag) gdrag.raf = 0; const t = state.team[state.current]; if (t && $('#graph')) $('#graph').innerHTML = graphSvg(t); });
+  });
+  const endDrag = (e) => { if (!gdrag || (e && e.pointerId !== gdrag.id)) return; graphMoved = gdrag.moved; gdrag = null; if (graphMoved) { const t = state.team[state.current]; if (t && $('#graph')) $('#graph').innerHTML = graphSvg(t); } };
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+  document.addEventListener('click', (e) => {   // the click that ends a drag doesn't select the node
+    if (graphMoved && e.target.closest?.('#graph')) { graphMoved = false; e.stopPropagation(); e.preventDefault(); return; }
+    graphMoved = false;
+    if (e.target.closest?.('[data-greset]')) { localSet(graphKey(), '{}'); const t = state.team[state.current]; if (t && $('#graph')) $('#graph').innerHTML = graphSvg(t); }
+  }, true);
   function graphSvg(t) {
     const g = graphModel(t); const r = 30; const sel = graphSelected(t);
     const edgeSvg = g.edges.map((e) => {
@@ -2488,7 +2524,7 @@
       const st = nodeState(t, name, g.human);
       const ini = name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?';
       const sub = nodeSub(t, name, st);
-      return `<g class="node s-${st} ${name === sel ? 'sel' : ''}" ${st === 'human' ? '' : `data-node="${esc(name)}"`} transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">
+      return `<g class="node s-${st} ${name === sel ? 'sel' : ''}" ${st === 'human' ? '' : `data-node="${esc(name)}"`} data-gdrag="${esc(st === 'human' ? HUMAN_KEY : name.toLowerCase())}" transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">
         <circle class="pulse" r="${r}"/><circle class="core" r="${r}"/><text class="ini" dy="5">${esc(ini)}</text>
         <text class="lbl" y="${r + 19}">${esc(name)}${name === g.lead ? ' ★' : ''}</text><text class="sub" y="${r + 34}">${esc(sub)}</text>
         <title>${esc(name)} — ${esc(sub)}</title></g>`;
@@ -2498,7 +2534,7 @@
         <marker id="arrM" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
         <marker id="arrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
       </defs>${edgeSvg}${nodeSvg}</svg>
-      <div class="legend"><span><i style="background:var(--fill-ok)"></i>working</span><span><i style="background:var(--fill-run)"></i>background shell</span><span><i style="background:var(--fill-lim)"></i>limit / out of credits</span><span><i style="background:var(--idle)"></i>idle</span><span><i style="background:var(--fill-warn)"></i>needs approval</span><span><i style="background:var(--fill-accent)"></i>you</span><span>arrows: who mentioned whom (last 60 messages) · click a node to see its terminal</span></div>`;
+      <div class="legend"><span><i style="background:var(--fill-ok)"></i>working</span><span><i style="background:var(--fill-run)"></i>background shell</span><span><i style="background:var(--fill-lim)"></i>limit / out of credits</span><span><i style="background:var(--idle)"></i>idle</span><span><i style="background:var(--fill-warn)"></i>needs approval</span><span><i style="background:var(--fill-accent)"></i>you</span><span>arrows: who mentioned whom (last 60 messages) · click a node to see its terminal, drag it to move it</span>${Object.keys(graphSaved()).length ? '<button type="button" class="linkbtn" data-greset style="margin:0">Reset layout</button>' : ''}</div>`;
   }
   function updateGraph() {
     const t = state.team[state.current]; const graph = $('#graph'); const side = $('#graphSide');
