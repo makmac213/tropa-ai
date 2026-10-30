@@ -2,6 +2,10 @@
 
 ## 0.5.1 (October 2026)
 
+### A steadier header in Advanced mode
+- **☰ Chat has its own place, beside the search box.** It used to replace whichever button you last pressed (Team, Tasks, Docs or Usage), so it moved around. Those buttons now keep their names and look pressed while their view is open.
+- **Smaller header buttons**, so the row takes less room.
+
 ### Answer an agent's screen questions with buttons
 - **Questions a CLI asks in its terminal** (a menu with "Enter to confirm") now show in Simple mode as a card with a button per answer, in the chat and on the agent's row in the side panel. No more switching to Advanced to press ↓ and Enter.
 - **Claude Code's "Bypass Permissions mode" warning is accepted by itself** when Auto-approve is on, since you already chose that in TropaAI. The room says so, and how to turn it off.

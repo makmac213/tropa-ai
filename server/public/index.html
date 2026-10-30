@@ -320,7 +320,9 @@
   .blur-pill:hover { color: var(--text); }
   .dl-wrap { position: relative; }
   .dl-btn { background: var(--panel2); border: 1px solid var(--line); color: var(--muted); border-radius: 6px;
-    padding: 5px 10px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+    padding: 3px 8px; cursor: pointer; font-size: 12.5px; line-height: 1.5; white-space: nowrap; }
+  main > header { gap: 6px; } main > header h1 { margin-right: 4px; } header .search { width: 170px; padding: 4px 9px; }
+  #chatBtn { margin-left: 4px; }
   .dl-btn:hover { color: var(--text); }
   .dl-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; background: var(--panel); border: 1px solid var(--line);
     border-radius: 8px; box-shadow: 0 8px 24px var(--shadow); min-width: 210px; overflow: hidden; }
@@ -1063,6 +1065,7 @@
       <button class="dl-btn" id="skillsBtn" hidden title="How-tos your agents load when a task matches: add, edit or remove them">🧩 Skills</button>
       <button class="dl-btn" id="usageBtn" hidden title="Tokens and API-equivalent cost for this project">📊 Usage</button>
       <button class="dl-btn" id="teamBtn" hidden title="See every agent's screen live">▦ Team</button>
+      <button class="dl-btn" id="chatBtn" hidden title="Back to the chat">☰ Chat</button>
       <input class="search" id="search" placeholder="Search…">
       <button type="button" class="dl-btn" id="backBtn" hidden>← Back to the chat</button>
       <button type="button" class="hbtn s-team-btn" id="sTeamBtn" hidden aria-label="What your team is doing"><span class="s-avs" id="sTeamAvs"></span></button>
@@ -1565,18 +1568,23 @@
     const na = (state.attention[state.current]?.items || []).length;
     $('#attnBtn').hidden = !proj || !!state.searching || !na;
     $('#attnBtn').textContent = `⚠ Attention · ${na}`;
-    $('#docsBtn').textContent = state.view === 'docs' && proj ? '☰ Chat' : '📄 Docs';
+    // the view buttons keep their names (the open one looks pressed); Chat has its own place, beside the search box
+    $('#docsBtn').textContent = '📄 Docs';
+    for (const [id, v] of [['#docsBtn', 'docs'], ['#tasksBtn', 'tasks'], ['#usageBtn', 'usage'], ['#teamBtn', 'team']]) {
+      const on = !!proj && state.view === v; $(id).classList.toggle('on', on); $(id).setAttribute('aria-pressed', String(on));
+    }
+    $('#chatBtn').hidden = !proj || !!state.searching || simple();
+    $('#chatBtn').classList.toggle('on', state.view === 'chat'); $('#chatBtn').setAttribute('aria-pressed', String(state.view === 'chat'));
     const open = (state.tasks[state.current] || []).filter((t) => t.status !== 'done').length;
-    $('#tasksBtn').textContent = state.view === 'tasks' && proj ? '☰ Chat' : `✓ Tasks${open ? ` · ${open}` : ''}`;
-    $('#usageBtn').textContent = state.view === 'usage' && proj ? '☰ Chat' : '📊 Usage';
+    $('#tasksBtn').textContent = `✓ Tasks${open ? ` · ${open}` : ''}`;
+    $('#usageBtn').textContent = '📊 Usage';
     $('#dlBtn').parentElement.hidden = state.current === USAGE;
     if (state.current === USAGE && !state.searching) $('#roomTopic').textContent = 'Tokens and API-equivalent cost for every project';
     const liveShares = proj ? state.shares.filter((x) => x.room_id === state.current && ['online', 'starting', 'requested'].includes(x.status)) : [];
     $('#shareBtn').hidden = !proj || !!state.searching;
     $('#shareBtn').classList.toggle('live', liveShares.some((x) => x.status === 'online'));
     $('#shareBtn').textContent = liveShares.length ? `🌐 Shared · ${liveShares.length}` : '🌐 Share';
-    $('#teamBtn').textContent = state.view === 'team' && proj ? '☰ Chat' : '▦ Team';
-    $('#teamBtn').title = state.view === 'team' && proj ? 'Back to the chat' : "See every agent's screen live";
+    $('#teamBtn').textContent = '▦ Team';
     const readOnly = state.current === ALL || !!state.searching;
     $('#input').placeholder = readOnly ? 'Read-only view — pick a room to post (slash commands still work)' : `Message ${roomLabel(state.current)}  —  @agent to mention, / for commands`;
     $('#secProjectsLabel').textContent = simple() ? 'Your projects' : 'Projects';
@@ -3663,6 +3671,7 @@
     if (e.target.closest('[data-hideinactive]')) { state.hideInactive = !state.hideInactive; localSet('airc.hideInactive', state.hideInactive ? 'on' : 'off'); renderTeam(); return; }
     const mdb = e.target.closest('[data-model]');
     if (mdb) { openModelSwitch(mdb.dataset.model); return; }
+    if (e.target.closest('#chatBtn')) { if (state.view !== 'chat') { state.view = 'chat'; localSet('airc.view', 'chat'); applyView(); renderMessages({ bottom: true }); } return; }
     if (e.target.closest('#docsBtn')) { state.view = state.view === 'docs' ? 'chat' : 'docs'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages({ bottom: true }); return; }
     if (e.target.closest('#tasksBtn')) { state.view = state.view === 'tasks' ? 'chat' : 'tasks'; localSet('airc.view', state.view); applyView(); if (state.view === 'chat') renderMessages({ bottom: true }); return; }
     const td = e.target.closest('[data-tkdel]');
