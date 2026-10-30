@@ -2,6 +2,9 @@
 
 ## 0.5.1 (October 2026)
 
+### Fixed: adding an agent failed on a Mac
+- **"Couldn't add @agent: SyntaxError: f-string: expecting '}'".** Part of the agent setup used a way of writing text that needs Python 3.12, and a Mac's built-in Python is 3.9. Every TropaAI script is now checked with Python 3.9.
+
 ### Fixed: lists marked "Waiting on you"
 - **A message that only lists example questions is no longer treated as a question for you.** An agent message that @mentions you counted as a question if it had a "?" anywhere, including inside a numbered list of prompts to try. Now only the agent's own sentences count; a "?" inside a list, a quote, quotation marks, code or a link doesn't. Questions asked with `ask_human` are unchanged.
 
