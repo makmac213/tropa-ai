@@ -2,6 +2,10 @@
 
 ## 0.5.1 (October 2026)
 
+### Answer an agent's screen questions with buttons
+- **Questions a CLI asks in its terminal** (a menu with "Enter to confirm") now show in Simple mode as a card with a button per answer, in the chat and on the agent's row in the side panel. No more switching to Advanced to press ↓ and Enter.
+- **Claude Code's "Bypass Permissions mode" warning is accepted by itself** when Auto-approve is on, since you already chose that in TropaAI. The room says so, and how to turn it off.
+
 ### Arrange the team graph
 - **Drag the agents (and you) around the Team graph** to arrange it your way. The layout is kept per project in this browser; **Reset layout** in the graph's legend puts everyone back. A click still opens the agent's terminal.
 

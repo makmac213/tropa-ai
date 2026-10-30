@@ -1860,7 +1860,13 @@
           const k = `${e.room_id}\0${n.toLowerCase()}`;
           if (p?.state === 'working') state.workStart[k] ||= Date.now(); else delete state.workStart[k];
         }
-        if (e.room_id === state.current) { renderSidebar(); renderSimpleHeader(); if (state.view === 'team') updateCards(); if (simpleChat()) renderWorking(); }
+        if (e.room_id === state.current) {
+          renderSidebar(); renderSimpleHeader(); if (state.view === 'team') updateCards();
+          if (simpleChat()) {   // a question on an agent's screen appeared or went: its card in the chat changes
+            const sig = (t.agents || []).filter((n) => paneMenu(t.panes?.[n]?.text)).join();
+            if (sig !== state.menuSig) { state.menuSig = sig; renderMessages({ stick: false }); } else renderWorking();
+          }
+        }
       }
       else if (e.type === 'attachment') {
         const a = e.attachment; let hit = false;
@@ -4918,6 +4924,12 @@
     const quote = m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : 'an earlier message'}</div>` : '';
     const extras = `${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}`;
     if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div>${extras}${actsHtml(m)}</div>`;
+    const waitQ = k === 'note' && /`([\w.-]+)` is waiting on a question in its terminal/.exec(m.content);
+    if (waitQ) {   // answer it here with buttons, while the question is still on its screen
+      const t = state.team[m.room_id] || {}, n = (t.agents || []).find((x) => x.toLowerCase() === waitQ[1].toLowerCase()) || waitQ[1];
+      const menu = paneMenu(t.panes?.[n]?.text);
+      return `<div class="sm sm-note" id="m${m.id}" data-id="${m.id}">${SICON.info}<div><div class="body"><b>${esc(n)}</b> ${menu ? 'is asking you something on its screen' : 'was asking something on its screen; it has been answered'}${menu?.question ? `:<br>${esc(menu.question)}` : '.'}</div>${menu ? menuButtons(n, menu) : ''}</div></div>`;
+    }
     if (k === 'note') {   // TropaAI telling you something; "press Fix the team" comes with the button
       const fix = /\*\*Fix the team\*\*/.test(m.content) && Date.now() - m.created_at < 6 * 3600e3 ? '<div class="rs-ask"><button type="button" class="tbtn pri" data-fixteam>Fix the team</button></div>' : '';
       return `<div class="sm sm-note" id="m${m.id}" data-id="${m.id}">${SICON.info}<div><div class="body">${md(m.content.replace(/ If it keeps happening, switch to Advanced mode:[^\n]*/, ''))}</div>${fix}${extras}</div></div>`;
@@ -4959,6 +4971,33 @@
     }
     return '';
   }
+  /** A question an agent's CLI is waiting on in its terminal (a menu with ❯), as { question, options: [{ label, keys }] }:
+   *  Simple mode answers it with buttons instead of arrow keys and Enter. null when there's none. */
+  function paneMenu(text) {
+    const rows = String(text || '').split('\n').filter((r) => r.trim()).slice(-16).map((r) => r.replace(/[│┃║╭╮╰╯]/g, ' ').replace(/[─━═]{3,}/g, ''));
+    if (!rows.slice(-4).some((r) => /Enter to (confirm|select|continue)|Esc to (cancel|exit)|to navigate/i.test(r))) return null;
+    let cur = -1;
+    for (let i = rows.length - 1; i >= 0; i--) if (/^\s*[❯›>]\s+\S/.test(rows[i])) { cur = i; break; }
+    if (cur < 0) return null;
+    const col = rows[cur].match(/^\s*[❯›>]\s+/)[0].length;
+    const same = (r) => r.length > col && /^[\s❯›>]*$/.test(r.slice(0, col)) && r[col] !== ' ';
+    let lo = cur, hi = cur;
+    while (lo > 0 && same(rows[lo - 1])) lo--;
+    while (hi + 1 < rows.length && same(rows[hi + 1])) hi++;
+    const opts = rows.slice(lo, hi + 1).map((r) => r.slice(col).trim().replace(/^\d+[.)]\s+/, ''));
+    if (opts.length < 2 || opts.length > 9) return null;
+    const question = rows.slice(Math.max(0, lo - 3), lo).map((r) => r.trim()).filter((r) => !/^https?:/.test(r)).join(' ').slice(-240);
+    return { question, options: opts.map((label, j) => { const d = j - (cur - lo); return { label: label.slice(0, 80), keys: [...Array(Math.abs(d)).fill(d > 0 ? 'Down' : 'Up'), 'Enter'] }; }) };
+  }
+  function menuButtons(agent, m) {
+    return `<div class="rs-ask">${m.options.map((o) => `<button type="button" class="tbtn" data-menukeys="${esc(o.keys.join(','))}" data-menuagent="${esc(agent)}">${esc(o.label)}</button>`).join('')}</div>`;
+  }
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-menukeys]'); if (!b) return;
+    b.closest('.rs-ask')?.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+    try { await api(`/rooms/${encodeURIComponent(state.current)}/agents/${encodeURIComponent(b.dataset.menuagent)}/keys`, { method: 'POST', body: { keys: b.dataset.menukeys.split(','), enter: false } }); b.textContent = `✓ ${b.textContent}`; }
+    catch (err) { alertInline(err.message); b.closest('.rs-ask')?.querySelectorAll('button').forEach((x) => { x.disabled = false; }); }
+  });
   state.workStart = {};   // room \0 agent -> when it started working (this page saw it)
   const minsSince = (t) => Math.max(0, Math.round((Date.now() - t) / 60e3));
   function workingFor(room, n) { const t = state.workStart[`${room}\0${n.toLowerCase()}`]; return t ? minsSince(t) : 0; }
@@ -5121,7 +5160,9 @@
         const card = tasks.find((x) => x.status === 'doing' && sameName(x.assignee, n));
         const oq = qs.find((q) => q.status === 'open' && sameName(q.agent, n));
         let s, cls = '';
+        const menu = p.state !== 'approval' ? paneMenu(p.text) : null;
         if (p.state === 'approval') { s = 'Needs your OK'; cls = 'warn'; }
+        else if (menu) { s = 'Asking you something on its screen'; cls = 'warn'; }
         else if (p.limit) { s = `Paused: ${limitLabel(p)}${p.limit.kind === 'credits' ? ' (top up the account)' : ''}`; cls = 'lim'; }
         else if (oq) { s = 'Waiting for your answer'; cls = 'warn'; }
         else if (p.state === 'working') { s = a?.status || paneActivity(p.text) || (card ? card.title : 'Working'); cls = 'now'; }
@@ -5130,7 +5171,8 @@
         else s = p.state ? 'Waiting for work' : 'Not started';
         return `<div class="sp-row">${sav(n, paneDot(p))}<div class="bd"><div class="t">${esc(n)}${n.toLowerCase() === lead ? '<span class="lab">lead</span>' : ''}</div><div class="s ${cls}">${esc(s)}</div>
           ${p.state === 'approval' ? `<div class="s" style="white-space:normal">${esc(p.prompt || 'wants to do something that needs your permission')}</div>
-            <div class="rs-ask"><button type="button" class="tbtn pri" data-approve="${esc(n)}" data-act="yes">Allow</button><button type="button" class="tbtn" data-approve="${esc(n)}" data-act="no">Don't allow</button></div>` : ''}</div></div>`;
+            <div class="rs-ask"><button type="button" class="tbtn pri" data-approve="${esc(n)}" data-act="yes">Allow</button><button type="button" class="tbtn" data-approve="${esc(n)}" data-act="no">Don't allow</button></div>` : ''}
+          ${menu ? `${menu.question ? `<div class="s" style="white-space:normal">${esc(menu.question)}</div>` : ''}${menuButtons(n, menu)}` : ''}</div></div>`;
       }).join('') + `<div class="sp-fix">Something not working? <button type="button" class="linkbtn" data-fixteam>Fix the team</button></div>`;
     }
     const procs = t.activity?.procs || [];

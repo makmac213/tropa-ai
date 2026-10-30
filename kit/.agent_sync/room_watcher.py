@@ -277,6 +277,39 @@ MCP_LOST = re.compile(r"\bMCP servers? failed\b|\btropa\b[^\n]{0,80}\b(dropped|d
 FOLDER_DLG = re.compile(r"Yes, I trust this folder|Yes, allow external imports", re.I)
 
 
+# Claude Code's one-time warning when it starts with --dangerously-skip-permissions (TropaAI's Auto-approve). The human
+# chose that in TropaAI, so the watcher answers "Yes, I accept"; without Auto-approve the warning never appears.
+BYPASS_DLG = re.compile(r"Bypass Permissions mode", re.I)
+
+
+def menu_keys(rows, want):
+    """Keys that move a menu's cursor (❯) to the option matching `want` and pick it, or None. Options are the lines
+    beside the cursor's line whose text starts in the same column."""
+    tail = [BOX.sub(lambda m: " " * len(m.group(0)), r) for r in rows if r.strip()][-16:]
+    cur = next((i for i in range(len(tail) - 1, -1, -1) if re.match(r"^\s*[❯›>]\s+\S", tail[i])), None)
+    if cur is None:
+        return None
+    col = re.match(r"^(\s*[❯›>]\s+)", tail[cur]).end()
+    same = lambda r: len(r) > col and r[:col].strip() in ("", "❯", "›", ">") and r[col] != " "
+    lo = cur
+    while lo > 0 and same(tail[lo - 1]):
+        lo -= 1
+    hi = cur
+    while hi + 1 < len(tail) and same(tail[hi + 1]):
+        hi += 1
+    opts = [tail[i][col:].strip() for i in range(lo, hi + 1)]
+    j = next((i for i, o in enumerate(opts) if re.search(want, o, re.I)), None)
+    if j is None:
+        return None
+    d = j - (cur - lo)
+    return (["Down"] * d if d > 0 else ["Up"] * -d) + ["Enter"]
+
+
+def bypass_dialog(rows):
+    tail = [r for r in rows if r.strip()][-16:]
+    return any(BYPASS_DLG.search(r) for r in tail) and any(re.search(r"Yes, I accept", r) for r in tail)
+
+
 def folder_dialog(rows):
     tail = [r for r in rows if r.strip()][-14:]
     return any(FOLDER_DLG.search(r) for r in tail) and any(re.search(r"Enter to confirm", r) for r in tail)
@@ -1061,6 +1094,17 @@ class Watcher:
                     say(self.cfg, f"@{self.cfg['human']} `{a}` is waiting on Claude's \"trust this folder\" question in its terminal "
                                   f"(`tmux attach -t {self.cfg['tmux_session']}`). Choose Yes, or it runs without the tropa tool.")
                 continue
+            if bypass_dialog(rows) and auto_on(self.cfg):
+                keys = menu_keys(rows, r"^yes, i accept")
+                if keys and time.time() - self.dismissed.get("bypass:" + a, (0,))[0] > 10:
+                    self.dismissed["bypass:" + a] = (time.time(),)
+                    for k in keys:
+                        press(self.cfg, a, [k]); time.sleep(0.25)
+                    log(f"{a}: accepted Claude Code's Bypass Permissions warning (Auto-approve is on)")
+                    say(self.cfg, f"⚡ `{a}` started without permission prompts (Auto-approve is on), so its \"Bypass Permissions mode\" warning was accepted. "
+                                  f"Turn Auto-approve off in the team settings to have agents ask again.")
+                    self.last_capture = 0
+                    continue
             if self.dismiss(a, rows):
                 self.last_capture = 0   # look again right after it redraws
                 continue
