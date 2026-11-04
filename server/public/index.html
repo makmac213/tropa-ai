@@ -187,9 +187,14 @@
   /* Simple / Advanced: Simple hides the technical parts (terminals, models, usage, public links) */
   #helloDlg { width: min(440px, 92vw); } #helloDlg input { font-size: 17px; }
   .hello-prev { font-size: 13.5px; color: var(--muted); margin: -2px 0 10px; min-height: 20px; } .hello-prev b { color: var(--text); }
-  .mode-sw { display: flex; margin: 10px 16px 2px; flex: none; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
-  .mode-sw button { flex: 1; border: 0; background: none; color: var(--muted); padding: 5px 0; border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 600; }
-  .mode-sw button[aria-checked="true"] { background: var(--fill-accent); color: var(--on-accent); }
+  /* Simple / Advanced: a round track with a raised thumb (a setting, so no action blue) */
+  .mode-sw { --track: var(--bg); --thumb: #2a3040; --thumb-edge: inset 0 0 0 1px #3a4152; --thumb-shadow: 0 1px 3px rgba(0,0,0,.5);
+    display: flex; margin: 10px 16px 2px; flex: none; background: var(--track); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  :root[data-theme="light"] .mode-sw { --track: #eceef2; --thumb: #ffffff; --thumb-edge: inset 0 0 0 0 transparent; --thumb-shadow: 0 1px 3px rgba(16,24,40,.18); }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .mode-sw { --track: #eceef2; --thumb: #ffffff; --thumb-edge: inset 0 0 0 0 transparent; --thumb-shadow: 0 1px 3px rgba(16,24,40,.18); } }
+  .mode-sw button { flex: 1; border: 0; background: none; color: var(--muted); padding: 6px 0; border-radius: 999px; cursor: pointer; font-size: 12.5px; font-weight: 600; transition: background .15s, color .15s, box-shadow .15s; }
+  .mode-sw button:hover { color: var(--text); }
+  .mode-sw button[aria-checked="true"] { background: var(--thumb); color: var(--text); box-shadow: var(--thumb-shadow), var(--thumb-edge); }
   body.simple #teamBtn, body.simple #usageBtn, body.simple #shareBtn, body.simple .msg .ptag, body.simple .agent .s2, body.simple .agent .s3 { display: none !important; }
   /* Build your team (Simple mode's New project) */
   .build { position: absolute; inset: 0; z-index: 7; overflow-y: auto; background: var(--bg); }
