@@ -440,15 +440,20 @@ def write_agent(cfg, a):
 - Track progress in the room, unblock agents, and report results or decisions needed back to `@{cfg['human']}`.
 """ if is_lead else ""
 
+    # a project left untouched: its code in code_dir, the team's files in root (Python 3.9 can't nest these f-strings)
+    if cfg.get('code_dir'):
+        where_block = f"""- **Project code:** `{cfg['code_dir']}` (the project's own folder: work on the code there, with absolute paths)
+- **Team folder:** `{cfg['root']}` (docs and specs in `{cfg['docs_path']}`). Notes, plans and handoff docs for the team go there, never into the project folder: it's kept free of TropaAI's files.
+- **Your own folder** `{ws}` only holds your config; never put project code there."""
+    else:
+        where_block = f"""- **Project folder:** `{cfg['root']}` (docs and specs in `{cfg['docs_path']}`)
+- **Where to write:** all project files go under `{cfg['root']}` — use absolute paths. Your own folder `{ws}` only holds your config; never put project code there."""
     dump(os.path.join(ws, "AGENT.md"), f"""# Your identity
 - **Agent name:** `{name}` — always pass `agent: "{name}"` to the tropa tools.
 - **Role:** {a.get('role', '')}
 - **Runs in:** {PROVIDERS[tool]}{f" · model {a['model']}" if a.get('model') else ""}
 - **Project room:** `{cfg['room']}`
-{f"""- **Project code:** `{cfg['code_dir']}` (the project's own folder: work on the code there, with absolute paths)
-- **Team folder:** `{cfg['root']}` (docs and specs in `{cfg['docs_path']}`). Notes, plans and handoff docs for the team go there, never into the project folder: it's kept free of TropaAI's files.
-- **Your own folder** `{ws}` only holds your config; never put project code there.""" if cfg.get('code_dir') else f"""- **Project folder:** `{cfg['root']}` (docs and specs in `{cfg['docs_path']}`)
-- **Where to write:** all project files go under `{cfg['root']}` — use absolute paths. Your own folder `{ws}` only holds your config; never put project code there."""}
+{where_block}
 {lead_block}{job_block(a)}{git_rules(cfg, a, all_agents(cfg))}{tool_rules(cfg, a)}{skill_rules(cfg, a)}
 # Initial instruction
 {a.get('instruction', '')}

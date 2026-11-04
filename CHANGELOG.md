@@ -2,6 +2,30 @@
 
 ## 0.5.1 (October 2026)
 
+### A new team builder in Advanced's New project
+- **The project on the left, the team on the right**, in one wider window. Tools, design system, API keys, git, auto-approve and the first message fold into **More options**; it opens by itself when an agent needs an API key.
+- **One line per teammate:** face, name, role and what it runs on ("Claude Code · Sonnet", "OpenCode · local qwen3"), with a LEAD badge on the lead. Click a line to change it: name and role, **Works in** (one button per program, "not installed" ones marked), **Model** (cards in plain words for the program's own models, or a local or OpenRouter model, or type one), their job, Make lead and Remove.
+- **＋ Add a teammate** searches every role in the ready-made teams, or starts a new one. They join on the program and model most of the team uses.
+- **Same for everyone…** sets one program and model for the whole team, and a line under the team sums it up.
+- Fixed: the Simple new-project page's styles leaked into the Advanced form (the folder box looked wrong).
+
+### A steadier header in Advanced mode
+- **☰ Chat has its own place, beside the search box.** It used to replace whichever button you last pressed (Team, Tasks, Docs or Usage), so it moved around. Those buttons now keep their names and look pressed while their view is open.
+- **Smaller header buttons**, so the row takes less room.
+
+### Answer an agent's screen questions with buttons
+- **Questions a CLI asks in its terminal** (a menu with "Enter to confirm") now show in Simple mode as a card with a button per answer, in the chat and on the agent's row in the side panel. No more switching to Advanced to press ↓ and Enter.
+- **Claude Code's "Bypass Permissions mode" warning is accepted by itself** when Auto-approve is on, since you already chose that in TropaAI. The room says so, and how to turn it off.
+
+### Arrange the team graph
+- **Drag the agents (and you) around the Team graph** to arrange it your way. The layout is kept per project in this browser; **Reset layout** in the graph's legend puts everyone back. A click still opens the agent's terminal.
+
+### Fixed: adding an agent failed on a Mac
+- **"Couldn't add @agent: SyntaxError: f-string: expecting '}'".** Part of the agent setup used a way of writing text that needs Python 3.12, and a Mac's built-in Python is 3.9. Every TropaAI script is now checked with Python 3.9.
+
+### Fixed: lists marked "Waiting on you"
+- **A message that only lists example questions is no longer treated as a question for you.** An agent message that @mentions you counted as a question if it had a "?" anywhere, including inside a numbered list of prompts to try. Now only the agent's own sentences count; a "?" inside a list, a quote, quotation marks, code or a link doesn't. Questions asked with `ask_human` are unchanged.
+
 ### See what happens to your message
 - **Simple mode shows the status of your last message** until someone replies: *Sent*, *Seen by lead* (the agent read it), then *lead is working on it · 4 min · Running git push*, with what it's doing read off its screen (running a command, editing a file, reading the chat…). After a few minutes with no reply, **Ask for an update** sends a one-line nudge. The side panel's Team list shows the same live activity.
 - **Agents say "On it" first.** When you write to an agent, it's asked to reply with one line about what it'll do before any work that takes more than a minute.

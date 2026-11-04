@@ -3044,6 +3044,16 @@ const qq = {
 };
 const questionView = (r) => r && { ...r, options: (() => { try { return JSON.parse(r.options || '[]'); } catch { return []; } })() };
 const broadcastQuestion = (id) => broadcast({ type: 'question', question: questionView(qq.get.get(id)) });
+/** Does a message ask the human something? Only the agent's own sentences count: a "?" inside a list, a quote,
+ *  quotation marks or code (example questions, prompts to try, quoted messages) isn't a question for you. */
+function asksHuman(text) {
+  const prose = String(text || '')
+    .replace(/```[\s\S]*?```/g, ' ').replace(/`[^`\n]*`/g, ' ')
+    .split('\n').filter((l) => !/^\s*(\d+[.)]|[-*•+]|>)\s+/.test(l)).join('\n')
+    .replace(/"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|«[^»\n]*»/g, ' ')
+    .replace(/https?:\/\/\S+/g, ' ');
+  return /\?/.test(prose);
+}
 let asking = false;   // set while ask_human posts its own message, so the mention detector skips it
 function askHuman({ roomId, agent, question, options, recommended, fallback, minutes, task_id }) {
   question = String(question || '').trim().slice(0, 1000);
@@ -3071,7 +3081,7 @@ bus.on('message', (m) => {
   try {
     if (!String(m.room_id).startsWith('project:')) return;
     const human = HUMAN_NAME.toLowerCase();
-    if (m.sender_kind === 'agent' && !asking && (m.mentions || []).includes(human) && /\?/.test(m.content)) {
+    if (m.sender_kind === 'agent' && !asking && (m.mentions || []).includes(human) && asksHuman(m.content)) {
       // a plain "@human …?" message: list it too; numbered lines become the options
       const lines = String(m.content).split('\n');
       const opts = lines.map((l) => l.match(/^\s*(\d+)[.)]\s+(.+)$/)).filter(Boolean).map((x) => x[2].trim());
