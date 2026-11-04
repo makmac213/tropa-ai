@@ -2,6 +2,13 @@
 
 ## 0.5.1 (October 2026)
 
+### A new team builder in Advanced's New project
+- **The project on the left, the team on the right**, in one wider window. Tools, design system, API keys, git, auto-approve and the first message fold into **More options**; it opens by itself when an agent needs an API key.
+- **One line per teammate:** face, name, role and what it runs on ("Claude Code · Sonnet", "OpenCode · local qwen3"), with a LEAD badge on the lead. Click a line to change it: name and role, **Works in** (one button per program, "not installed" ones marked), **Model** (cards in plain words for the program's own models, or a local or OpenRouter model, or type one), their job, Make lead and Remove.
+- **＋ Add a teammate** searches every role in the ready-made teams, or starts a new one. They join on the program and model most of the team uses.
+- **Same for everyone…** sets one program and model for the whole team, and a line under the team sums it up.
+- Fixed: the Simple new-project page's styles leaked into the Advanced form (the folder box looked wrong).
+
 ### A steadier header in Advanced mode
 - **☰ Chat has its own place, beside the search box.** It used to replace whichever button you last pressed (Team, Tasks, Docs or Usage), so it moved around. Those buttons now keep their names and look pressed while their view is open.
 - **Smaller header buttons**, so the row takes less room.
