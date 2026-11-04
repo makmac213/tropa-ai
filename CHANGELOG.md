@@ -2,6 +2,16 @@
 
 ## 0.5.1 (October 2026)
 
+### Advanced mode, refined
+A design pass using the rules of the impeccable design skill for app screens: familiar controls, one icon set, less noise, and one signature detail.
+- **Views are tabs:** Chat · Team · Tasks · Docs · Usage under the room name, with counts. Download, share and skills are small icons; Questions and Attention show only when they need you.
+- **One line-icon set** instead of emoji on the header buttons.
+- **The team at a glance:** the agents' faces sit in the header with a ring for working, needs you or idle, plus "1 working · 1 needs you". Click to open the Team view.
+- **Quieter chat:** messages for you get a light tint and a "For you" tag (no thick stripe); TropaAI's own notes are single muted lines; message numbers and the model tag show on hover; the HUMAN tag is gone. Questions get one button per answer, and so do questions waiting on an agent's screen.
+- **Sidebar:** Projects first, then the project's **Team** with what each agent is doing ("Building the menu page · 4 min", "Asking you on its screen", "Idle 12 min"), then Feeds.
+- **Team view:** one toolbar (layout, filter, Only active, **Auto-wake** and **Auto-approve** switches, Wake all, Add agent) and a **Team settings** panel in plain words: *Who gets woken*, *When the lead wants to…*, *Keeping it healthy*, *This project*.
+- **Tasks:** drag cards between columns (the dropdown and × on every card are gone; delete is in the card's window). Empty columns are narrower and say "Nothing in QA".
+
 ### A new team builder in Advanced's New project
 - **The project on the left, the team on the right**, in one wider window. Tools, design system, API keys, git, auto-approve and the first message fold into **More options**; it opens by itself when an agent needs an API key.
 - **One line per teammate:** face, name, role and what it runs on ("Claude Code · Sonnet", "OpenCode · local qwen3"), with a LEAD badge on the lead. Click a line to change it: name and role, **Works in** (one button per program, "not installed" ones marked), **Model** (cards in plain words for the program's own models, or a local or OpenRouter model, or type one), their job, Make lead and Remove.
