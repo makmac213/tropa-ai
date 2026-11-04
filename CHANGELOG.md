@@ -2,6 +2,13 @@
 
 ## 0.5.1 (October 2026)
 
+### A better dark mode
+- **A rounder Simple / Advanced switch:** a pill-shaped track with a raised thumb (grey in dark mode, white in light), and no blue: blue stays for buttons that do something.
+- **The header line is one straight line now.** The sidebar's top was a different height from the page header, so their bottom borders didn't meet. It now follows the header's height: the logo row in Simple mode, the logo and the mode switch beside Advanced's header and tabs.
+- **Clear layers:** the page is the deepest ink, panels and the header one step up, and raised things (your message bubbles, cards, hover) another step, so the screen has depth instead of three near-identical greys. Lines are a touch stronger.
+- **Calmer colors:** a softer blue for buttons and links, a quieter tint on messages for you, and slightly gentler status colors, all checked at WCAG AA or better.
+- **The browser's own parts follow the theme:** text selection, focus rings, the text cursor and thin scrollbars.
+
 ### Advanced mode, refined
 A design pass using the rules of the impeccable design skill for app screens: familiar controls, one icon set, less noise, and one signature detail.
 - **Views are tabs:** Chat · Team · Tasks · Docs · Usage under the room name, with counts. Download, share and skills are small icons; Questions and Attention show only when they need you.
