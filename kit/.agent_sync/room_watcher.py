@@ -43,6 +43,7 @@ SYNC = os.path.join(CHATROOM, ".wake_sync.json")
 SKIP_WINDOWS = {"ControlCenter", "watcher"}
 ROUTING = ["lead", "wake", "wake_rules", "max_wakes_per_agent_per_hour", "auto_approve", "auto_heal", "auto_compact", "compact_at_k", "compact_idle_min",
            "cooldown_seconds", "debounce_seconds", "history_limit", "attention"]
+SCROLL_BOX = re.compile(r"↑/↓ to scroll|Esc to close", re.I)   # a CLI's scrolling answer box (Claude Code's /btw)
 PANE_EVERY = 2.0          # seconds between screen captures
 PANE_LINES = 60
 WORKING_FOR = 6.0         # screen changed within this many seconds -> "working"
@@ -926,7 +927,8 @@ class Watcher:
             log(f"slash {a}: {text[:80]}")
             self.last_capture = 0
             out = self.slash_output(a, text, 90 if kind == "builtin" else 600)
-            say(self.cfg, f"⌨️ `{a}` · `{text[:60]}`" + (f"\n```\n{out}\n```" if out else " → nothing new on its screen yet (▦ Team shows it)."))
+            prose = text.lower().startswith("/btw")   # a written answer, not a table: show it as text, not code
+            say(self.cfg, f"⌨️ `{a}` · `{text[:60]}`" + ((f"\n{out}" if prose else f"\n```\n{out}\n```") if out else " → nothing new on its screen yet (▦ Team shows it)."))
         except Exception as e:
             log(f"slash {a} failed: {e}")
             say(self.cfg, f"@{self.cfg['human']} `{text[:60]}` for `{a}` failed: {e}")
@@ -948,6 +950,8 @@ class Watcher:
             if approval_in(self.cfg, rows):
                 break
         rows = list(last or [])
+        if any(SCROLL_BOX.search(r) for r in rows[-8:]):   # the answer sits in a box that scrolls (Claude Code's /btw): read all of it
+            return self.scroll_box(a, text, rows, screen)
         while rows and not rows[-1].strip():
             rows.pop()
         head = text[:40]
@@ -961,6 +965,39 @@ class Watcher:
         lines = [BOX.sub(" ", r).rstrip() for r in rows]
         lines = [r for r in lines if r.strip()][-60:]
         return "\n".join(lines)[-3000:].replace("```", "ˋˋˋ")
+
+    def scroll_box(self, a, text, rows, screen):
+        """Read a scrolling answer box to the end (↓, a few lines at a time), then close it (Esc) so the agent can
+        carry on. Overlapping screens are stitched together."""
+        def body(rs):
+            rs = [r.rstrip() for r in rs]
+            foot = max((i for i, r in enumerate(rs) if SCROLL_BOX.search(r)), default=len(rs))
+            head = text[:40]
+            top = max((i for i, r in enumerate(rs[:foot]) if r.lstrip(" >❯›│┃").startswith(head)), default=-1)
+            out = [BOX.sub(" ", r).rstrip() for r in rs[top + 1:foot]]
+            while out and not out[0].strip():
+                out.pop(0)
+            while out and not out[-1].strip():
+                out.pop()
+            return out
+        got = body(rows)
+        for _ in range(60):
+            press(self.cfg, a, ["Down"] * 6)
+            time.sleep(0.5)
+            new = body(screen())
+            if not new or new == got[-len(new):]:
+                break
+            k = next((n for n in range(min(len(got), len(new)), 0, -1) if got[-n:] == new[:n]), 0)
+            if k == 0 and new[0] in got:   # scrolled less than a screen: line up on the first line
+                k = len(got) - got.index(new[0])
+                k = k if got[-k:] == new[:k] else 0
+            got += new[k:]
+            if len(got) > 400:
+                break
+        press(self.cfg, a, ["Escape"])     # close the box: it would sit over the agent's input
+        ind = min((len(r) - len(r.lstrip()) for r in got if r.strip()), default=0)
+        lines = [r[ind:] for r in got]
+        return "\n".join(lines).strip()[-6000:].replace("```", "ˋˋˋ")
 
     # -- docs viewer --
     def post_activity(self, force=False):
