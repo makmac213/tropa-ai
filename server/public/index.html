@@ -290,11 +290,11 @@
   .msg .foryou { font-size: 11px; font-weight: 600; color: var(--human); border: 1px solid color-mix(in srgb, var(--human) 45%, transparent); border-radius: 5px; padding: 0 5px; }
   .msg .rid, .msg .ptag { opacity: 0; transition: opacity .15s; } .msg:hover .rid, .msg:hover .ptag, .msg:focus-within .rid { opacity: 1; }
   /* TropaAI's own notes: one quiet line, no avatar */
-  .msg.k-system:not(.mention) { padding-top: 1px; padding-bottom: 1px; }
-  .msg.k-system:not(.mention) .avatar { visibility: hidden; height: 0; }
-  .msg.k-system:not(.mention) .head { display: none; }
-  .msg.k-system:not(.mention) .body { font-size: 12.5px; color: var(--muted); font-style: normal; }
-  .msg.k-system:not(.mention) .body p { display: inline; }
+  .msg.k-system:not(.mention):not(.slash) { padding-top: 1px; padding-bottom: 1px; }
+  .msg.k-system:not(.mention):not(.slash) .avatar { visibility: hidden; height: 0; }
+  .msg.k-system:not(.mention):not(.slash) .head { display: none; }
+  .msg.k-system:not(.mention):not(.slash) .body { font-size: 12.5px; color: var(--muted); font-style: normal; }
+  .msg.k-system:not(.mention):not(.slash) .body p { display: inline; }
   .msg.k-system .stime { font-size: 11.5px; color: var(--muted); margin-left: 8px; }
   .mq { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; } .mq .qopt { border-radius: 8px; padding: 5px 12px; }
   .msg.flash { animation: flash 1.6s ease-out; }
@@ -1759,6 +1759,12 @@
 
 
   function msgHtml(m, prev, showRoom) {
+    // a slash command you ran, and the agent's answer (the watcher posts both): shown as you asking and the agent answering
+    if (m.sender_kind === 'system' && /^⌨️ /.test(m.content)) {
+      const ask = SLASH_ASK.exec(m.content), ans = !ask && SLASH_ANS.exec(m.content);
+      if (ask) m = { ...m, sender: ask[1], sender_kind: 'human', content: `\`${ask[3]}\` → ${ask[2]}` };
+      else if (ans) m = { ...m, sender: ans[1], sender_kind: 'agent', content: `*Answer to* \`${ans[2]}\`\n\n${ans[3].replace(/^\s*→\s*/, '').trim() || 'Nothing new on its screen yet.'}` };
+    }
     const cont = prev && prev.sender === m.sender && prev.room_id === m.room_id && m.created_at - prev.created_at < 5 * 60e3 && !m.reply_to;
     const me = myName().toLowerCase();
     const mentioned = m.sender.toLowerCase() !== me && (m.mentions || []).some((n) => n === me || n === 'all' || n === 'here');
@@ -1768,14 +1774,15 @@
     const bg = kind === 'human' ? 'var(--fill-warn)' : kind === 'system' ? 'var(--idle)' : colorFor(m.sender);
     const fg = kind === 'human' ? 'var(--on-warn)' : '#fff';
     const oq = state.questions.find((q) => q.message_id === m.id && q.status === 'open');
-    return `<div class="msg ${cont ? 'cont' : ''} ${mentioned ? 'mention' : ''} ${oq ? 'q-open' : ''} k-${kind}" id="m${m.id}" data-id="${m.id}">
+    const slashMsg = kind === 'system' && /^⌨️ /.test(m.content);   // a slash command you ran, and the agent's answer: part of the conversation
+    return `<div class="msg ${cont ? 'cont' : ''} ${mentioned ? 'mention' : ''} ${oq ? 'q-open' : ''} ${slashMsg ? 'slash' : ''} k-${kind}" id="m${m.id}" data-id="${m.id}">
       <div class="avatar" style="background:${bg};color:${fg}">${kind === 'system' ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.5"/></svg>' : esc(initials)}</div>
       <div>
         ${cont ? '' : `<div class="head"><span class="who k-${kind}">${esc(kind === 'system' ? 'TropaAI' : m.sender)}</span>${kind === 'human' ? '' : agentTag(m.sender)}${mentioned ? '<span class="foryou">For you</span>' : ''}
           ${showRoom ? `<span class="roomtag" data-room="${esc(m.room_id)}">${esc(roomLabel(m.room_id))}</span>` : ''}
           <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><span class="rid">#${m.id}</span></div>`}
         ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
-        <div class="body">${md(m.content)}${kind === 'system' && !mentioned ? `<span class="stime">${fmtTime(m.created_at)}</span>` : ''}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}${screenQ(m)}${oq ? `${oq.options?.length ? `<div class="mq">${oq.options.map((o, i) => `<button type="button" class="qopt ${i + 1 === oq.recommended ? 'rec' : ''}" data-qans="${oq.id}" data-ans="${esc(`${i + 1}. ${o}`)}">${esc(o)}${i + 1 === oq.recommended ? ' <span class="mut">· suggested</span>' : ''}</button>`).join('')}</div>` : ''}<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} · ${oq.options?.length ? 'other answer' : 'answer'}</button>` : ''}
+        <div class="body">${md(m.content)}${kind === 'system' && !mentioned && !slashMsg ? `<span class="stime">${fmtTime(m.created_at)}</span>` : ''}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}${screenQ(m)}${oq ? `${oq.options?.length ? `<div class="mq">${oq.options.map((o, i) => `<button type="button" class="qopt ${i + 1 === oq.recommended ? 'rec' : ''}" data-qans="${oq.id}" data-ans="${esc(`${i + 1}. ${o}`)}">${esc(o)}${i + 1 === oq.recommended ? ' <span class="mut">· suggested</span>' : ''}</button>`).join('')}</div>` : ''}<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} · ${oq.options?.length ? 'other answer' : 'answer'}</button>` : ''}
       </div>
       ${actsHtml(m)}
     </div>`;
@@ -5188,6 +5195,8 @@
     if (m.sender_kind === 'human') return 'mine';
     const ments = (m.mentions || []).map((x) => String(x).toLowerCase());
     const toMe = !!me && ments.includes(me);
+    if (m.sender_kind === 'system' && SLASH_ASK.test(m.content)) return 'slashask';
+    if (m.sender_kind === 'system' && SLASH_ANS.test(m.content)) return 'slashans';
     if (m.sender_kind === 'system') return toMe || shareActs(m) || agentReqActs(m) || roomReqActs(m) || rmReqActs(m) ? 'note' : 'quiet';
     if (toMe || state.questions.some((q) => q.message_id === m.id)) return 'agent';
     const toAgents = ments.some((x) => agents.has(x) && x !== m.sender.toLowerCase());
@@ -5210,6 +5219,7 @@
     let owed = false;   // the lead's first message after yours answers you, even when it also hands out work
     for (const m of list) {
       let k = simpleKind(m, me, lead, agents);
+      if (k === 'slashask' || k === 'slashans') k = k === 'slashans' ? k : k;   // shown, never folded
       if (k === 'mine') owed = true;
       else if (owed && m.sender_kind === 'agent' && m.sender.toLowerCase() === lead) { k = 'agent'; owed = false; }
       if (k === 'quiet') { run.push(m); continue; }
@@ -5219,7 +5229,19 @@
     flush();
     return `<div class="sconv">${out}${simpleWorking(room)}</div>`;
   }
+  // the watcher's notes for a slash command: "⌨️ Maria → lead: `/btw …`" and "⌨️ `lead` · `/btw …`" + the answer
+  const SLASH_ASK = /^⌨️ (.+?) → (.+?): `([\s\S]*)`\s*$/;
+  const SLASH_ANS = /^⌨️ `([\w.-]+)` · `([^`]*)`([\s\S]*)$/;
   function simpleMsg(m, k, prev) {
+    if (k === 'slashask') {
+      const [, , to, cmd] = SLASH_ASK.exec(m.content);
+      return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}"><div class="sb body"><code>${esc(cmd)}</code></div><div class="mut" style="font-size:12px;margin-top:3px">to ${esc(to)}</div></div>`;
+    }
+    if (k === 'slashans') {
+      const [, agent, cmd, rest] = SLASH_ANS.exec(m.content);
+      const out = rest.replace(/^\s*→\s*/, '').trim();
+      return `<div class="sm sm-ag" id="m${m.id}" data-id="${m.id}">${sav(agent)}<div style="min-width:0"><div class="sn">${esc(agent)} <span class="mut" style="font-weight:400">· answer to <code>${esc(cmd)}</code></span></div><div class="body">${md(out || 'Nothing new on its screen yet.')}</div></div>${actsHtml(m)}</div>`;
+    }
     const parent = m.reply_to ? findMsg(m.reply_to) : null;
     const quote = m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : 'an earlier message'}</div>` : '';
     const extras = `${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}`;

@@ -2,6 +2,10 @@
 
 ## 0.5.1 (October 2026)
 
+### Slash commands show as a conversation
+- **Your `/btw` (or any slash command) shows in the chat right away**, under your name, and the agent's answer under the agent's name. They were TropaAI notes, which the recent quieter chat folded away (into "team updates" in Simple, a small grey line in Advanced).
+- **The whole `/btw` answer comes through.** Claude Code shows it in a small scrolling box; the watcher now scrolls through all of it, then closes the box so the agent can carry on. The answer is posted as normal text, not as code with the box's footer.
+
 ### A better dark mode
 - **A rounder Simple / Advanced switch:** a pill-shaped track with a raised thumb (grey in dark mode, white in light), and no blue: blue stays for buttons that do something.
 - **The header line is one straight line now.** The sidebar's top was a different height from the page header, so their bottom borders didn't meet. It now follows the header's height: the logo row in Simple mode, the logo and the mode switch beside Advanced's header and tabs.
