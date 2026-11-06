@@ -3546,6 +3546,12 @@
       if (!who) { openLeadDlg(''); return; }
       setLeadTo(who, args.some((a) => /^today$/i.test(a)));
     } },
+    { name: 'restart', desc: 'Restart an agent\'s CLI on the same conversation (reconnects its MCP tools): /restart @agent', run: async (args) => {
+      const who = args.filter((a) => /^@?[\w.-]+$/.test(a)).map((a) => '@' + a.replace(/^@/, ''));
+      if (!who.length || !projectOf(state.current)) { infoInline('Use /restart @agent in a project room (or /restart @all).'); return; }
+      try { await api(`/rooms/${encodeURIComponent(state.current)}/messages`, { method: 'POST', body: { sender_kind: 'human', sender: myName(), content: `restart ${who.join(' ')}` } }); }
+      catch (err) { alertInline(err.message); }
+    } },
     { name: 'pause', desc: 'Pause this room: nothing wakes the agents (no nudges either) until /resume', run: () => setPaused(true) },
     { name: 'resume', desc: 'Resume this room: agents are woken again, and the lead catches up', run: () => setPaused(false) },
     { name: 'help', desc: 'List available commands', run: () => {
@@ -5281,7 +5287,7 @@
     const toMe = !!me && ments.includes(me);
     if (m.sender_kind === 'system' && SLASH_ASK.test(m.content)) return 'slashask';
     if (m.sender_kind === 'system' && SLASH_ANS.test(m.content)) return 'slashans';
-    if (m.sender_kind === 'system') return toMe || /^👑 /.test(m.content) || shareActs(m) || agentReqActs(m) || roomReqActs(m) || rmReqActs(m) ? 'note' : 'quiet';
+    if (m.sender_kind === 'system') return toMe || /^(?:👑|↻) /.test(m.content) || shareActs(m) || agentReqActs(m) || roomReqActs(m) || rmReqActs(m) ? 'note' : 'quiet';
     if (toMe || state.questions.some((q) => q.message_id === m.id)) return 'agent';
     const toAgents = ments.some((x) => agents.has(x) && x !== m.sender.toLowerCase());
     if (lead && m.sender.toLowerCase() === lead && !toAgents) return 'agent';
@@ -5423,6 +5429,8 @@
     // your last message, if no agent has answered since
     let mine = null;
     for (let i = list.length - 1; i >= 0; i--) { const m = list[i]; if (m.sender_kind === 'agent') break; if (m.sender_kind === 'human' && m.sender.toLowerCase() === me) { mine = m; break; } }
+    // a command TropaAI already carried out ("restart @x", "make @y the lead"): nothing to wait for
+    if (mine && list.some((m) => m.id > mine.id && m.sender_kind === 'system' && m.created_at - mine.created_at < 5000 && /^(?:👑|↻|⚠️) /.test(m.content))) mine = null;
     let line = '', ask = '';
     if (mine && Date.now() - mine.created_at < 6 * 3600e3) {
       const agents = new Set((t.agents || []).map((n) => n.toLowerCase()));

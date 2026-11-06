@@ -2,6 +2,9 @@
 
 ## 0.5.1 (October 2026)
 
+### Restart an agent from the chat
+- **Write `restart @backend2`** (or *@backend2 restart your session*, *restart @a and @b*, *restart @all*, or `/restart @backend2`). Its CLI stops and starts again on the same conversation, which also reconnects its MCP tools: the fix when an agent says its chat tools are disconnected. A note in the chat confirms it. Messages like *please restart the dev server @backend2* are still just messages.
+
 ### Advanced chat is as narrow as Simple
 - **Advanced project chats use the same 720 px reading column as Simple.** It was 960 px, which made long agent reports hard to read on wide screens.
 

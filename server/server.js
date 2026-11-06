@@ -1666,6 +1666,7 @@ const CMD_ACT = { approve: 'yes', yes: 'yes', allow: 'yes', always: 'always', de
 bus.on('message', (m) => {
   if (m.sender_kind === 'system') return;
   if (m.sender_kind === 'human' && /@tropa\b/i.test(m.content) && (shareCommand(m) || agentCommand(m))) return;
+  if (m.sender_kind === 'human' && restartCommand(m)) return;   // "restart @backend2": done here, not a message for it
   if (m.sender_kind === 'human' && leadCommand(m)) return;   // "pass the lead to @agent2": done here, not a message for the old lead
   if (m.sender_kind === 'human' && removalCommand(m)) return;   // "remove x and y from the room" → a confirmation card   // not a message for the agents
   if (m.sender_kind === 'human') { try { agentReqReply(m); } catch (e) { console.error(e); } }   // "approve backend2" (still passed on to the agents)
@@ -3513,6 +3514,28 @@ function teamMembers(roomId, words) {
   const team = new Map((watcherFor(roomId)?.agents || []).map((n) => [n.toLowerCase(), n]));
   for (const a of q.listAgents.all()) if ((a.project || '').toLowerCase() === slug) team.set(a.name.toLowerCase(), a.name);
   return [...new Set(words.map((w) => team.get(String(w).replace(/^@/, '').toLowerCase())).filter(Boolean))];
+}
+// ---------- restarting an agent from the chat ----------
+// "restart @backend2" · "@tropa restart @a and @b" · "@backend2 restart your session" · "restart @all"
+// Its CLI stops and starts again on the same conversation, which also reconnects its MCP tools.
+const RESTART_ASK = [
+  /^\s*(?:@tropa[,:]?\s+)?(?:please\s+)?restart\s+((?:@[\w.-]+(?:\s*(?:,|and|&)\s*|\s+)?)+)(?:'s)?\s*(?:session|cli)?\s*(?:please)?\s*[.!]?\s*$/i,
+  /^\s*((?:@[\w.-]+(?:\s*(?:,|and|&)\s*|\s+)?)+)[,:]?\s+(?:please\s+)?restart(?:\s+(?:your(?:self|\s+session|\s+cli)?|the\s+session))?(?:\s+please)?\s*[.!]?\s*$/i,
+];
+function restartCommand(m) {
+  if (!String(m.room_id).startsWith('project:')) return false;
+  const hit = RESTART_ASK.map((rx) => String(m.content).match(rx)).find(Boolean);
+  if (!hit) return false;
+  const words = hit[1].match(/@[\w.-]+/g) || [];
+  const w = watcherFor(m.room_id);
+  const all = words.some((x) => EVERYONE.has(x.slice(1).toLowerCase()));
+  const names = all ? (w?.agents || []) : teamMembers(m.room_id, words);
+  if (!names.length) return false;   // "@nobody restart": just a message
+  if (!w) { shareNote(m.room_id, "⚠️ The team isn't running, so nobody can be restarted. Start it first."); return true; }
+  for (const agent of names) pushEvent(m.room_id, { type: 'restart', agent });
+  const list = names.map((n) => `\`${n}\``).join(', ');
+  watcherSay(m.room_id, `↻ Restarting ${list}: ${names.length === 1 ? 'its CLI stops and starts again on the same conversation' : 'their CLIs stop and start again on the same conversations'}, which also reconnects ${names.length === 1 ? 'its' : 'their'} MCP tools. Anything ${names.length === 1 ? 'it was' : 'they were'} doing is cut off.`);
+  return true;
 }
 // ---------- passing the lead ----------
 // "@lead pass the leadership to @agent2" · "make @agent2 the lead" · "@agent2 you're the lead for today" · /lead @agent2 (page)
