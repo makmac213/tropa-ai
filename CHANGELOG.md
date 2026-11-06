@@ -2,6 +2,9 @@
 
 ## 0.5.1 (October 2026)
 
+### Advanced chat is as narrow as Simple
+- **Advanced project chats use the same 720 px reading column as Simple.** It was 960 px, which made long agent reports hard to read on wide screens.
+
 ### Quicker agent actions
 - **Click an agent's name in the sidebar** and its dialog now starts with **Wake**, **Restart**, **Clone** and **Make lead**, so you don't have to open the Team view to unstick one. Its name also shows *lead* when it leads the room.
 - **Snooze all** in *Needs attention* (Team view) hides every flagged item for an hour in one click. Approvals stay, since an agent waiting on one can't carry on.
