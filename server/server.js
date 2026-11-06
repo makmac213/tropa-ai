@@ -3697,7 +3697,9 @@ app.get('/vendor/:file', (req, res) => {
   res.set('Cache-Control', 'public, max-age=86400').type('text/javascript').sendFile(path.join(__dirname, 'node_modules', f));
 });
 app.get('/agent-guide.md', (req, res) => res.type('text/markdown').sendFile(path.join(__dirname, 'AGENT_GUIDE.md')));
-app.use(express.static(path.join(__dirname, 'public')));
+// the page itself is always re-checked (a cheap 304 when unchanged), so after tropa self-update the browser
+// shows the new version on the next reload instead of a copy it cached; images keep normal caching
+app.use(express.static(path.join(__dirname, 'public'), { setHeaders: (res, file) => { if (/\.html?$/.test(file)) res.set('Cache-Control', 'no-cache'); } }));
 
 const server = http.createServer(app);
 server.requestTimeout = 0; // allow long-polls

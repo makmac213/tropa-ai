@@ -2,6 +2,9 @@
 
 ## 0.5.1 (October 2026)
 
+### Fixed: the old page after an update
+- **After `tropa self-update`, a reload now shows the new version.** The page was sent without caching rules, so a browser could keep showing its old copy for a while. The page is now always re-checked (cheap when nothing changed).
+
 ### Advanced chat looks like a conversation
 - **Advanced project rooms use the same layout as Simple:** your messages as bubbles on the right, agents with their face and name on the left. **Nothing is folded away:** agents talking to each other show in full, TropaAI's notes are quiet one-line rows, and day dividers, the time beside each name, the model on hover, reactions, attachments and answer buttons all stay. All activity and search keep the list layout.
 
