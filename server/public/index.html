@@ -1157,7 +1157,7 @@
       <div class="sec" id="secFeeds">Feeds</div>
       <div id="feeds"></div>
     </div>
-    <div class="me">You are <input id="myName" spellcheck="false" aria-label="Your name"><button class="gear" id="bellBtn" title="Notifications"></button><button class="gear" id="themeBtn" title="Theme"></button><button class="gear" id="settingsBtn" title="Settings">⚙</button></div>
+    <div class="me">You are <input id="myName" spellcheck="false" aria-label="Your name"><button class="gear" id="bellBtn" title="Notifications"></button><button class="gear" id="themeBtn" title="Theme"></button><button class="gear" id="settingsBtn" title="Settings" aria-label="Settings"></button></div>
   </aside>
   <main>
     <header>
@@ -1176,10 +1176,10 @@
           <button data-dl="json">JSON<span>.json</span></button>
         </div>
       </div>
-      <button class="dl-btn" id="shareBtn" hidden title="Open a public link to an app running on this machine (ngrok, optional)">🌐 Share</button>
-      <button class="dl-btn q-btn" id="askBtn" hidden title="Questions the agents asked you">❓ Questions</button>
-      <button class="dl-btn a-btn" id="attnBtn" hidden title="Work that looks stuck">⚠ Attention</button>
-      <button class="dl-btn" id="skillsBtn" hidden title="How-tos your agents load when a task matches: add, edit or remove them">🧩 Skills</button>
+      <button class="dl-btn" id="shareBtn" hidden title="Open a public link to an app running on this machine (ngrok, optional)">Share</button>
+      <button class="dl-btn q-btn" id="askBtn" hidden title="Questions the agents asked you">Questions</button>
+      <button class="dl-btn a-btn" id="attnBtn" hidden title="Work that looks stuck">Attention</button>
+      <button class="dl-btn" id="skillsBtn" hidden title="How-tos your agents load when a task matches: add, edit or remove them">Skills</button>
       <button type="button" class="adv-team" id="advTeam" hidden></button>
       <input class="search" id="search" placeholder="Search…">
       <button type="button" class="dl-btn" id="backBtn" hidden>← Back to the chat</button>
@@ -1189,11 +1189,11 @@
       <div class="more-menu" id="moreMenu" role="menu" hidden></div>
       </div>
       <nav class="vtabs" id="viewTabs" aria-label="Views" hidden>
-        <button class="vtab" id="chatBtn" hidden title="The room's chat">☰ Chat</button>
+        <button class="vtab" id="chatBtn" hidden title="The room's chat">Chat</button>
         <button class="vtab" id="teamBtn" hidden title="See every agent's screen live">▦ Team</button>
-        <button class="vtab" id="tasksBtn" hidden title="The team's task board">✓ Tasks</button>
-        <button class="vtab" id="docsBtn" hidden title="Browse the project's docs folder">📄 Docs</button>
-        <button class="vtab" id="usageBtn" hidden title="Tokens and API-equivalent cost for this project">📊 Usage</button>
+        <button class="vtab" id="tasksBtn" hidden title="The team's task board">Tasks</button>
+        <button class="vtab" id="docsBtn" hidden title="Browse the project's docs folder">Docs</button>
+        <button class="vtab" id="usageBtn" hidden title="Tokens and API-equivalent cost for this project">Usage</button>
       </nav>
     </header>
     <div class="room-note" id="roomNote" hidden></div>
@@ -1210,12 +1210,12 @@
       <div class="cmds" id="cmds" hidden></div>
       <div class="pending-files" id="pendingFiles" hidden></div>
       <div class="row">
-        <button class="attach" id="attachBtn" type="button" title="Attach files (or drop / paste them here)">📎</button>
+        <button class="attach" id="attachBtn" type="button" title="Attach files (or drop / paste them here)" aria-label="Attach files"></button>
         <input type="file" id="fileInput" multiple hidden>
         <textarea id="input" rows="1" placeholder="Message #general  —  @agent to mention"></textarea>
         <button class="send" id="sendBtn">Send</button>
       </div>
-      <div class="hint-row"><div class="hint">Enter to send · Shift+Enter for new line · @ suggests names (Tab picks) · 📎 drop or paste files · /help for commands</div>
+      <div class="hint-row"><div class="hint">Enter to send · Shift+Enter for new line · @ suggests names (Tab picks) · drop or paste files · /help for commands</div>
         <button type="button" class="as-btn" id="asBtn" title="Follow new messages when you're at the bottom of the chat"></button></div>
     </div>
   </main>
@@ -1304,7 +1304,7 @@
     </div>
     <div class="set-sec">
       <span class="h">Notifications</span>
-      <label class="set-radio"><input type="checkbox" id="notifySound"><span>Play a sound with notifications<small>Turn notifications on with 🔔 at the bottom of the sidebar. You're notified when a message @mentions you (approvals, questions, stalled or crashed agents, finished work) and you're not looking at that room.</small></span></label>
+      <label class="set-radio"><input type="checkbox" id="notifySound"><span>Play a sound with notifications<small>Turn notifications on with the bell at the bottom of the sidebar. You're notified when a message @mentions you (approvals, questions, stalled or crashed agents, finished work) and you're not looking at that room.</small></span></label>
     </div>
     <div class="set-sec">
       <span class="h">Setup</span>
@@ -1313,10 +1313,10 @@
     <div class="set-sec keys-set">
       <span class="h">API keys</span>
       <div id="keysSet"></div>
-      <small class="mut" style="display:block;margin-top:4px"><b>OpenRouter</b>: one key for hundreds of hosted models (“Runs on → OpenRouter”). <b>Gemini</b>: for Gemini CLI agents; without a key they use your Google sign-in. A project can have its own keys: <b>🔑 Keys</b> in its ▦ Team view. Keys are saved on this computer, outside every project folder.</small>
+      <small class="mut" style="display:block;margin-top:4px"><b>OpenRouter</b>: one key for hundreds of hosted models (“Runs on → OpenRouter”). <b>Gemini</b>: for Gemini CLI agents; without a key they use your Google sign-in. A project can have its own keys: <b>Keys</b> in its ▦ Team view. Keys are saved on this computer, outside every project folder.</small>
     </div>
     <div class="about">TropaAI · built by Mark Allan Meriales with Claude (Anthropic)</div>
-    <div class="btns"><button type="button" id="ttsTest">▶ Test voice</button><button class="primary" value="close">Done</button></div>
+    <div class="btns"><button type="button" id="ttsTest">Test voice</button><button class="primary" value="close">Done</button></div>
   </form>
 </dialog>
 
@@ -1465,13 +1465,13 @@
 
 <dialog id="projDlg">
   <form id="projForm" novalidate>
-    <h3>New project <button type="button" class="linkbtn np-switch" id="npToChat" hidden>💬 Set it up by chatting with Claude</button></h3>
+    <h3>New project <button type="button" class="linkbtn np-switch" id="npToChat" hidden>Set it up by chatting with Claude</button></h3>
     <div class="np-host" id="npHost"></div>
     <div class="np-cols"><div class="np-left">
     <div class="np-team-head">THE PROJECT</div>
     <div class="np-mode" id="npMode"><label><input type="radio" name="npMode" value="new" checked> New folder</label><label><input type="radio" name="npMode" value="existing"> Existing project folder</label></div>
     <div id="npExisting" hidden><label class="f" for="npFolderPick">Folder <small>the team works on what's in it</small></label>
-      <div class="np-pick"><select id="npFolderPick"></select><button type="button" class="tbtn" id="npBrowse" hidden title="Pick the folder with your computer's own folder window">📂 Browse…</button></div>
+      <div class="np-pick"><select id="npFolderPick"></select><button type="button" class="tbtn" id="npBrowse" hidden title="Pick the folder with your computer's own folder window">Browse…</button></div>
       <div class="np-hint np-blocked" id="npBlocked" hidden></div>
       <div id="npPathBox" hidden><input id="npPath" placeholder="~/work/my-app" spellcheck="false" autocomplete="off">
         <div class="np-hint">Any folder in your home folder or on an external drive (not hidden or system folders). To allow other places, set <code>TROPA_PROJECT_ROOTS</code> before starting the host helper.</div></div>
@@ -1524,6 +1524,38 @@
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
+  // one line-icon set for the whole page (no emoji standing in for icons)
+  const HI = (d, extra = '') => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${extra}>${d}</svg>`;
+  const HICON = {
+    chat: HI('<path d="M4 5h16v11H9l-5 4z"/>'),
+    team: HI('<rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="7" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="13" width="8" height="7" rx="1"/>'),
+    tasks: HI('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8.5 12l2.5 2.5 4.5-5"/>'),
+    docs: HI('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>'),
+    usage: HI('<path d="M4 20V11M10 20V5M16 20v-6M22 20H2"/>'),
+    share: HI('<path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/>'),
+    skills: HI('<path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.6 7.1 18.2 8 12.7 4 8.8 9.5 8z"/>'),
+    download: HI('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
+    question: HI('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 015 .5c0 1.7-2.5 2-2.5 3.5M12 17v.5"/>'),
+    alert: HI('<path d="M12 3l9.5 17H2.5z"/><path d="M12 10v4M12 17v.5"/>'),
+    bell: HI('<path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15z"/><path d="M10 21h4"/>'),
+    bellOff: HI('<path d="M6 16V11a6 6 0 019.3-5M18 10.5V16l1.5 2H8"/><path d="M10 21h4M3 3l18 18"/>'),
+    sun: HI('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+    moon: HI('<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>'),
+    auto: HI('<circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 010 18z" fill="currentColor" stroke="none"/>'),
+    gear: HI('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>'),
+    clip: HI('<path d="M21 11.5l-8.6 8.6a5 5 0 01-7-7l8.6-8.6a3.3 3.3 0 014.7 4.7L10 17.9a1.7 1.7 0 01-2.4-2.4l8-8"/>'),
+    up: HI('<path d="M7 11v9H4v-9zM7 11l4-8a2 2 0 012 2v4h5.5a2 2 0 012 2.3l-1.2 7A2 2 0 0117.3 20H7"/>'),
+    down: HI('<path d="M17 13V4h3v9zM17 13l-4 8a2 2 0 01-2-2v-4H5.5a2 2 0 01-2-2.3l1.2-7A2 2 0 016.7 4H17"/>'),
+    file: HI('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>'),
+    image: HI('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>'),
+    folder: HI('<path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1z"/>'),
+    edit: HI('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
+    clock: HI('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  };
+  // TropaAI's own chat notes are written with emoji (and agents read them that way); the page shows them without
+  const KEEP_GLYPH = new Set(['★']);
+  const noEmoji = (t) => String(t).replace(/(?:\p{Extended_Pictographic}|\p{Regional_Indicator})\uFE0F?\u200D?/gu, (c) => (KEEP_GLYPH.has(c[0]) ? c : '')).replace(/(\S)[ \t]{2,}/g, '$1 ').replace(/^ /, '');
+  const msgText = (m) => (m.sender_kind === 'system' ? noEmoji(m.content) : m.content);
   const ALL = '__all__';
   const USAGE = '__usage__';
   const state = {
@@ -1654,7 +1686,7 @@
         <div class="meta" data-edit-agent="${esc(a.name)}" role="button" tabindex="0" title="Wake, restart, clone or edit ${esc(a.name)}"><div class="n">${esc(a.name)}${isLead(a) ? ' <span class="lead-tag">lead</span>' : ''}</div>
           ${scoped ? agentLine(a, panes[a.name]) : `<div class="s">${esc([a.project, a.status].filter(Boolean).join(' · ') || (a.last_seen ? 'seen ' + fmtTime(a.last_seen) : ''))}</div>`}
           ${a.provider || a.model ? `<div class="s s2">${esc([a.provider, a.model].filter(Boolean).join(' · '))}</div>` : ''}${usageToday(a.name, 's s3')}</div>
-        <button class="x" data-edit-agent="${esc(a.name)}" title="Edit agent">✎</button>
+        <button class="x" data-edit-agent="${esc(a.name)}" title="Edit agent" aria-label="Edit agent">${HICON.edit}</button>
         <button class="x" style="margin-left:0" data-del-agent="${esc(a.name)}" title="Remove agent (click twice): stops it and moves its folder to agents/.removed/">×</button>
       </div>`).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">${scoped ? `No agents in ${esc(proj)} yet` : 'No agents yet'}</span></div>`;
     renderRside();   // background tasks follow the same pane and status updates
@@ -1682,13 +1714,13 @@
     const paused = !!slug && !none && t?.settings?.wake === 'paused' && !state.searching;
     el.hidden = !none && !paused;
     if (paused) {
-      el.innerHTML = `<span class="t">⏸ <b>This room is paused.</b> Nothing wakes the agents, and the watcher doesn't nudge them. Your messages are kept; the lead catches up when you resume.</span>
-        <button type="button" class="tbtn pri" data-resume>▶ Resume</button>`;
+      el.innerHTML = `<span class="t"><b>This room is paused.</b> Nothing wakes the agents, and the watcher doesn't nudge them. Your messages are kept; the lead catches up when you resume.</span>
+        <button type="button" class="tbtn pri" data-resume>Resume</button>`;
       return;
     }
     if (!none) return;
     const base = parentBase();
-    el.innerHTML = `<span class="t">🧭 <b>This room has no team yet.</b> Every project room has a lead that runs it. Add one in a new folder <code>${esc(base)}/${esc(slug)}</code>, or in a folder you already have.</span>
+    el.innerHTML = `<span class="t"><b>This room has no team yet.</b> Every project room has a lead that runs it. Add one in a new folder <code>${esc(base)}/${esc(slug)}</code>, or in a folder you already have.</span>
       <button type="button" class="tbtn pri" data-addlead ${state.host?.connected ? '' : 'disabled title="Start TropaAI\'s helper first (tropa start)"'}>Add a lead</button>
       <button type="button" class="tbtn" data-addlead-folder>Use a folder I already have…</button>`;
   }
@@ -1711,20 +1743,6 @@
       else { await openNewProject(); setPreset(''); $('#npName').value = slug; document.querySelector('input[name="npMode"][value="existing"]').checked = true; applyMode(); }
     }
   });
-  // one line-icon set for the header (no emoji standing in for icons)
-  const HI = (d, extra = '') => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${extra}>${d}</svg>`;
-  const HICON = {
-    chat: HI('<path d="M4 5h16v11H9l-5 4z"/>'),
-    team: HI('<rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="7" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="13" width="8" height="7" rx="1"/>'),
-    tasks: HI('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8.5 12l2.5 2.5 4.5-5"/>'),
-    docs: HI('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>'),
-    usage: HI('<path d="M4 20V11M10 20V5M16 20v-6M22 20H2"/>'),
-    share: HI('<path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/>'),
-    skills: HI('<path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.6 7.1 18.2 8 12.7 4 8.8 9.5 8z"/>'),
-    download: HI('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
-    question: HI('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 015 .5c0 1.7-2.5 2-2.5 3.5M12 17v.5"/>'),
-    alert: HI('<path d="M12 3l9.5 17H2.5z"/><path d="M12 10v4M12 17v.5"/>'),
-  };
   // keep the sidebar's top as tall as the header (see .side-head)
   const syncHead = () => { const h = $('main > header')?.getBoundingClientRect().height; if (h) document.documentElement.style.setProperty('--hh', `${h}px`); };
   if (window.ResizeObserver) new ResizeObserver(syncHead).observe($('main > header'));
@@ -1821,7 +1839,7 @@
     const mentioned = m.sender.toLowerCase() !== me && (m.mentions || []).some((n) => n === me || n === 'all' || n === 'here');
     const parent = m.reply_to ? findMsg(m.reply_to) : null;
     const kind = m.sender_kind;
-    const initials = kind === 'system' ? '⚙' : m.sender.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?';
+    const initials = kind === 'system' ? 'T' : m.sender.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?';
     const bg = kind === 'human' ? 'var(--fill-warn)' : kind === 'system' ? 'var(--idle)' : colorFor(m.sender);
     const fg = kind === 'human' ? 'var(--on-warn)' : '#fff';
     const oq = state.questions.find((q) => q.message_id === m.id && q.status === 'open');
@@ -1833,7 +1851,7 @@
           ${showRoom ? `<span class="roomtag" data-room="${esc(m.room_id)}">${esc(roomLabel(m.room_id))}</span>` : ''}
           <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><span class="rid">#${m.id}</span></div>`}
         ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
-        <div class="body">${md(m.content)}${kind === 'system' && !mentioned && !slashMsg ? `<span class="stime">${fmtTime(m.created_at)}</span>` : ''}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}${screenQ(m)}${oq ? `${oq.options?.length ? `<div class="mq">${oq.options.map((o, i) => `<button type="button" class="qopt ${i + 1 === oq.recommended ? 'rec' : ''}" data-qans="${oq.id}" data-ans="${esc(`${i + 1}. ${o}`)}">${esc(o)}${i + 1 === oq.recommended ? ' <span class="mut">· suggested</span>' : ''}</button>`).join('')}</div>` : ''}<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} · ${oq.options?.length ? 'other answer' : 'answer'}</button>` : ''}
+        <div class="body">${md(msgText(m))}${kind === 'system' && !mentioned && !slashMsg ? `<span class="stime">${fmtTime(m.created_at)}</span>` : ''}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}${screenQ(m)}${oq ? `${oq.options?.length ? `<div class="mq">${oq.options.map((o, i) => `<button type="button" class="qopt ${i + 1 === oq.recommended ? 'rec' : ''}" data-qans="${oq.id}" data-ans="${esc(`${i + 1}. ${o}`)}">${esc(o)}${i + 1 === oq.recommended ? ' <span class="mut">· suggested</span>' : ''}</button>`).join('')}</div>` : ''}<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} · ${oq.options?.length ? 'other answer' : 'answer'}</button>` : ''}
       </div>
       ${actsHtml(m)}
     </div>`;
@@ -1846,7 +1864,7 @@
     return menu ? menuButtons(n, menu) : '';
   }
   function actsHtml(m) {
-    return `<div class="actions"><button data-react="up" data-rxmsg="${m.id}" class="${myRx(m) === 'up' ? 'on' : ''}" title="Approve (👍)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} to go ahead` : ''}" aria-label="Thumbs up">👍</button><button data-react="down" data-rxmsg="${m.id}" class="${myRx(m) === 'down' ? 'on' : ''}" title="Disapprove (👎)${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} not to go ahead` : ''}" aria-label="Thumbs down">👎</button><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? '■ Stop' : '▶ Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>`;
+    return `<div class="actions"><button data-react="up" data-rxmsg="${m.id}" class="${myRx(m) === 'up' ? 'on' : ''}" title="Approve${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} to go ahead` : ''}" aria-label="Thumbs up">${HICON.up}</button><button data-react="down" data-rxmsg="${m.id}" class="${myRx(m) === 'down' ? 'on' : ''}" title="Disapprove${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} not to go ahead` : ''}" aria-label="Thumbs down">${HICON.down}</button><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? 'Stop' : 'Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>`;
   }
   // 👍 / 👎: a quick approve or disapprove. An agent whose message you react to is told; on its question, it's the answer.
   const myRx = (m) => (m.reactions || []).find((r) => r.who.toLowerCase() === myName().toLowerCase())?.kind || '';
@@ -1854,13 +1872,13 @@
     const rs = m.reactions || []; if (!rs.length) return '';
     const mine = myRx(m);
     return `<div class="rx">${['up', 'down'].map((k) => { const who = rs.filter((r) => r.kind === k).map((r) => r.who); if (!who.length) return '';
-      return `<button type="button" class="rx-chip ${mine === k ? 'mine' : ''}" data-react="${k}" data-rxmsg="${m.id}" title="${esc(who.join(', '))}${mine === k ? ' (click to take yours back)' : ''}">${k === 'up' ? '👍' : '👎'} ${esc(who.join(', '))}</button>`; }).join('')}</div>`;
+      return `<button type="button" class="rx-chip ${mine === k ? 'mine' : ''}" data-react="${k}" data-rxmsg="${m.id}" title="${esc(who.join(', '))}${mine === k ? ' (click to take yours back)' : ''}">${k === 'up' ? HICON.up : HICON.down} ${esc(who.join(', '))}</button>`; }).join('')}</div>`;
   }
   async function react(id, kind) {
     const m = [...state.messages.values()].flat().find((x) => x.id === id);
     const next = m && myRx(m) === kind ? '' : kind;   // the same thumb again takes it back
     try { await api(`/messages/${id}/react`, { method: 'POST', body: { kind: next, by: myName() } });
-      if (next && m?.sender_kind === 'agent') infoInline(next === 'up' ? `👍 ${m.sender} is told to go ahead.` : `👎 ${m.sender} is told not to go ahead.`); }
+      if (next && m?.sender_kind === 'agent') infoInline(next === 'up' ? `${m.sender} is told to go ahead.` : `${m.sender} is told not to go ahead.`); }
     catch (err) { alertInline(err.message); }
   }
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-react][data-rxmsg]'); if (b) react(Number(b.dataset.rxmsg), b.dataset.react); });
@@ -1895,16 +1913,16 @@
     return `<div class="sh-acts"><button class="ok" data-share-approve="${sh.id}">Approve link</button><button data-share-deny="${sh.id}">Deny</button></div>`;
   }
   const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
-  const fileIcon = (mime) => (/pdf/.test(mime) ? '📕' : /^text\/(markdown|plain)/.test(mime) ? '📝' : /html|css|javascript|json|xml|yaml/.test(mime) ? '🧩' : /spreadsheet|csv/.test(mime) ? '📊' : /presentation/.test(mime) ? '📽' : /^video/.test(mime) ? '🎞' : /^audio/.test(mime) ? '🔊' : /zip/.test(mime) ? '🗜' : '📄');
+  const fileIcon = (mime) => (/^image\//.test(mime) ? HICON.image : HICON.file);
   function attsHtml(m) {
     const list = m.attachments || [];
     if (!list.length) return '';
     const inProject = String(m.room_id || '').startsWith('project:');
     return `<div class="atts">${list.map((a) => {
-      if (!a.stored) return `<span class="att ${a.error ? 'failed' : 'pending'}" title="${esc(a.path)}">${a.error ? '⚠️' : '⏳'} ${esc(a.name)} <small>${a.error ? esc(a.error) : `waiting for ${esc(a.uploader)}'s upload…`}</small></span>`;
+      if (!a.stored) return `<span class="att ${a.error ? 'failed' : 'pending'}" title="${esc(a.path)}">${a.error ? HICON.alert : HICON.clock} ${esc(a.name)} <small>${a.error ? esc(a.error) : `waiting for ${esc(a.uploader)}'s upload…`}</small></span>`;
       const where = !inProject ? 'stored on the chat server' : a.error ? `not saved in the project: ${a.error}` : a.synced ? `in the project: ${a.path}` : `copying into the project (${a.path})…`;
-      if (a.is_image) return `<a class="att img" href="${a.url}" target="_blank" rel="noopener" title="${esc(where)}"><img src="${a.url}" alt="${esc(a.name)}" loading="lazy"><span>${a.synced || !inProject ? '' : '⏳ '}${esc(a.name)} · ${fmtSize(a.size)}</span></a>`;
-      return `<a class="att file" href="${a.url}" target="_blank" rel="noopener" title="${esc(where)}">${fileIcon(a.mime)} <b>${esc(a.name)}</b> <small>${fmtSize(a.size)}${a.synced || !inProject ? '' : ' · ⏳'}</small></a>`;
+      if (a.is_image) return `<a class="att img" href="${a.url}" target="_blank" rel="noopener" title="${esc(where)}"><img src="${a.url}" alt="${esc(a.name)}" loading="lazy"><span>${a.synced || !inProject ? '' : 'copying · '}${esc(a.name)} · ${fmtSize(a.size)}</span></a>`;
+      return `<a class="att file" href="${a.url}" target="_blank" rel="noopener" title="${esc(where)}">${fileIcon(a.mime)} <b>${esc(a.name)}</b> <small>${fmtSize(a.size)}${a.synced || !inProject ? '' : ' · copying'}</small></a>`;
     }).join('')}</div>`;
   }
   function agentTag(name) {
@@ -1922,7 +1940,7 @@
   let autoScroll = localGet('airc.autoscroll') !== 'off', unseenBelow = 0;
   const atBottomOf = (box) => box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   function renderAutoScroll() {
-    const b = $('#asBtn'); b.textContent = autoScroll ? '⇣ Auto-scroll on' : '⏸ Auto-scroll off'; b.classList.toggle('off', !autoScroll);
+    const b = $('#asBtn'); b.textContent = autoScroll ? '⇣ Auto-scroll on' : 'Auto-scroll off'; b.classList.toggle('off', !autoScroll);
     b.setAttribute('aria-pressed', String(autoScroll));
     b.title = autoScroll ? 'New messages scroll the chat down while you are at the bottom. Click to keep the chat still.' : 'The chat stays where you are; new messages show a button instead. Click to follow new messages again.';
   }
@@ -2235,7 +2253,7 @@
     if (!notifyPref() || !needsMe(m)) return;
     const looking = document.visibilityState === 'visible' && document.hasFocus() && (state.current === m.room_id || state.current === ALL);
     if (looking) return;
-    const kind = /waiting for your approval|asks to share/.test(m.content) ? '⏳ Needs your OK' : /❌|stopped without reporting|stalled|stopped after/.test(m.content) ? '⚠️ Needs a look' : '💬 Mentioned you';
+    const kind = /waiting for your approval|asks to share/.test(m.content) ? 'Needs your OK' : /❌|stopped without reporting|stalled|stopped after/.test(m.content) ? 'Needs a look' : 'Mentioned you';
     const text = m.content.replace(/```[\s\S]*?```/g, ' ').replace(/[*_`>#]/g, '').replace(/\s+/g, ' ').trim();
     try {
       const n = new Notification(`${kind} · ${m.sender} in ${roomLabel(m.room_id)}`, { body: state.blurred ? 'New message (hidden while blurred)' : text.slice(0, 220), tag: `tropa-${m.room_id}`, renotify: true, icon: 'favicon.png' });
@@ -2246,7 +2264,7 @@
   function renderBell() {
     const b = $('#bellBtn'); if (!b) return;
     const on = notifyPref(), blocked = 'Notification' in window && Notification.permission === 'denied';
-    b.textContent = on ? '🔔' : '🔕';
+    b.innerHTML = on ? HICON.bell : HICON.bellOff; b.setAttribute('aria-label', on ? 'Notifications on' : 'Notifications off');
     b.title = !('Notification' in window) ? "This browser can't show notifications" : blocked ? 'Notifications are blocked for this site: allow them in the browser\'s site settings'
       : on ? 'Notifications on: you are told when someone needs you (click to turn off)' : 'Turn on notifications: approvals, questions, stalls and finished work';
   }
@@ -2316,7 +2334,7 @@
   function showTtsPill(engine, voice) {
     const pill = $('#ttsPill');
     if (!engine) { pill.classList.remove('on'); return; }
-    pill.textContent = engine === 'kokoro' ? `🔊 Kokoro · ${voice}` : `🔊 System voice · ${voice || 'default'}`;
+    pill.textContent = engine === 'kokoro' ? `Kokoro · ${voice}` : `System voice · ${voice || 'default'}`;
     pill.classList.toggle('mac', engine !== 'kokoro');
     pill.classList.add('on');
   }
@@ -2329,7 +2347,7 @@
   async function ttsCommand(arg) {
     arg = (arg || '').toLowerCase();
     if (arg === 'mac' || arg === 'kokoro') setTtsPref(arg);
-    else if (arg) { alertInline('Use /tts, /tts kokoro or /tts mac — or open ⚙ Settings.'); return; }
+    else if (arg) { alertInline('Use /tts, /tts kokoro or /tts mac — or open Settings.'); return; }
     await ttsInit();
     (tts.engine === 'kokoro' || tts.pref === 'mac' ? infoInline : alertInline)(`Read-aloud: ${ttsStatusText()}`);
   }
@@ -2401,13 +2419,13 @@
   }
   function markSpeaking(id) {
     document.querySelectorAll('.msg.speaking').forEach((el) => el.classList.remove('speaking'));
-    document.querySelectorAll('[data-read].on').forEach((b) => { b.classList.remove('on'); b.textContent = '▶ Read'; });
+    document.querySelectorAll('[data-read].on').forEach((b) => { b.classList.remove('on'); b.textContent = 'Read'; });
     tts.current = id;
     if (!id) return;
     const el = document.getElementById('m' + id);
     if (el) {
       el.classList.add('speaking');
-      const b = el.querySelector('[data-read]'); if (b) { b.classList.add('on'); b.textContent = '■ Stop'; }
+      const b = el.querySelector('[data-read]'); if (b) { b.classList.add('on'); b.textContent = 'Stop'; }
       el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }
@@ -2504,7 +2522,7 @@
         if (typeof got === 'string') { showTtsPill('kokoro', kokoroVoiceFor(seg.m.sender)); await playUrl(got, token); continue; }
         tts.engine = 'browser';                      // Kokoro failed: use Mac voices until the next re-check
         tts.checkedAt = Date.now(); tts.kokoroError = got?.message || tts.kokoroError; renderTtsSettings();
-        if (!tts.warned) { tts.warned = true; alertInline('Kokoro didn\'t respond — using your system voices for now (see ⚙ Settings).'); }
+        if (!tts.warned) { tts.warned = true; alertInline('Kokoro didn\'t respond — using your system voices for now (see Settings).'); }
       }
       if (!macVoices().length) await waitForVoices();
       const v = browserVoiceFor(seg.m.sender);
@@ -2624,7 +2642,7 @@
         <button class="tbtn" data-restart="${esc(name)}" title="Restart ${esc(name)}'s CLI (it resumes its conversation). Use it when it's stuck, crashed or logged out">Restart</button>
         <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)}: same CLI, model, role and instructions under a new name (change the model if this one is rate-limited)">Clone</button>
         <button class="tbtn warn" data-remove="${esc(name)}" title="Remove ${esc(name)} from the team: stops its CLI and moves agents/${esc(name)}/ to agents/.removed/">Remove</button></div>
-      ${p.limit && p.state !== 'approval' ? `<div class="appr lim"><span><b>${p.limit.kind === 'credits' ? '💳 Out of credits' : p.limit.kind === 'limit' ? '⏳ Usage limit reached' : '🐢 Rate-limited'}</b>${p.limit.resets ? ` · resets ${esc(p.limit.resets)}` : ''}${p.limit.kind === 'credits' ? ' · top up the account, or' : ' ·'} switch to another model</span>
+      ${p.limit && p.state !== 'approval' ? `<div class="appr lim"><span><b>${p.limit.kind === 'credits' ? 'Out of credits' : p.limit.kind === 'limit' ? 'Usage limit reached' : 'Rate-limited'}</b>${p.limit.resets ? ` · resets ${esc(p.limit.resets)}` : ''}${p.limit.kind === 'credits' ? ' · top up the account, or' : ' ·'} switch to another model</span>
         <button class="tbtn" data-model="${esc(name)}">Switch model</button>
         <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)} on another model">Clone</button>${lead ? '<button class="tbtn" data-mklead="" title="Let another agent lead while this one is stuck">Pass the lead…</button>' : ''}</div>` : ''}
       ${p.state === 'approval' ? `<div class="appr"><span>Waiting for approval${p.prompt ? `: <b>${esc(p.prompt)}</b>` : ''}</span>
@@ -2882,7 +2900,7 @@
         : `<div class="grid ${L === 'auto' ? '' : 'cols-' + L}">${names.map((n) => cardHtml(n, t)).join('')}</div>`)
       : `<div class="empty">${t.watching ? 'The watcher is running, but no agents are in tmux yet.'
         : `The team isn't running.<br>${state.host?.connected
-          ? `<button type="button" class="tbtn pri start-team" id="startTeam">▶ Start the team</button><br><small class="mut">Starts every agent that isn't running, and the room watcher.</small>`
+          ? `<button type="button" class="tbtn pri start-team" id="startTeam">Start the team</button><br><small class="mut">Starts every agent that isn't running, and the room watcher.</small>`
           : helperOff('the team can\'t be started from here yet')}`}</div>`);
     renderTeamBar(); renderAttention();
     el.querySelectorAll('pre.screen').forEach((pre) => { pre.scrollTop = pre.scrollHeight; });
@@ -2899,7 +2917,7 @@
     const b = e.target.closest('#startTeam'); if (!b) return;
     b.disabled = true; b.textContent = 'Starting…';
     try { await api(`/rooms/${encodeURIComponent(state.current)}/start`, { method: 'POST', body: {} }); b.textContent = 'Starting… the screens appear here in a few seconds'; }
-    catch (err) { alertInline(err.message); b.disabled = false; b.textContent = '▶ Start the team'; }
+    catch (err) { alertInline(err.message); b.disabled = false; b.textContent = 'Start the team'; }
   });
   function updateCards() {
     const t = state.team[state.current];
@@ -3026,14 +3044,14 @@
       const isOpen = filter || open.startsWith(p) || localGet('airc.docdir.' + room + '.' + p) !== 'closed';
       return `<details ${isOpen ? 'open' : ''} data-docdir="${esc(p)}"><summary>${esc(d)}</summary><div class="kids">${draw(node.dirs[d], p)}</div></details>`;
     }).join('') + node.files.sort((a, b) => a.path.localeCompare(b.path)).map((f) =>
-      `<button class="dc-file ${f.path === open ? 'sel' : ''}" data-doc="${esc(f.path)}" title="${esc(f.path)} · ${fmtSize(f.size)} · ${esc(new Date(f.mtime).toLocaleString())}"><span class="n">${DOC_MD.includes(docExt(f.path)) ? '📝' : DOC_IMG.includes(docExt(f.path)) ? '🖼' : docExt(f.path) === 'pdf' ? '📕' : '📄'} ${esc(f.path.split('/').pop())}</span><small>${fmtSize(f.size)}</small></button>`).join('');
+      `<button class="dc-file ${f.path === open ? 'sel' : ''}" data-doc="${esc(f.path)}" title="${esc(f.path)} · ${fmtSize(f.size)} · ${esc(new Date(f.mtime).toLocaleString())}"><span class="n">${DOC_IMG.includes(docExt(f.path)) ? HICON.image : HICON.file} ${esc(f.path.split('/').pop())}</span><small>${fmtSize(f.size)}</small></button>`).join('');
     return draw(root, '') || `<div class="u-empty">${filter ? 'No matches' : 'No files yet'}</div>`;
   }
   function renderDocs() {
     const room = state.current, d = state.docs[room] || {};
     const filter = ($('#dcFilter')?.value || '').trim().toLowerCase();
     const editing = $('#dcDirIn') ? $('#dcDirIn').value : null;
-    const side = `<div class="dc-head">📁 <code>${esc(d.dir || 'docs')}/</code><span>${d.tree?.length ? `${d.tree.length} file${d.tree.length === 1 ? '' : 's'}` : ''}</span><span class="sp"></span>
+    const side = `<div class="dc-head">${HICON.folder} <code>${esc(d.dir || 'docs')}/</code><span>${d.tree?.length ? `${d.tree.length} file${d.tree.length === 1 ? '' : 's'}` : ''}</span><span class="sp"></span>
         <button type="button" id="dcDirBtn" title="Use another folder for this project's docs (settings: docs_dir)">Change</button></div>
       ${editing !== null ? dirFormHtml(editing) : ''}
       ${d.tree?.length > 12 ? `<input class="dc-filter" id="dcFilter" placeholder="Filter files…" value="${esc(filter)}">` : ''}
@@ -3050,7 +3068,7 @@
     const main = $('#dcMain'); if (!main) return;
     const seq = ++docSeq, scroll = keepScroll ? main.scrollTop : 0;
     if (!d.watching) {
-      main.innerHTML = `<div class="dc-empty">The team isn't running, so its docs folder can't be read.<br>${state.host?.connected ? '<button type="button" class="tbtn pri" data-fixteam>▶ Start the team</button>' : helperOff('the team can\'t be started')}</div>`; return;
+      main.innerHTML = `<div class="dc-empty">The team isn't running, so its docs folder can't be read.<br>${state.host?.connected ? '<button type="button" class="tbtn pri" data-fixteam>Start the team</button>' : helperOff('the team can\'t be started')}</div>`; return;
     }
     if (d.listed === false) {
       main.innerHTML = `<div class="dc-empty">This project's watcher doesn't list docs yet: it's running scripts from before the Docs view.<br>Run <code>tropa update</code> in the project folder: it refreshes the project's scripts and restarts the watcher.<br>The list appears here a few seconds later.</div>`; return;
@@ -3068,7 +3086,7 @@
     const bar = `<div class="dc-bar"><b>${esc(p)}</b><span>${fmtSize(f.size)} · ${esc(new Date(f.mtime).toLocaleString())}</span><span class="sp"></span>
       <a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Open raw</a><a class="btn" href="${esc(url)}&download=1">Download</a></div>`;
     if (DOC_IMG.includes(ext)) { main.innerHTML = bar + `<img class="dc-img" src="${esc(url)}" alt="${esc(p)}">`; return; }
-    if (ext === 'pdf') { main.innerHTML = bar + `<div class="dc-empty">📕 PDF · ${fmtSize(f.size)}<br><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a new tab</a></div>`; return; }
+    if (ext === 'pdf') { main.innerHTML = bar + `<div class="dc-empty">PDF · ${fmtSize(f.size)}<br><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a new tab</a></div>`; return; }
     const text = DOC_MD.includes(ext) || DOC_TEXT.includes(ext) || !ext || f.size < 256 * 1024;
     if (!text) { main.innerHTML = bar + `<div class="dc-empty">No preview for .${esc(ext)} files. Use Download.</div>`; return; }
     if (!keepScroll) main.innerHTML = bar + '<div class="dc-empty">Loading…</div>';
@@ -3184,7 +3202,7 @@
       const files = state.files[room];
       html += sec('files', 'Files shared', files?.length || '', files === null ? '<div class="rs-empty">Loading…</div>' : !files?.length ? '<div class="rs-empty">No files shared in this room yet. Drop or paste one into the chat.</div>'
         : files.slice(0, 60).map((a) => `<a class="rs-item" href="${a.stored ? a.url : '#'}" target="_blank" rel="noopener" title="${esc(a.stored ? `Open ${a.name}` : 'Still uploading')}${a.path && proj ? ` · ${esc(a.path)}` : ''}">
-            <span class="ic">${a.is_image && a.stored ? `<img src="${a.url}" alt="" loading="lazy">` : a.stored ? fileIcon(a.mime) : '⏳'}</span>
+            <span class="ic">${a.is_image && a.stored ? `<img src="${a.url}" alt="" loading="lazy">` : a.stored ? fileIcon(a.mime) : HICON.clock}</span>
             <div class="bd"><span class="nm">${esc(a.name)}</span><div class="s">${esc([a.uploader, a.created_at ? fmtTime(a.created_at) : '', a.size ? fmtSize(a.size) : ''].filter(Boolean).join(' · '))}</div></div>
             ${a.message_id ? `<button type="button" class="go" data-jump="${a.message_id}" title="Jump to the message">↪</button>` : ''}</a>`).join(''));
       if (proj) {
@@ -3193,9 +3211,9 @@
           : d.watching === false && !d.tree?.length ? `<div class="rs-empty">The team isn't running, so the docs folder can't be read.</div>`
           : !docs.length ? `<div class="rs-empty">Files in <code>${esc(d.dir || 'docs')}/</code> mentioned in the chat show up here.</div>`
           : docs.map((e) => `<div class="rs-item ${e.exists ? '' : 'missing'}" ${e.exists ? `data-rs-doc="${esc(e.path)}" title="Open in Docs"` : `title="Not in ${esc(d.dir || 'docs')}/ yet"`}>
-              <span class="ic">${e.exists ? (DOC_IMG.includes(docExt(e.path)) ? '🖼' : docExt(e.path) === 'pdf' ? '📕' : DOC_MD.includes(docExt(e.path)) ? '📝' : '📄') : '⏳'}</span>
+              <span class="ic">${e.exists ? (DOC_IMG.includes(docExt(e.path)) ? HICON.image : HICON.file) : HICON.clock}</span>
               <div class="bd"><span class="nm">${esc(e.path)}</span><div class="s">${esc([[...e.who].join(', '), e.count > 1 ? `${e.count} mentions` : '', e.exists ? (e.at ? fmtTime(e.at) : '') : 'not written yet'].filter(Boolean).join(' · '))}</div></div>
-              ${e.exists ? '<span class="go">📄</span>' : ''}</div>`).join(''));
+              ${e.exists ? `<span class="go">${HICON.file}</span>` : ''}</div>`).join(''));
       }
     }
     if (html === rsLast) return;
@@ -3358,7 +3376,7 @@
   function renderProjectKeys() {
     if (!$('#pkDlg').open) return;
     const room = state.current, slug = projectOf(room);
-    $('#pkTitle').textContent = `🔑 Keys · ${slug}`;
+    $('#pkTitle').textContent = `Keys · ${slug}`;
     $('#pkRows').innerHTML = Object.entries(KEYS).map(([p, k]) => {
       const u = keyUse(p, slug), who = agentsUsing(p, room);
       return `<div class="pk-row"><b>${k.name}</b><span class="st">${u.html}${who.length ? `<br>Used by ${who.map((n) => '@' + esc(n)).join(', ')}` : ''}</span>
@@ -3514,11 +3532,11 @@
 
   // ---------- light / dark theme ----------
   const THEMES = ['auto', 'light', 'dark'];
-  const THEME_ICON = { auto: '◐', light: '☀', dark: '☾' };
+  const THEME_ICON = { auto: HICON.auto, light: HICON.sun, dark: HICON.moon };
   function currentTheme() { const t = localGet('airc.theme'); return THEMES.includes(t) ? t : 'auto'; }
   function applyTheme(t) {
     if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
-    const b = $('#themeBtn'); b.textContent = THEME_ICON[t];
+    const b = $('#themeBtn'); b.innerHTML = THEME_ICON[t]; b.setAttribute('aria-label', `Theme: ${t}`);
     b.title = `Theme: ${t === 'auto' ? 'Auto (follows your system)' : t[0].toUpperCase() + t.slice(1)} — click to change`;
     b.setAttribute('aria-label', b.title);
   }
@@ -3545,6 +3563,12 @@
       const who = (args.find((a) => /^@?[\w.-]+$/.test(a) && !/^today$/i.test(a)) || '').replace(/^@/, '');
       if (!who) { openLeadDlg(''); return; }
       setLeadTo(who, args.some((a) => /^today$/i.test(a)));
+    } },
+    { name: 'restart', desc: 'Restart an agent\'s CLI on the same conversation (reconnects its MCP tools): /restart @agent', run: async (args) => {
+      const who = args.filter((a) => /^@?[\w.-]+$/.test(a)).map((a) => '@' + a.replace(/^@/, ''));
+      if (!who.length || !projectOf(state.current)) { infoInline('Use /restart @agent in a project room (or /restart @all).'); return; }
+      try { await api(`/rooms/${encodeURIComponent(state.current)}/messages`, { method: 'POST', body: { sender_kind: 'human', sender: myName(), content: `restart ${who.join(' ')}` } }); }
+      catch (err) { alertInline(err.message); }
     } },
     { name: 'pause', desc: 'Pause this room: nothing wakes the agents (no nudges either) until /resume', run: () => setPaused(true) },
     { name: 'resume', desc: 'Resume this room: agents are woken again, and the lead catches up', run: () => setPaused(false) },
@@ -3581,7 +3605,7 @@
     const v = state.skills[state.current] || { skills: [], agents: [], watching: false }, el = $('#skillsBody');
     if (sk.mode === 'edit') return renderSkillEdit(v);
     const list = [...v.skills].sort((a, b) => a.managed - b.managed || a.name.localeCompare(b.name));
-    el.innerHTML = `<div class="sk-top"><h3>🧩 Skills · ${esc(roomLabel(state.current))}</h3>
+    el.innerHTML = `<div class="sk-top"><h3>Skills · ${esc(roomLabel(state.current))}</h3>
         ${v.editable ? '<button type="button" class="tbtn" data-sk="import" title="Use a SKILL.md file you already have">Import SKILL.md</button><button type="button" class="tbtn pri" data-sk="new">＋ New skill</button>' : ''}
         <button type="button" class="tbtn" data-sk="close" aria-label="Close">✕</button></div>
       <p class="sk-lead">A skill is a how-to your agents load when a task matches its description: a checklist, a house style, the steps for a recurring job. Keep each one short and specific. They live in the project's <code>.agents/skills/</code> folder.</p>
@@ -3719,7 +3743,7 @@
       const s = await api(`/rooms/${encodeURIComponent(state.current)}/wake`, { method: 'PATCH', body: { wake: on ? 'paused' : 'auto' } });
       if (state.team[state.current]) state.team[state.current].settings = s;
       renderRoomNote(); if (state.view === 'team') renderTeamBar();
-      infoInline(on ? '⏸ Room paused. /resume to wake the agents again.' : '▶ Room resumed.');
+      infoInline(on ? 'Room paused. /resume to wake the agents again.' : 'Room resumed.');
     } catch (e) { alertInline(e.message); }
   }
   function runCommand(text) {
@@ -3989,7 +4013,7 @@
       const nm = rm.dataset.remove;
       if (!confirm(`Remove ${nm} from the team? Its CLI is stopped, it leaves the chat, and its folder moves to agents/.removed/ (nothing is deleted). You can add an agent with the same name again later.`)) return;
       rm.disabled = true;
-      try { await api(`/agents/${encodeURIComponent(nm)}`, { method: 'DELETE' }); rm.textContent = '🗑 Removing'; }
+      try { await api(`/agents/${encodeURIComponent(nm)}`, { method: 'DELETE' }); rm.textContent = 'Removing…'; }
       catch (err) { rm.textContent = 'Failed'; rm.disabled = false; alertInline(err.message); }
       return;
     }
@@ -4139,6 +4163,8 @@
   $('#agentDlg').addEventListener('close', () => { editing = null; });
 
   // settings
+  $('#settingsBtn').innerHTML = HICON.gear;
+  $('#attachBtn').innerHTML = HICON.clip;
   $('#settingsBtn').addEventListener('click', openSettings);
   $('#notifySound').addEventListener('change', (e) => { localSet('airc.notifySound', e.target.checked ? 'on' : 'off'); if (e.target.checked) chime(); });
   $('#settingsDlg').addEventListener('change', async (e) => {
@@ -4170,7 +4196,7 @@
   function renderPending() {
     const el = $('#pendingFiles');
     el.hidden = !state.pending.length;
-    el.innerHTML = state.pending.map((p) => `<span class="pchip ${p.error ? 'bad' : p.att ? '' : 'up'}" title="${esc(p.error || '')}">${p.att ? (p.att.is_image ? '🖼' : fileIcon(p.att.mime)) : p.error ? '⚠️' : '⏳'} ${esc(p.name)} <small>${fmtSize(p.size)}</small><button type="button" data-unpend="${p.key}" title="Remove">×</button></span>`).join('');
+    el.innerHTML = state.pending.map((p) => `<span class="pchip ${p.error ? 'bad' : p.att ? '' : 'up'}" title="${esc(p.error || '')}">${p.att ? (p.att.is_image ? HICON.image : fileIcon(p.att.mime)) : p.error ? HICON.alert : HICON.clock} ${esc(p.name)} <small>${fmtSize(p.size)}</small><button type="button" data-unpend="${p.key}" title="Remove">×</button></span>`).join('');
   }
   function attachFiles(files) {   // files the human pasted, dropped or picked for the message being written
     if (state.current === ALL || state.searching) { alertInline('Pick a room in the sidebar to attach files.'); return; }
@@ -4226,7 +4252,7 @@
   function helperOff(what) {
     const can = state.host?.can_start;
     return `<span class="helper-off" data-helper-off>TropaAI's helper on this computer isn't running, so ${what}. ` +
-      (can ? `<button type="button" class="tbtn pri" data-starthost>▶ Start the helper</button>`
+      (can ? `<button type="button" class="tbtn pri" data-starthost>Start the helper</button>`
         : `It comes back by itself within a minute when TropaAI is set to keep running. If it doesn't, open TropaAI with its shortcut (or run <code>tropa start</code> once).`) + '</span>';
   }
   function renderHelperNotes() {   // re-render what showed the helper as off (or on)
@@ -4240,8 +4266,8 @@
     try {
       await api('/host/start', { method: 'POST', body: {} });
       for (let i = 0; i < 20 && !state.host?.connected; i++) { await new Promise((r) => setTimeout(r, 1500)); try { state.host = await api('/host'); } catch {} }
-      if (state.host?.connected) { infoInline('The helper is running.'); renderHelperNotes(); } else { b.disabled = false; b.textContent = '▶ Start the helper'; alertInline("The helper didn't come up. Run tropa start once on this computer."); }
-    } catch (err) { b.disabled = false; b.textContent = '▶ Start the helper'; alertInline(err.message); }
+      if (state.host?.connected) { infoInline('The helper is running.'); renderHelperNotes(); } else { b.disabled = false; b.textContent = 'Start the helper'; alertInline("The helper didn't come up. Run tropa start once on this computer."); }
+    } catch (err) { b.disabled = false; b.textContent = 'Start the helper'; alertInline(err.message); }
   });
   // every project room keeps at least one agent, its lead orchestrator (teams/lead.md, sent by the host helper)
   function leadMember() {
@@ -4300,7 +4326,7 @@
     if (runs === 'openrouter') { const n = orModels(tool).length; return n ? `openrouter/author/model · ${n} with tools` : 'openrouter/author/model'; }
     return modelHint(tool);
   }
-  const OR_OFF = 'OpenRouter: not set up yet. Pick it to add your key (or ⚙ Settings → OpenRouter)';
+  const OR_OFF = 'OpenRouter: not set up yet. Pick it to add your key (or Settings → OpenRouter)';
   // OpenCode needs provider/model; a bare id makes it silently fall back to its last-used model
   function fullModel(tool, m) {
     m = String(m || '').trim();
@@ -4545,7 +4571,7 @@
     $('#npKickoff').value = np.team.length ? `${lead}Please read docs/SPEC.md${np.files.length ? ' and the files in docs/attachments/' : ''}, then ${np.lead ? 'plan the work and assign it to the team' : 'plan the work and get started'}. Post questions here.` : '';
   }
   function renderNpFiles() {
-    $('#npFileList').innerHTML = np.files.map((f, i) => `<span class="pchip">${/^image\//.test(f.type) ? '🖼' : '📄'} ${esc(f.name)} <small>${fmtSize(f.size)}</small><button type="button" data-npfile="${i}">×</button></span>`).join('');
+    $('#npFileList').innerHTML = np.files.map((f, i) => `<span class="pchip">${/^image\//.test(f.type) ? HICON.image : HICON.file} ${esc(f.name)} <small>${fmtSize(f.size)}</small><button type="button" data-npfile="${i}">×</button></span>`).join('');
     defaultKickoff();
   }
   $('#npTeam').addEventListener('input', (e) => {
@@ -4625,7 +4651,7 @@
     $('#npBrowse').hidden = !state.host?.picker;
     const bl = state.host?.blocked || [];   // macOS privacy protection kept the search out of these
     $('#npBlocked').hidden = !bl.length;
-    $('#npBlocked').innerHTML = bl.length ? `⚠ macOS didn't let TropaAI look in ${esc(bl.join(', '))}, so projects there aren't listed. Use <b>Browse…</b>, or allow access in <b>System Settings → Privacy &amp; Security → Files &amp; Folders</b> for the app you started TropaAI from (usually Terminal), then restart it.` : '';
+    $('#npBlocked').innerHTML = bl.length ? `macOS didn't let TropaAI look in ${esc(bl.join(', '))}, so projects there aren't listed. Use <b>Browse…</b>, or allow access in <b>System Settings → Privacy &amp; Security → Files &amp; Folders</b> for the app you started TropaAI from (usually Terminal), then restart it.` : '';
   }
   $('#npWhere').addEventListener('click', async () => {
     const b = $('#npWhere'), label = b.textContent;
@@ -5281,7 +5307,7 @@
     const toMe = !!me && ments.includes(me);
     if (m.sender_kind === 'system' && SLASH_ASK.test(m.content)) return 'slashask';
     if (m.sender_kind === 'system' && SLASH_ANS.test(m.content)) return 'slashans';
-    if (m.sender_kind === 'system') return toMe || /^👑 /.test(m.content) || shareActs(m) || agentReqActs(m) || roomReqActs(m) || rmReqActs(m) ? 'note' : 'quiet';
+    if (m.sender_kind === 'system') return toMe || /^(?:👑|↻) /.test(m.content) || shareActs(m) || agentReqActs(m) || roomReqActs(m) || rmReqActs(m) ? 'note' : 'quiet';
     if (toMe || state.questions.some((q) => q.message_id === m.id)) return 'agent';
     const toAgents = ments.some((x) => agents.has(x) && x !== m.sender.toLowerCase());
     if (lead && m.sender.toLowerCase() === lead && !toAgents) return 'agent';
@@ -5297,7 +5323,7 @@
       if (!run.length) return;
       const key = String(run[0].id), open = state.unfold.has(key);
       out += `<button type="button" class="sfold" data-fold="${key}" aria-expanded="${open}">${SICON.chev}${run.length} team update${run.length === 1 ? '' : 's'}</button>`;
-      if (open) out += `<div class="sfold-list">${run.map((m) => `<div class="su k-${m.sender_kind}" id="m${m.id}" data-id="${m.id}"><span class="who">${esc(m.sender_kind === 'system' ? 'TropaAI' : m.sender)}</span><span class="body">${md(m.content)}</span>${attsHtml(m)}</div>`).join('')}</div>`;
+      if (open) out += `<div class="sfold-list">${run.map((m) => `<div class="su k-${m.sender_kind}" id="m${m.id}" data-id="${m.id}"><span class="who">${esc(m.sender_kind === 'system' ? 'TropaAI' : m.sender)}</span><span class="body">${md(msgText(m))}</span>${attsHtml(m)}</div>`).join('')}</div>`;
       run = []; prev = null;
     };
     let owed = false;   // the lead's first message after yours answers you, even when it also hands out work
@@ -5335,7 +5361,7 @@
     const extras = `${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}`;
     const adv = !simple(), when = `<span class="st" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span>`;
     if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div>${adv ? `<div class="smeta">${when}</div>` : ''}${extras}${actsHtml(m)}</div>`;
-    if (k === 'sys') return `<div class="sm sm-sys" id="m${m.id}" data-id="${m.id}">${SICON.info}<div class="body">${md(m.content)}${when}</div>${extras}</div>`;
+    if (k === 'sys') return `<div class="sm sm-sys" id="m${m.id}" data-id="${m.id}">${SICON.info}<div class="body">${md(msgText(m))}${when}</div>${extras}</div>`;
     const waitQ = k === 'note' && /`([\w.-]+)` is waiting on a question in its terminal/.exec(m.content);
     if (waitQ) {   // answer it here with buttons, while the question is still on its screen
       const t = state.team[m.room_id] || {}, n = (t.agents || []).find((x) => x.toLowerCase() === waitQ[1].toLowerCase()) || waitQ[1];
@@ -5344,7 +5370,7 @@
     }
     if (k === 'note') {   // TropaAI telling you something; "press Fix the team" comes with the button
       const fix = /\*\*Fix the team\*\*/.test(m.content) && Date.now() - m.created_at < 6 * 3600e3 ? '<div class="rs-ask"><button type="button" class="tbtn pri" data-fixteam>Fix the team</button></div>' : '';
-      return `<div class="sm sm-note" id="m${m.id}" data-id="${m.id}">${SICON.info}<div><div class="body">${md(m.content.replace(/ If it keeps happening, switch to Advanced mode:[^\n]*/, ''))}</div>${fix}${extras}</div></div>`;
+      return `<div class="sm sm-note" id="m${m.id}" data-id="${m.id}">${SICON.info}<div><div class="body">${md(msgText(m).replace(/ If it keeps happening, switch to Advanced mode:[^\n]*/, ''))}</div>${fix}${extras}</div></div>`;
     }
     const q = state.questions.find((x) => x.message_id === m.id);
     const cont = prev && prev.sender === m.sender && m.created_at - prev.created_at < 10 * 60e3 && !m.reply_to && !q;
@@ -5423,6 +5449,8 @@
     // your last message, if no agent has answered since
     let mine = null;
     for (let i = list.length - 1; i >= 0; i--) { const m = list[i]; if (m.sender_kind === 'agent') break; if (m.sender_kind === 'human' && m.sender.toLowerCase() === me) { mine = m; break; } }
+    // a command TropaAI already carried out ("restart @x", "make @y the lead"): nothing to wait for
+    if (mine && list.some((m) => m.id > mine.id && m.sender_kind === 'system' && m.created_at - mine.created_at < 5000 && /^(?:👑|↻|⚠️) /.test(m.content))) mine = null;
     let line = '', ask = '';
     if (mine && Date.now() - mine.created_at < 6 * 3600e3) {
       const agents = new Set((t.agents || []).map((n) => n.toLowerCase()));
@@ -5497,7 +5525,7 @@
     }
     if (!simple()) $('#search').classList.remove('show');
     $('#sendBtn').innerHTML = simple() ? SICON.send : 'Send'; $('#sendBtn').setAttribute('aria-label', 'Send');
-    $('#attachBtn').innerHTML = simple() ? SICON.clip : '📎'; $('#attachBtn').setAttribute('aria-label', 'Attach files');
+    $('#attachBtn').innerHTML = simple() ? SICON.clip : HICON.clip; $('#attachBtn').setAttribute('aria-label', 'Attach files');
   }
   function moreItems() {
     const proj = projectOf(state.current), t = state.team[state.current] || {};
@@ -5654,7 +5682,7 @@
       <div class="bd-top"><button type="button" class="linkbtn" data-bd="start" style="margin:0">← Back</button><h1>Build your team</h1><button type="button" class="bd-x" data-bd="close" aria-label="Close">×</button></div>
       <p class="bd-lead">Hire the roles you need, the way you'd staff a small office. Each one gets a job you can read and change.</p>
       ${h.connected ? '' : `<div class="bd-warn">${helperOff('the team can\'t be created yet')}</div>`}
-      ${h.connected && !(h.clis || []).includes('claude') ? `<div class="bd-warn">Claude Code isn't installed on this computer, and your team runs on it. Open <b>⚙ Settings → Setup</b> to install it.</div>` : ''}
+      ${h.connected && !(h.clis || []).includes('claude') ? `<div class="bd-warn">Claude Code isn't installed on this computer, and your team runs on it. Open <b>Settings → Setup</b> to install it.</div>` : ''}
       <section><h2>1. Start from a ready-made team</h2>
         <div class="bd-grid">${ts.map((t) => `<button type="button" class="bd-tpl ${t.id === bt.teamId ? 'on' : ''}" data-bd-team="${esc(t.id)}" aria-pressed="${t.id === bt.teamId}"><b>${esc(t.name)}</b>${t.summary ? `<span>${esc(forHuman(t.summary))}</span>` : ''}<small>${t.members.map((m) => esc(m.name)).join(' · ')}</small></button>`).join('')}
           <button type="button" class="bd-tpl ${bt.teamId === '' ? 'on' : ''}" data-bd-team="" aria-pressed="${bt.teamId === ''}"><b>Start with a lead</b><span>Just the lead orchestrator; hire the rest yourself.</span></button></div></section>
@@ -5675,12 +5703,12 @@
         <textarea id="bdBrief" class="bd-in" rows="4" placeholder="What should the team do, for whom, and what does done look like? They'll ask you if anything is unclear.">${esc(bt.brief)}</textarea></section>
       <section><h2>4. Where it's saved</h2>
         <label class="bd-r"><input type="radio" name="bdWhere" value="new" ${bt.where !== 'existing' ? 'checked' : ''}> A new folder: <code id="bdSlug">${esc(base)}/${esc(slugOf(bt.name) || '…')}</code></label>
-        ${bt.where !== 'existing' ? `<div class="bd-pick bd-par">${h.picker ? '<button type="button" class="tbtn" data-bd="parent">📂 Change where…</button>' : ''}
+        ${bt.where !== 'existing' ? `<div class="bd-pick bd-par">${h.picker ? '<button type="button" class="tbtn" data-bd="parent">Change where…</button>' : ''}
           ${bt.ptype || !h.picker ? '' : '<button type="button" class="linkbtn" data-bd="ptype">or type a location</button>'}
           ${newParent() ? `<span class="mut">·</span><button type="button" class="linkbtn" data-bd="pdefault">back to ${esc(defaultParent())}</button>` : ''}</div>
           ${bt.ptype || !h.picker ? `<div class="bd-pick"><input id="bdParent" class="bd-in" value="${esc(base)}" placeholder="~/Documents" spellcheck="false" aria-label="Where to create the folder"></div>` : ''}` : ''}
         <label class="bd-r"><input type="radio" name="bdWhere" value="existing" ${bt.where === 'existing' ? 'checked' : ''}> A folder I already have</label>
-        ${bt.where === 'existing' ? `<div class="bd-pick"><input id="bdPath" class="bd-in" value="${esc(bt.path)}" placeholder="~/work/my-project" spellcheck="false" aria-label="Folder">${h.picker ? '<button type="button" class="tbtn" data-bd="browse">📂 Browse…</button>' : ''}</div>
+        ${bt.where === 'existing' ? `<div class="bd-pick"><input id="bdPath" class="bd-in" value="${esc(bt.path)}" placeholder="~/work/my-project" spellcheck="false" aria-label="Folder">${h.picker ? '<button type="button" class="tbtn" data-bd="browse">Browse…</button>' : ''}</div>
           <label class="bd-r bd-untouched"><input type="checkbox" id="bdUntouched" ${bt.untouched !== false ? 'checked' : ''}> Leave this folder untouched: the team's files are kept elsewhere, and the agents work on what's in it</label>` : ''}</section>
       <div class="bd-foot"><span class="err" id="bdErr" role="alert"></span><span class="mut">Runs on Claude Code. Other models and CLIs: switch to Advanced.</span>
         <button type="button" class="send" data-bd="create" ${h.connected ? '' : 'disabled'}>Create team and start</button></div>
@@ -5753,7 +5781,7 @@
       <div class="nps-hi">${esc(hi)}${state.human ? `, ${esc(state.human)}` : ''}</div>
       <h1>What should your team work on?</h1>
       ${h.connected ? '' : `<div class="bd-warn">${helperOff('the team can\'t be created yet')}</div>`}
-      ${h.connected && !(h.clis || []).includes('claude') ? `<div class="bd-warn">Claude Code isn't installed on this computer, and your team runs on it. Open <b>⚙ Settings → Setup</b> to install it.</div>` : ''}
+      ${h.connected && !(h.clis || []).includes('claude') ? `<div class="bd-warn">Claude Code isn't installed on this computer, and your team runs on it. Open <b>Settings → Setup</b> to install it.</div>` : ''}
       <div class="nps-box">
         <label for="npGoal" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Describe the work</label>
         <textarea id="npGoal" rows="3" placeholder="For example: build a website for my bakery with our menu and a way to order cakes">${esc(bt.brief)}</textarea>
@@ -5883,7 +5911,7 @@
     } catch (err) { fail(err.message); }
     finally { btn.disabled = false; btn.innerHTML = label; }
   }
-  // ---------- Setup check: what this computer has (first run, and ⚙ Settings → Setup) ----------
+  // ---------- Setup check: what this computer has (first run, and Settings → Setup) ----------
   const CLI_INSTALL = {
     claude: ['Claude Code', 'curl -fsSL https://claude.ai/install.sh | bash'],
     codex: ['Codex', 'npm install -g @openai/codex'],

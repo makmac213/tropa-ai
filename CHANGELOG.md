@@ -2,6 +2,19 @@
 
 ## 0.5.1 (October 2026)
 
+### Agents answer when mentioned in another room
+- **An @mention in a room the agent's team doesn't run now wakes it.** Ask your dev team's `@developer` something in the research room (or `#general`) and its own team wakes it, pointed at that room and told to answer there. Before, it only heard about it when you mentioned it again in its own room.
+- **No mix-ups between teams:** agent names are unique across TropaAI, and a name the room's own team uses (its `@lead`) is never sent to another team. If two running teams both claim a name (an old setup), nothing is routed.
+- **Only a pointer travels:** the agent alone is told who mentioned it, where, and the message number, and to read and answer there. Nothing is copied into its own room and its teammates aren't woken. `@all` only ever wakes the room's own team.
+- **The room's own team stays asleep** when your message names only a visitor, and an agent's "thanks" to a visitor wakes nobody.
+
+### No more emoji in TropaAI's own screens
+- **Line icons instead of emoji:** the notifications bell, theme and settings buttons at the bottom of the sidebar, attach, thumbs up and down, and file icons in messages, docs and uploads. Buttons and labels that only had an emoji for decoration are now plain text (*Share*, *Keys*, *Start the team*, *Out of credits*…).
+- **TropaAI's notes in the chat are shown without their emoji,** older ones included. Agents' own messages are shown as they wrote them.
+
+### Restart an agent from the chat
+- **Write `restart @backend2`** (or *@backend2 restart your session*, *restart @a and @b*, *restart @all*, or `/restart @backend2`). Its CLI stops and starts again on the same conversation, which also reconnects its MCP tools: the fix when an agent says its chat tools are disconnected. A note in the chat confirms it. Messages like *please restart the dev server @backend2* are still just messages.
+
 ### Advanced chat is as narrow as Simple
 - **Advanced project chats use the same 720 px reading column as Simple.** It was 960 px, which made long agent reports hard to read on wide screens.
 
