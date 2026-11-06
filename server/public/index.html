@@ -1060,6 +1060,12 @@
   .sm-ag .sn { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
   .sm-ag .body, .sm-note .body { font-size: 15px; line-height: 1.6; }
   .sm .quote { margin-bottom: 6px; }
+  .sm .st { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+  .smeta { margin-top: 3px; } .smeta .st { margin-left: 0; }
+  .sm-ag .ptag { opacity: 0; margin-left: 8px; font-weight: 400; transition: opacity .15s; } .sm-ag:hover .ptag { opacity: 1; }
+  .sm-sys { display: flex; gap: 8px; align-items: flex-start; margin-left: 42px; color: var(--muted); } .sm-sys svg { flex: none; margin-top: 2px; }
+  .sm-sys .body { font-size: 12.5px; color: var(--muted); } .sm-sys .body p { display: inline; margin: 0; } .sm-sys .body pre { font-size: 12px; }
+  body:not(.simple) .sconv { max-width: 960px; gap: 14px; } body:not(.simple) .sconv .day { margin: 6px 0 0; }
   .sm-note { display: flex; gap: 10px; align-items: flex-start; justify-content: center; font-size: 13px; color: var(--muted); padding: 0 12px; }
   .sm-note .body { font-size: 13.5px; color: var(--text); text-align: left; } .sm-note svg { flex: none; margin-top: 3px; }
   .sm-note .body p:last-child { margin-bottom: 0; }
@@ -1895,14 +1901,14 @@
     const prevHeight = box.scrollHeight;
     const list = state.searching ? (state.messages.get('__search__') || []) : (state.messages.get(state.current) || []);
     const showRoom = state.current === ALL || !!state.searching;
-    if (!list.length && simpleChat()) { box.innerHTML = `<div class="sempty"><b>Say hello to your team</b>Tell the lead what you'd like done. It plans the work with the team and asks you when something needs your say.</div>`; return; }
+    if (!list.length && convChat()) { box.innerHTML = `<div class="sempty"><b>Say hello to your team</b>Tell the lead what you'd like done. It plans the work with the team and asks you when something needs your say.</div>`; return; }
     if (!list.length) {
       box.innerHTML = state.searching ? `<div class="empty">No matches.</div>` : `<div class="empty">No messages in ${esc(roomLabel(state.current))} yet.<br><br>
         Agents join with the MCP tool <code>register</code> and post with <code>send_message</code>.<br>You can type below to start the conversation.</div>`;
       return;
     }
     let html = list.length >= 100 && !state.searching ? `<button class="older" id="older">Load older messages</button>` : '';
-    if (simpleChat()) html += simpleConv(list);
+    if (convChat()) html += simpleConv(list);
     else {
       let prev = null, lastDay = '';
       for (const m of list) {
@@ -2053,7 +2059,7 @@
           renderSidebar(); renderSimpleHeader(); if (state.view === 'team') updateCards();
           if (state.view === 'chat' && projectOf(state.current)) {   // a question on an agent's screen appeared or went: its buttons in the chat change
             const sig = (t.agents || []).filter((n) => paneMenu(t.panes?.[n]?.text)).join();
-            if (sig !== state.menuSig) { state.menuSig = sig; renderMessages({ stick: false }); } else if (simpleChat()) renderWorking();
+            if (sig !== state.menuSig) { state.menuSig = sig; renderMessages({ stick: false }); } else if (convChat()) renderWorking();
           }
         }
       }
@@ -5171,6 +5177,8 @@
 
   // ---------- Simple mode, chat-first: your messages and what's for you; the team's chatter folded away ----------
   const simpleChat = () => simple() && !!projectOf(state.current) && !state.searching && state.current !== ALL;
+  // a project room's chat as a conversation (bubbles for you, faces for agents): Simple folds the team's chatter, Advanced shows everything
+  const convChat = () => !!projectOf(state.current) && !state.searching && state.current !== ALL;
   state.unfold = new Set();   // "N team updates" folds you opened
   const SICON = {
     check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>',
@@ -5217,8 +5225,12 @@
       run = []; prev = null;
     };
     let owed = false;   // the lead's first message after yours answers you, even when it also hands out work
+    const fold = simple();   // Advanced shows every message: the team's chatter and TropaAI's notes too
+    let day = '';
     for (const m of list) {
       let k = simpleKind(m, me, lead, agents);
+      if (!fold && k === 'quiet') k = m.sender_kind === 'system' ? 'sys' : 'agent';
+      if (!fold && fmtDay(m.created_at) !== day) { day = fmtDay(m.created_at); out += `<div class="day">${day}</div>`; prev = null; }
       if (k === 'slashask' || k === 'slashans') k = k === 'slashans' ? k : k;   // shown, never folded
       if (k === 'mine') owed = true;
       else if (owed && m.sender_kind === 'agent' && m.sender.toLowerCase() === lead) { k = 'agent'; owed = false; }
@@ -5245,7 +5257,9 @@
     const parent = m.reply_to ? findMsg(m.reply_to) : null;
     const quote = m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : 'an earlier message'}</div>` : '';
     const extras = `${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}`;
-    if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div>${extras}${actsHtml(m)}</div>`;
+    const adv = !simple(), when = `<span class="st" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span>`;
+    if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div>${adv ? `<div class="smeta">${when}</div>` : ''}${extras}${actsHtml(m)}</div>`;
+    if (k === 'sys') return `<div class="sm sm-sys" id="m${m.id}" data-id="${m.id}">${SICON.info}<div class="body">${md(m.content)}${when}</div>${extras}</div>`;
     const waitQ = k === 'note' && /`([\w.-]+)` is waiting on a question in its terminal/.exec(m.content);
     if (waitQ) {   // answer it here with buttons, while the question is still on its screen
       const t = state.team[m.room_id] || {}, n = (t.agents || []).find((x) => x.toLowerCase() === waitQ[1].toLowerCase()) || waitQ[1];
@@ -5258,7 +5272,7 @@
     }
     const q = state.questions.find((x) => x.message_id === m.id);
     const cont = prev && prev.sender === m.sender && m.created_at - prev.created_at < 10 * 60e3 && !m.reply_to && !q;
-    return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? '' : `<div class="sn">${esc(m.sender)}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;
+    return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? '' : `<div class="sn">${esc(m.sender)}${adv ? `${when}${agentTag(m.sender)}` : ''}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;
   }
   const ansText = (q) => String(q.answer || '').replace(new RegExp('^@' + q.agent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').replace(/^\d+\.\s+/, '');
   function sqCard(q) {
@@ -5381,7 +5395,7 @@
     try { await api(`/rooms/${encodeURIComponent(state.current)}/messages`, { method: 'POST', body: { sender_kind: 'human', sender: myName(), content: `@${b.dataset.sask} Any update on this? A line on where it stands is enough.` } }); }
     catch (err) { alertInline(err.message); b.disabled = false; }
   });
-  setInterval(() => { if (simpleChat() && !document.hidden) renderWorking(); }, 30e3);   // keep "4 min" and "no reply yet" current
+  setInterval(() => { if (convChat() && !document.hidden) renderWorking(); }, 30e3);   // keep "4 min" and "no reply yet" current
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('sheet-open')) document.body.classList.remove('sheet-open'); });
   document.addEventListener('click', (e) => {
     const f = e.target.closest('[data-fold]'); if (!f) return;
