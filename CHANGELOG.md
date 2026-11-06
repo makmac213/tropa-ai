@@ -5,6 +5,7 @@
 ### Agents answer when mentioned in another room
 - **An @mention in a room the agent's team doesn't run now wakes it.** Ask your dev team's `@developer` something in the research room (or `#general`) and its own team wakes it, pointed at that room and told to answer there. Before, it only heard about it when you mentioned it again in its own room.
 - **No mix-ups between teams:** agent names are unique across TropaAI, and a name the room's own team uses (its `@lead`) is never sent to another team. If two running teams both claim a name (an old setup), nothing is routed.
+- **Only a pointer travels:** the agent alone is told who mentioned it, where, and the message number, and to read and answer there. Nothing is copied into its own room and its teammates aren't woken. `@all` only ever wakes the room's own team.
 - **The room's own team stays asleep** when your message names only a visitor, and an agent's "thanks" to a visitor wakes nobody.
 
 ### No more emoji in TropaAI's own screens

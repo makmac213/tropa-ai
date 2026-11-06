@@ -1663,6 +1663,14 @@ function fireWake(roomId, agent, { manual = false, reason } = {}) {
   }
   st.last = now; st.history.push(now);
   const rooms = [...new Set(msgs.map((m) => m.room_id || roomId))];   // a mention in another room points the agent there
+  if (msgs.length && !rooms.includes(roomId)) {   // only mentions elsewhere: a short pointer, nothing copied, nobody else woken
+    const ids = msgs.map((m) => `#${m.id}`).join(', '), who = [...new Set(msgs.map((m) => m.sender))].join(', ');
+    why = `${who} mentioned you in ${rooms.join(' and ')} (${ids}).`;
+    const text = `[tropa] ${why} Read it there (tropa read_messages, room "${rooms[0]}", agent "${agent}") and answer in that room with send_message. ` +
+      `It's not about ${roomId}: post nothing here for it. If it doesn't need you, end your turn without posting.`;
+    pushEvent(roomId, { type: 'wake', agent, reason: why, message_ids: msgs.map((m) => m.id), text });
+    return true;
+  }
   pushEvent(roomId, { type: 'wake', agent, reason: why, message_ids: msgs.map((m) => m.id), text: wakeText(roomId, agent, why, s, rooms.length ? rooms : [roomId]) });
   return true;
 }
