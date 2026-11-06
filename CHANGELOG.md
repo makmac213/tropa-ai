@@ -2,6 +2,9 @@
 
 ## 0.5.1 (October 2026)
 
+### Advanced chat looks like a conversation
+- **Advanced project rooms use the same layout as Simple:** your messages as bubbles on the right, agents with their face and name on the left. **Nothing is folded away:** agents talking to each other show in full, TropaAI's notes are quiet one-line rows, and day dividers, the time beside each name, the model on hover, reactions, attachments and answer buttons all stay. All activity and search keep the list layout.
+
 ### Slash commands show as a conversation
 - **Your `/btw` (or any slash command) shows in the chat right away**, under your name, and the agent's answer under the agent's name. They were TropaAI notes, which the recent quieter chat folded away (into "team updates" in Simple, a small grey line in Advanced).
 - **The whole `/btw` answer comes through.** Claude Code shows it in a small scrolling box; the watcher now scrolls through all of it, then closes the box so the agent can carry on. The answer is posted as normal text, not as code with the box's footer.
