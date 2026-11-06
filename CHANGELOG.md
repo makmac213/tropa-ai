@@ -2,6 +2,10 @@
 
 ## 0.5.1 (October 2026)
 
+### No more emoji in TropaAI's own screens
+- **Line icons instead of emoji:** the notifications bell, theme and settings buttons at the bottom of the sidebar, attach, thumbs up and down, and file icons in messages, docs and uploads. Buttons and labels that only had an emoji for decoration are now plain text (*Share*, *Keys*, *Start the team*, *Out of credits*…).
+- **TropaAI's notes in the chat are shown without their emoji,** older ones included. Agents' own messages are shown as they wrote them.
+
 ### Restart an agent from the chat
 - **Write `restart @backend2`** (or *@backend2 restart your session*, *restart @a and @b*, *restart @all*, or `/restart @backend2`). Its CLI stops and starts again on the same conversation, which also reconnects its MCP tools: the fix when an agent says its chat tools are disconnected. A note in the chat confirms it. Messages like *please restart the dev server @backend2* are still just messages.
 

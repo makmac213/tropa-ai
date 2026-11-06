@@ -2528,7 +2528,7 @@ function createProject(b) {
   if (b.topic || name) { q.setTopic.run(String(b.topic || name).slice(0, 300), roomId); broadcast({ type: 'room', room: q.getRoom.get(roomId) }); }
   setWakeSettings(roomId, { lead: lead_, auto_approve: b.auto_approve === true });
   const brief_ = renamed.size ? String(b.brief || '').slice(0, MAX_CONTENT - 500) : brief;
-  const intro = [existing ? `🧩 **Team added to existing project: ${name || slug}** (\`${path || folder}\`)` : `🆕 **New project: ${name || slug}**`, b.origin ? String(b.origin).slice(0, 300) : '', brief_ ? `\n${brief_}` : '',
+  const intro = [existing ? `**Team added to existing project: ${name || slug}** (\`${path || folder}\`)` : `**New project: ${name || slug}**`, b.origin ? String(b.origin).slice(0, 300) : '', brief_ ? `\n${brief_}` : '',
     renamed.size ? `\nThese names were already used in other projects, so this team has: ${[...renamed].map(([o, n]) => `${o} → @${n}`).join(', ')}.` : '',
     files.length ? `\nFiles are saved in \`${ATT_DIR}/\`.` : ''].filter(Boolean).join('\n').trim();
   const msg = postMessage({ room: roomId, sender: HUMAN_NAME, kind: 'human', content: intro, attachments: files });
