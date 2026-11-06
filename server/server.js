@@ -1548,8 +1548,11 @@ function pushEvent(roomId, ev) {
 function watcherSay(roomId, content) {
   try { return postMessage({ room: roomId, sender: WATCHER, kind: 'system', content }); } catch (e) { console.error(e); }
 }
-function wakeText(roomId, agent, reason, s) {
-  return `[tropa] ${reason} Read your unread messages in ${roomId} (tropa read_messages, agent "${agent}", limit ${s.history_limit}). ` +
+function wakeText(roomId, agent, reason, s, rooms = [roomId]) {
+  const away = rooms.filter((r) => r !== roomId);
+  const where = rooms.join(' and ');
+  return `[tropa] ${reason} Read your unread messages in ${where} (tropa read_messages, agent "${agent}", limit ${s.history_limit}). ` +
+    (away.length ? `You were mentioned in ${away.join(' and ')}, a room your team doesn't run: answer there (send_message to that room), not in ${roomId}. ` : '') +
     'If it assigns you work: post a one-line plan, do it, and finish with a message that @mentions who is next (result, blocker or done). ' +
     'If it doesn\'t concern you, or it only acknowledges something or says someone is standing by, end your turn without posting: don\'t reply to acknowledgements, and don\'t @mention anyone just to say you\'re idle (a mention wakes them).';
 }
@@ -1648,7 +1651,8 @@ function fireWake(roomId, agent, { manual = false, reason } = {}) {
   if (!why) {
     const ids = msgs.map((m) => m.id).sort((a, b) => a - b);
     const who = [...new Set(msgs.map((m) => m.sender))].sort().join(', ');
-    why = `New message(s) #${ids[0]}${ids.length > 1 ? `-#${ids[ids.length - 1]}` : ''} from ${who}.`;
+    const away = [...new Set(msgs.map((m) => m.room_id).filter((r) => r && r !== roomId))];
+    why = `New message(s) #${ids[0]}${ids.length > 1 ? `-#${ids[ids.length - 1]}` : ''} from ${who}${away.length ? ` in ${away.join(', ')}` : ''}.`;
   }
   if (msgs.some((m) => m.sender_kind === 'human')) {   // without this, the human sees nothing until the work is done
     why += ` ${HUMAN_NAME} is waiting on you: if it's work that takes more than a minute, first reply with one line saying what you'll do (e.g. "On it: deploying now, about 5 minutes"), then do it.`;
@@ -1658,8 +1662,34 @@ function fireWake(roomId, agent, { manual = false, reason } = {}) {
     st.standingIn = '';
   }
   st.last = now; st.history.push(now);
-  pushEvent(roomId, { type: 'wake', agent, reason: why, message_ids: msgs.map((m) => m.id), text: wakeText(roomId, agent, why, s) });
+  const rooms = [...new Set(msgs.map((m) => m.room_id || roomId))];   // a mention in another room points the agent there
+  pushEvent(roomId, { type: 'wake', agent, reason: why, message_ids: msgs.map((m) => m.id), text: wakeText(roomId, agent, why, s, rooms.length ? rooms : [roomId]) });
   return true;
+}
+/** The one project room whose running watcher runs `agent` ('' if none, or if it's ambiguous). Agent names are
+ *  unique across TropaAI, so the agent's own project decides; two running teams that both claim the name (an old
+ *  setup from before names were unique) route nothing, so one team's @lead is never woken for another's. */
+function homeRoomOf(agent) {
+  const live = [...watchers].filter(([, w]) => Date.now() - (w.seen || 0) <= WATCH_TTL && (w.agents || []).some((a) => sameName(a, agent))).map(([r]) => r);
+  if (live.length !== 1) return '';
+  const proj = (q.getAgent.get(agent)?.project || '').toLowerCase();
+  return !proj || live[0] === `project:${proj}` ? live[0] : '';
+}
+// "@dev-lead can your team check this?" in #research (or #general): dev-lead's own watcher wakes it, pointed at #research.
+function wakeAway(m) {
+  if (m.sender_kind === 'agent' && isAck(m.content)) return 0;
+  const here = new Set((watcherFor(m.room_id)?.agents || []).map((a) => a.toLowerCase()));
+  let routed = 0;
+  for (const name of new Set((m.mentions || []).map((x) => String(x).toLowerCase()))) {
+    if (here.has(name) || EVERYONE.has(name) || sameName(name, m.sender) || sameName(name, HUMAN_NAME)) continue;
+    const home = homeRoomOf(name);
+    if (!home || home === m.room_id) continue;
+    const w = watcherFor(home), s = wakeSettings(home);
+    if (s.wake === 'paused') continue;
+    scheduleWake(home, w.agents.find((a) => sameName(a, name)), m);
+    routed++;
+  }
+  return routed;
 }
 const CMD_RE = /@watcher\s+(approve|yes|allow|always|deny|no|reject)\s+@?([A-Za-z0-9._-]+)/gi;
 const CMD_ACT = { approve: 'yes', yes: 'yes', allow: 'yes', always: 'always', deny: 'no', no: 'no', reject: 'no' };
@@ -1670,8 +1700,11 @@ bus.on('message', (m) => {
   if (m.sender_kind === 'human' && leadCommand(m)) return;   // "pass the lead to @agent2": done here, not a message for the old lead
   if (m.sender_kind === 'human' && removalCommand(m)) return;   // "remove x and y from the room" → a confirmation card   // not a message for the agents
   if (m.sender_kind === 'human') { try { agentReqReply(m); } catch (e) { console.error(e); } }   // "approve backend2" (still passed on to the agents)
+  const away = wakeAway(m);   // an agent @mentioned in a room its team doesn't run: its own team's watcher wakes it
   const w = watcherFor(m.room_id);
   if (!w) return;
+  // "@developer can you check this?" in #research names only a visitor: this room's lead isn't woken for it
+  if (away && !(m.mentions || []).some((x) => EVERYONE.has(String(x).toLowerCase()) || w.agents.some((a) => sameName(a, x)))) return;
   if (m.sender_kind === 'human') {
     const cmds = [...String(m.content).matchAll(CMD_RE)];
     if (cmds.length) {

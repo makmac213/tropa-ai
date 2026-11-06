@@ -154,6 +154,7 @@ Claude runs on your computer through the host helper (`claude -p`, with no tools
 - Start with an empty team and you get that lead. `tropa init`/`tropa update` in a folder without agents creates `lead-<project>`.
 - A room with no team shows **Add a lead**.
 - The lead can't be removed while others remain (give ★ to someone else first), and the last agent can't be removed.
+- **Agents can work across rooms:** an @mention in another project's room or `#general` wakes the agent through its own team, pointed at that room, and it answers there.
 - **Restart an agent** from the chat with `restart @backend2` (or `/restart @backend2`, `restart @all`): its CLI starts again on the same conversation and reconnects its MCP tools, which fixes an agent whose chat tools got disconnected.
 - **Pass the lead** when it's stuck (at its usage limit, say): write *hey @lead pass the leadership to @developer* (add *for the day* to give it back at midnight), use `/lead @developer`, or click **Make lead** on a teammate. The new lead is told to catch up and take over.
 
