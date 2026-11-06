@@ -105,6 +105,9 @@
   .agent .meta { cursor: pointer; }
   .agent .meta:hover .n { text-decoration: underline; text-underline-offset: 2px; }
   .agent .s2 { color: var(--muted); }
+  .ag-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 14px; }
+  .ag-acts .mut { font-size: 12.5px; }
+  .agent .lead-tag { font-size: 11px; font-weight: 400; color: var(--muted); }
   .msg .ptag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
   #agentDlg { width: min(460px, 94vw); }
   #agentDlg label.h { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 5px; }
@@ -1114,6 +1117,9 @@
   .sp-empty { padding: 2px 18px 6px; color: var(--muted); font-size: 13px; }
   .sp-fix { padding: 6px 18px 2px; font-size: 13px; color: var(--muted); } .sp-fix .linkbtn { margin: 0; }
   .rs-back { display: none; }
+  .sp-row .mk-lead { margin: 0 0 0 auto; font-size: 12px; font-weight: 400; opacity: 0; } .sp-row:hover .mk-lead, .sp-row .mk-lead:focus-visible { opacity: 1; }
+  @media (hover: none) { .sp-row .mk-lead { opacity: 1; } }
+  #leadDlg { width: min(420px, 92vw); }
   body.simple .rs-top .rs-back { margin: 0 4px 0 -8px; } body.simple .rs-top span { flex: 1; }
   button.sp-file, button.sp-dec { width: 100%; background: none; border: 0; text-align: left; font: inherit; color: var(--text); }
   @media (max-width: 760px) {
@@ -1215,10 +1221,24 @@
   </main>
 </div>
 
+<dialog id="leadDlg" aria-labelledby="leadDlgTitle">
+  <form method="dialog" id="leadForm">
+    <h3 id="leadDlgTitle">Who leads this room?</h3>
+    <p class="mut" id="leadDlgNow" style="margin:-4px 0 12px;font-size:13px"></p>
+    <label class="h" for="leadPick" style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">New lead</label>
+    <select id="leadPick" style="width:100%;margin-bottom:12px"></select>
+    <div class="err" id="leadErr" style="color:var(--danger);font-size:12.5px;min-height:16px"></div>
+    <div class="btns"><button type="button" id="leadCancel">Cancel</button><span style="flex:1"></span>
+      <button type="button" id="leadToday" title="It goes back to the current lead at midnight">For today</button>
+      <button type="button" class="primary" id="leadForGood">From now on</button></div>
+  </form>
+</dialog>
+
 <dialog id="agentDlg">
   <form id="agentForm" novalidate>
     <h3 id="agentDlgTitle">Edit agent</h3>
     <div class="meta-line" id="agentMeta"></div>
+    <div class="ag-acts" id="agActs" role="group" aria-label="Actions"></div>
     <div class="fld">
       <label class="h" for="agName">Name</label>
       <input id="agName" spellcheck="false" autocomplete="off" required>
@@ -1627,10 +1647,11 @@
     $('#agentScope').textContent = scoped ? 'All agents' : 'This team';
     $('#agentScope').title = scoped ? 'Show agents from every project' : `Show only agents in ${proj}`;
     const dotCls = (a) => { const p = panes[a.name], st = p?.state; return p?.limit && st !== 'approval' ? 'lim' : st === 'working' ? 'busy' : st === 'approval' ? 'wait' : st === 'idle' ? (bgTasks(p) ? 'bg' : 'idle') : a.online ? 'on' : ''; };
+    const isLead = (a) => !!proj && (a.project || '').toLowerCase() === proj && a.name.toLowerCase() === String(state.team[state.current]?.settings?.lead || '').toLowerCase();
     $('#agents').innerHTML = list.length ? list.map((a) => `
       <div class="agent" title="${esc(a.description || '')}">
         <span class="dot ${dotCls(a)}"></span>
-        <div class="meta" data-edit-agent="${esc(a.name)}"><div class="n">${esc(a.name)}</div>
+        <div class="meta" data-edit-agent="${esc(a.name)}" role="button" tabindex="0" title="Wake, restart, clone or edit ${esc(a.name)}"><div class="n">${esc(a.name)}${isLead(a) ? ' <span class="lead-tag">lead</span>' : ''}</div>
           ${scoped ? agentLine(a, panes[a.name]) : `<div class="s">${esc([a.project, a.status].filter(Boolean).join(' · ') || (a.last_seen ? 'seen ' + fmtTime(a.last_seen) : ''))}</div>`}
           ${a.provider || a.model ? `<div class="s s2">${esc([a.provider, a.model].filter(Boolean).join(' · '))}</div>` : ''}${usageToday(a.name, 's s3')}</div>
         <button class="x" data-edit-agent="${esc(a.name)}" title="Edit agent">✎</button>
@@ -1707,6 +1728,30 @@
   // keep the sidebar's top as tall as the header (see .side-head)
   const syncHead = () => { const h = $('main > header')?.getBoundingClientRect().height; if (h) document.documentElement.style.setProperty('--hh', `${h}px`); };
   if (window.ResizeObserver) new ResizeObserver(syncHead).observe($('main > header'));
+  // passing the lead: the Make lead buttons, /lead, and the window that asks who and for how long
+  async function setLeadTo(agent, today) {
+    try {
+      const r = await api(`/rooms/${encodeURIComponent(state.current)}/lead`, { method: 'POST', body: { agent, today } });
+      if (!r.changed) infoInline(`${agent} already leads this room.`);
+      return true;
+    } catch (e) { alertInline(e.message); return false; }
+  }
+  function openLeadDlg(name) {
+    const t = state.team[state.current] || {}, cur = String(t.settings?.lead || '');
+    const names = [...new Set([...(t.agents || []), ...state.agents.filter((a) => (a.project || '').toLowerCase() === projectOf(state.current)).map((a) => a.name)])].filter((n) => n.toLowerCase() !== cur.toLowerCase());
+    if (!names.length) { infoInline('There is no other agent on this team to lead it.'); return; }
+    $('#leadPick').innerHTML = names.map((n) => { const p = t.panes?.[n]; return `<option value="${esc(n)}" ${n.toLowerCase() === String(name).toLowerCase() ? 'selected' : ''}>${esc(n)}${p?.limit ? ' · at its limit' : p?.state === 'working' ? ' · working' : ''}</option>`; }).join('');
+    const lim = cur && t.panes?.[cur]?.limit;
+    $('#leadDlgNow').textContent = cur ? `${cur} leads it now${lim ? ` (${limitLabel(t.panes[cur])})` : ''}. The new lead gets the messages that name nobody, and is told to catch up and take over.` : 'Nobody leads it now.';
+    $('#leadErr').textContent = '';
+    $('#leadToday').hidden = !cur;
+    $('#leadDlg').showModal();
+  }
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-mklead]'); if (b) { e.preventDefault(); openLeadDlg(b.dataset.mklead); } });
+  $('#leadCancel').addEventListener('click', () => $('#leadDlg').close());
+  for (const [id, today] of [['#leadToday', true], ['#leadForGood', false]]) {
+    $(id).addEventListener('click', async () => { const b = $(id); b.disabled = true; const ok = await setLeadTo($('#leadPick').value, today); b.disabled = false; if (ok) $('#leadDlg').close(); });
+  }
   function renderAdvTeam() {   // the team's faces in the header, ringed by state; a click opens the Team view
     const b = $('#advTeam'); if (!b) return;
     const proj = projectOf(state.current), t = state.team[state.current] || {};
@@ -2140,7 +2185,7 @@
         if ($('#projDlg').open) renderNpKeys();
         if (state.view === 'team' && !$('#team').hidden && !state.team[state.current]?.watching) renderTeam();
       }
-      else if (e.type === 'wake_settings') { const t = state.team[e.room_id]; if (t) { t.settings = e.settings; if (e.room_id === state.current) { renderRoomNote(); if (state.view === 'team') renderTeamBar(); } } }
+      else if (e.type === 'wake_settings') { const t = state.team[e.room_id]; if (t) { const was = t.settings?.lead; t.settings = e.settings; if (e.room_id === state.current) { renderRoomNote(); if (state.view === 'team') { if (was !== e.settings.lead) renderTeam(); else renderTeamBar(); } if (was !== e.settings.lead) { rsLast = ''; renderSidebar(); renderMessages({ stick: false }); } } } }
       else if (e.type === 'message_deleted') { for (const [k, arr] of state.messages) state.messages.set(k, arr.filter((m) => m.id !== e.id)); renderMessages({ stick: false }); }
     };
   }
@@ -2575,12 +2620,13 @@
       <div class="ca">
         <button class="tbtn" data-model="${esc(name)}" title="Switch ${esc(name)}'s model (keeps its conversation)">Model</button>
         <button class="tbtn" data-wake="${esc(name)}" title="Tell ${esc(name)} to read the room now">Wake</button>
+        ${lead ? '' : `<button class="tbtn" data-mklead="${esc(name)}" title="Make ${esc(name)} the lead of this room (for today, or from now on)">Make lead</button>`}
         <button class="tbtn" data-restart="${esc(name)}" title="Restart ${esc(name)}'s CLI (it resumes its conversation). Use it when it's stuck, crashed or logged out">Restart</button>
         <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)}: same CLI, model, role and instructions under a new name (change the model if this one is rate-limited)">Clone</button>
         <button class="tbtn warn" data-remove="${esc(name)}" title="Remove ${esc(name)} from the team: stops its CLI and moves agents/${esc(name)}/ to agents/.removed/">Remove</button></div>
       ${p.limit && p.state !== 'approval' ? `<div class="appr lim"><span><b>${p.limit.kind === 'credits' ? '💳 Out of credits' : p.limit.kind === 'limit' ? '⏳ Usage limit reached' : '🐢 Rate-limited'}</b>${p.limit.resets ? ` · resets ${esc(p.limit.resets)}` : ''}${p.limit.kind === 'credits' ? ' · top up the account, or' : ' ·'} switch to another model</span>
         <button class="tbtn" data-model="${esc(name)}">Switch model</button>
-        <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)} on another model">Clone</button></div>` : ''}
+        <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)} on another model">Clone</button>${lead ? '<button class="tbtn" data-mklead="" title="Let another agent lead while this one is stuck">Pass the lead…</button>' : ''}</div>` : ''}
       ${p.state === 'approval' ? `<div class="appr"><span>Waiting for approval${p.prompt ? `: <b>${esc(p.prompt)}</b>` : ''}</span>
         <button class="tbtn" data-approve="${esc(name)}" data-act="yes">Approve</button>
         <button class="tbtn" data-approve="${esc(name)}" data-act="always" title="Yes, and don't ask again this session">Always</button>
@@ -3433,9 +3479,10 @@
       }
       return `<div class="attn-row"><span class="atag k-${it.kind}">${ATTN_LABEL[it.kind]}</span><div class="at">${text}</div><div class="aa">${acts}</div></div>`;
     };
+    const snoozable = a.items.filter((it) => it.kind !== 'approval').map((it) => it.key);
     const summary = ATTN_KEYS.filter(([k]) => lim[k]).map(([k, l]) => `${l} ${lim[k]} min`).join(' · ') || 'all checks off';
     box.innerHTML = `<section class="attn" aria-label="Needs attention">
-      <div class="attn-h"><h2>Needs attention</h2>${a.items.length ? `<span class="pb a">${a.items.length}</span>` : ''}<span class="sp"></span><span class="mut">${esc(summary)}</span><button type="button" class="tbtn" id="attnEdit">Change</button></div>
+      <div class="attn-h"><h2>Needs attention</h2>${a.items.length ? `<span class="pb a">${a.items.length}</span>` : ''}<span class="sp"></span><span class="mut">${esc(summary)}</span>${snoozable.length > 1 ? `<button type="button" class="tbtn" data-snooze-all="${esc(snoozable.join(','))}" title="Hide these ${snoozable.length} for an hour (approvals stay)">Snooze all 1 h</button>` : ''}<button type="button" class="tbtn" id="attnEdit">Change</button></div>
       ${editing ? `<form id="attnForm" class="attn-form">${ATTN_KEYS.map(([k, l]) => `<label>${l} <input type="number" min="0" max="1440" name="${k}" value="${esc(editing[k] ?? lim[k] ?? 0)}"> min</label>`).join('')}<button type="submit" class="tbtn pri">Save</button><span class="mut">0 turns a check off. Also in .agent_sync/settings.json → attention.</span></form>` : ''}
       ${a.items.map(row).join('')}
       ${a.notes.map((n) => `<div class="attn-note mut">Not flagged: @${esc(n.agent)} has been idle ${agoShort(n.since)}, but its work waits for ${n.waits_for.map((x) => '#' + x).join(', ')}.</div>`).join('')}
@@ -3447,8 +3494,8 @@
     if (e.target.closest('#attnEdit')) { state.attnEditing = !state.attnEditing; renderAttention(); return; }
     const w = e.target.closest('[data-attnwake]');
     if (w) { w.disabled = true; try { await api(`/rooms/${encodeURIComponent(state.current)}/wake`, { method: 'POST', body: { agents: [w.dataset.attnwake], reason: w.dataset.reason } }); w.textContent = 'Woken'; } catch (err) { alertInline(err.message); w.disabled = false; } return; }
-    const sz = e.target.closest('[data-snooze]');
-    if (sz) { try { const r = await api(`/rooms/${encodeURIComponent(state.current)}/attention/snooze`, { method: 'POST', body: { key: sz.dataset.snooze, minutes: 60 } }); state.attention[state.current] = r; renderAttention(); renderHeader(); renderSidebar(); } catch (err) { alertInline(err.message); } return; }
+    const sz = e.target.closest('[data-snooze],[data-snooze-all]');
+    if (sz) { sz.disabled = true; try { const r = await api(`/rooms/${encodeURIComponent(state.current)}/attention/snooze`, { method: 'POST', body: sz.dataset.snoozeAll ? { keys: sz.dataset.snoozeAll.split(','), minutes: 60 } : { key: sz.dataset.snooze, minutes: 60 } }); state.attention[state.current] = r; renderAttention(); renderHeader(); renderSidebar(); } catch (err) { alertInline(err.message); } return; }
     const ot = e.target.closest('[data-opentk]'); if (ot) { openTask(Number(ot.dataset.opentk)); return; }
     const sc = e.target.closest('[data-seecard]');
     if (sc) { const c = document.querySelector(`#team [data-card="${CSS.escape(sc.dataset.seecard)}"]`); if (c) { c.scrollIntoView({ block: 'center', behavior: 'smooth' }); c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1600); } }
@@ -3494,6 +3541,11 @@
     { name: 'stop', desc: 'Stop reading aloud', run: () => { ttsStop(); infoInline('Stopped reading.'); } },
     { name: 'tts', desc: 'Show which voice engine reads aloud · /tts kokoro · /tts mac', run: (args) => ttsCommand(args[0]) },
     { name: 'theme', desc: 'Colour theme: /theme light · dark · auto', run: (args) => setTheme(args[0] || 'next') },
+    { name: 'lead', desc: 'Pass the lead: /lead @agent (add "today" to give it back at midnight)', run: (args) => {
+      const who = (args.find((a) => /^@?[\w.-]+$/.test(a) && !/^today$/i.test(a)) || '').replace(/^@/, '');
+      if (!who) { openLeadDlg(''); return; }
+      setLeadTo(who, args.some((a) => /^today$/i.test(a)));
+    } },
     { name: 'pause', desc: 'Pause this room: nothing wakes the agents (no nudges either) until /resume', run: () => setPaused(true) },
     { name: 'resume', desc: 'Resume this room: agents are woken again, and the lead catches up', run: () => setPaused(false) },
     { name: 'help', desc: 'List available commands', run: () => {
@@ -3979,6 +4031,7 @@
     if (t.dataset.delAgent) { if (t.dataset.confirm) await api(`/agents/${encodeURIComponent(t.dataset.delAgent)}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); else { t.dataset.confirm = '1'; t.textContent = '?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = '×'; }, 2500); } }
   });
   $('#menuBtn').addEventListener('click', () => $('#app').classList.toggle('nav'));
+  $('#agents').addEventListener('keydown', (e) => { const m = e.target.closest?.('.meta[data-edit-agent]'); if (m && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); m.click(); } });
 
   // topic editing
   $('#roomTopic').addEventListener('click', async () => {
@@ -4023,9 +4076,32 @@
     $('#modelList').innerHTML = [...new Set([...known, ...base])].map((m) => `<option value="${esc(m)}">`).join('');
     $('#agErr').textContent = '';
     const del = $('#agDelete'); delete del.dataset.confirm; del.textContent = 'Remove agent';
+    const room = a.project ? `project:${a.project.toLowerCase()}` : '', here = room && room === state.current;
+    const lead = String(state.team[room]?.settings?.lead || '').toLowerCase() === a.name.toLowerCase();
+    $('#agActs').hidden = !room;
+    $('#agActs').innerHTML = !room ? '' : `<button type="button" class="tbtn" data-agact="wake" title="Tell ${esc(a.name)} to read the room now">Wake</button>
+      <button type="button" class="tbtn" data-agact="restart" title="Stop and start its CLI again; it picks up its conversation">Restart</button>
+      ${here ? `<button type="button" class="tbtn" data-agact="clone" title="Add a copy: same CLI, model, role and instructions under a new name">Clone</button>` : ''}
+      ${here && !lead ? `<button type="button" class="tbtn" data-agact="lead">Make lead</button>` : ''}
+      ${here ? '' : `<span class="mut">Open ${esc(a.project)} to clone it.</span>`}`;
+    $('#agActs').dataset.room = room;
     $('#agentDlg').showModal();
     setTimeout(() => $('#agName').select(), 0);
   }
+  $('#agActs').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-agact]'); if (!b || !editing) return;
+    const name = editing, room = encodeURIComponent($('#agActs').dataset.room), act = b.dataset.agact, label = b.textContent;
+    $('#agErr').textContent = '';
+    if (act === 'clone') { $('#agentDlg').close(); openAddAgent({ clone: name }); return; }
+    if (act === 'lead') { $('#agentDlg').close(); openLeadDlg(name); return; }
+    if (act === 'restart' && !confirm(`Restart ${name}? Its CLI is stopped and started again (it picks up its conversation where it left off). Anything it's doing right now is cut off.`)) return;
+    b.disabled = true;
+    try {
+      if (act === 'wake') { const r = await api(`/rooms/${room}/wake`, { method: 'POST', body: { agents: [name] } }); b.textContent = r.woke?.length ? '✓ Woken' : 'Not woken'; }
+      else { await api(`/rooms/${room}/agents/${encodeURIComponent(name)}/restart`, { method: 'POST', body: {} }); b.textContent = '↻ Restarting'; }
+    } catch (err) { b.textContent = 'Failed'; $('#agErr').textContent = err.message; }
+    setTimeout(() => { b.textContent = label; b.disabled = false; }, 2500);
+  });
   $('#agentForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!editing) return;
@@ -5205,7 +5281,7 @@
     const toMe = !!me && ments.includes(me);
     if (m.sender_kind === 'system' && SLASH_ASK.test(m.content)) return 'slashask';
     if (m.sender_kind === 'system' && SLASH_ANS.test(m.content)) return 'slashans';
-    if (m.sender_kind === 'system') return toMe || shareActs(m) || agentReqActs(m) || roomReqActs(m) || rmReqActs(m) ? 'note' : 'quiet';
+    if (m.sender_kind === 'system') return toMe || /^👑 /.test(m.content) || shareActs(m) || agentReqActs(m) || roomReqActs(m) || rmReqActs(m) ? 'note' : 'quiet';
     if (toMe || state.questions.some((q) => q.message_id === m.id)) return 'agent';
     const toAgents = ments.some((x) => agents.has(x) && x !== m.sender.toLowerCase());
     if (lead && m.sender.toLowerCase() === lead && !toAgents) return 'agent';
@@ -5505,7 +5581,7 @@
         else if (bgTasks(p)) s = 'Running a long task';
         else if (card) s = `Has “${card.title}” in progress`;
         else s = p.state ? 'Waiting for work' : 'Not started';
-        return `<div class="sp-row">${sav(n, paneDot(p))}<div class="bd"><div class="t">${esc(n)}${n.toLowerCase() === lead ? '<span class="lab">lead</span>' : ''}</div><div class="s ${cls}">${esc(s)}</div>
+        return `<div class="sp-row">${sav(n, paneDot(p))}<div class="bd"><div class="t">${esc(n)}${n.toLowerCase() === lead ? '<span class="lab">lead</span>' : `<button type="button" class="linkbtn mk-lead" data-mklead="${esc(n)}">Make lead</button>`}</div><div class="s ${cls}">${esc(s)}</div>
           ${p.state === 'approval' ? `<div class="s" style="white-space:normal">${esc(p.prompt || 'wants to do something that needs your permission')}</div>
             <div class="rs-ask"><button type="button" class="tbtn pri" data-approve="${esc(n)}" data-act="yes">Allow</button><button type="button" class="tbtn" data-approve="${esc(n)}" data-act="no">Don't allow</button></div>` : ''}
           ${menu ? `${menu.question ? `<div class="s" style="white-space:normal">${esc(menu.question)}</div>` : ''}${menuButtons(n, menu)}` : ''}</div></div>`;
