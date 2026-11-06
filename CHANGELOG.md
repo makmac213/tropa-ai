@@ -2,6 +2,10 @@
 
 ## 0.5.1 (October 2026)
 
+### Quicker agent actions
+- **Click an agent's name in the sidebar** and its dialog now starts with **Wake**, **Restart**, **Clone** and **Make lead**, so you don't have to open the Team view to unstick one. Its name also shows *lead* when it leads the room.
+- **Snooze all** in *Needs attention* (Team view) hides every flagged item for an hour in one click. Approvals stay, since an agent waiting on one can't carry on.
+
 ### Pass the lead
 - **Hand the room to another agent when the lead is stuck**, for example at its usage limit. Say it in the chat: *hey @lead pass the leadership to @developer*, *make @designer the lead*, or *@designer you're the lead now*. Add *for the day* (or *today*) and the old lead takes it back at midnight.
 - **Or click:** **Make lead** on an agent's card (Advanced, Team view) or beside a teammate in Simple's side panel, and **Pass the lead…** on the lead's card when it hits its limit. Pick **For today** or **From now on**. `/lead @agent` (add `today`) works too.

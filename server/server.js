@@ -3264,11 +3264,11 @@ api.get('/attention', wrap(() => [...watchers.keys()].map((r) => attention(r))))
 api.get('/rooms/:id/attention', wrap((req) => attention(roomOf(req))));
 api.post('/rooms/:id/attention/snooze', wrap((req) => {
   const roomId = roomOf(req);
-  const key = String(req.body?.key || '').slice(0, 100);
-  if (!key) throw new UserError('key is required');
+  const keys = (Array.isArray(req.body?.keys) ? req.body.keys : [req.body?.key]).map((k) => String(k || '').slice(0, 100)).filter(Boolean).slice(0, 200);
+  if (!keys.length) throw new UserError('key is required');
   const mins = Math.min(Math.max(Number(req.body?.minutes) || 60, 1), 24 * 60);
   if (!snoozes.has(roomId)) snoozes.set(roomId, new Map());
-  snoozes.get(roomId).set(key, Date.now() + mins * 60e3);
+  for (const key of keys) snoozes.get(roomId).set(key, Date.now() + mins * 60e3);   // one item, or "Snooze all"
   attnSig.delete(roomId);
   return refreshAttention(roomId);
 }));

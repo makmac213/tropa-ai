@@ -105,6 +105,9 @@
   .agent .meta { cursor: pointer; }
   .agent .meta:hover .n { text-decoration: underline; text-underline-offset: 2px; }
   .agent .s2 { color: var(--muted); }
+  .ag-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 14px; }
+  .ag-acts .mut { font-size: 12.5px; }
+  .agent .lead-tag { font-size: 11px; font-weight: 400; color: var(--muted); }
   .msg .ptag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
   #agentDlg { width: min(460px, 94vw); }
   #agentDlg label.h { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 5px; }
@@ -1235,6 +1238,7 @@
   <form id="agentForm" novalidate>
     <h3 id="agentDlgTitle">Edit agent</h3>
     <div class="meta-line" id="agentMeta"></div>
+    <div class="ag-acts" id="agActs" role="group" aria-label="Actions"></div>
     <div class="fld">
       <label class="h" for="agName">Name</label>
       <input id="agName" spellcheck="false" autocomplete="off" required>
@@ -1643,10 +1647,11 @@
     $('#agentScope').textContent = scoped ? 'All agents' : 'This team';
     $('#agentScope').title = scoped ? 'Show agents from every project' : `Show only agents in ${proj}`;
     const dotCls = (a) => { const p = panes[a.name], st = p?.state; return p?.limit && st !== 'approval' ? 'lim' : st === 'working' ? 'busy' : st === 'approval' ? 'wait' : st === 'idle' ? (bgTasks(p) ? 'bg' : 'idle') : a.online ? 'on' : ''; };
+    const isLead = (a) => !!proj && (a.project || '').toLowerCase() === proj && a.name.toLowerCase() === String(state.team[state.current]?.settings?.lead || '').toLowerCase();
     $('#agents').innerHTML = list.length ? list.map((a) => `
       <div class="agent" title="${esc(a.description || '')}">
         <span class="dot ${dotCls(a)}"></span>
-        <div class="meta" data-edit-agent="${esc(a.name)}"><div class="n">${esc(a.name)}</div>
+        <div class="meta" data-edit-agent="${esc(a.name)}" role="button" tabindex="0" title="Wake, restart, clone or edit ${esc(a.name)}"><div class="n">${esc(a.name)}${isLead(a) ? ' <span class="lead-tag">lead</span>' : ''}</div>
           ${scoped ? agentLine(a, panes[a.name]) : `<div class="s">${esc([a.project, a.status].filter(Boolean).join(' · ') || (a.last_seen ? 'seen ' + fmtTime(a.last_seen) : ''))}</div>`}
           ${a.provider || a.model ? `<div class="s s2">${esc([a.provider, a.model].filter(Boolean).join(' · '))}</div>` : ''}${usageToday(a.name, 's s3')}</div>
         <button class="x" data-edit-agent="${esc(a.name)}" title="Edit agent">✎</button>
@@ -3474,9 +3479,10 @@
       }
       return `<div class="attn-row"><span class="atag k-${it.kind}">${ATTN_LABEL[it.kind]}</span><div class="at">${text}</div><div class="aa">${acts}</div></div>`;
     };
+    const snoozable = a.items.filter((it) => it.kind !== 'approval').map((it) => it.key);
     const summary = ATTN_KEYS.filter(([k]) => lim[k]).map(([k, l]) => `${l} ${lim[k]} min`).join(' · ') || 'all checks off';
     box.innerHTML = `<section class="attn" aria-label="Needs attention">
-      <div class="attn-h"><h2>Needs attention</h2>${a.items.length ? `<span class="pb a">${a.items.length}</span>` : ''}<span class="sp"></span><span class="mut">${esc(summary)}</span><button type="button" class="tbtn" id="attnEdit">Change</button></div>
+      <div class="attn-h"><h2>Needs attention</h2>${a.items.length ? `<span class="pb a">${a.items.length}</span>` : ''}<span class="sp"></span><span class="mut">${esc(summary)}</span>${snoozable.length > 1 ? `<button type="button" class="tbtn" data-snooze-all="${esc(snoozable.join(','))}" title="Hide these ${snoozable.length} for an hour (approvals stay)">Snooze all 1 h</button>` : ''}<button type="button" class="tbtn" id="attnEdit">Change</button></div>
       ${editing ? `<form id="attnForm" class="attn-form">${ATTN_KEYS.map(([k, l]) => `<label>${l} <input type="number" min="0" max="1440" name="${k}" value="${esc(editing[k] ?? lim[k] ?? 0)}"> min</label>`).join('')}<button type="submit" class="tbtn pri">Save</button><span class="mut">0 turns a check off. Also in .agent_sync/settings.json → attention.</span></form>` : ''}
       ${a.items.map(row).join('')}
       ${a.notes.map((n) => `<div class="attn-note mut">Not flagged: @${esc(n.agent)} has been idle ${agoShort(n.since)}, but its work waits for ${n.waits_for.map((x) => '#' + x).join(', ')}.</div>`).join('')}
@@ -3488,8 +3494,8 @@
     if (e.target.closest('#attnEdit')) { state.attnEditing = !state.attnEditing; renderAttention(); return; }
     const w = e.target.closest('[data-attnwake]');
     if (w) { w.disabled = true; try { await api(`/rooms/${encodeURIComponent(state.current)}/wake`, { method: 'POST', body: { agents: [w.dataset.attnwake], reason: w.dataset.reason } }); w.textContent = 'Woken'; } catch (err) { alertInline(err.message); w.disabled = false; } return; }
-    const sz = e.target.closest('[data-snooze]');
-    if (sz) { try { const r = await api(`/rooms/${encodeURIComponent(state.current)}/attention/snooze`, { method: 'POST', body: { key: sz.dataset.snooze, minutes: 60 } }); state.attention[state.current] = r; renderAttention(); renderHeader(); renderSidebar(); } catch (err) { alertInline(err.message); } return; }
+    const sz = e.target.closest('[data-snooze],[data-snooze-all]');
+    if (sz) { sz.disabled = true; try { const r = await api(`/rooms/${encodeURIComponent(state.current)}/attention/snooze`, { method: 'POST', body: sz.dataset.snoozeAll ? { keys: sz.dataset.snoozeAll.split(','), minutes: 60 } : { key: sz.dataset.snooze, minutes: 60 } }); state.attention[state.current] = r; renderAttention(); renderHeader(); renderSidebar(); } catch (err) { alertInline(err.message); } return; }
     const ot = e.target.closest('[data-opentk]'); if (ot) { openTask(Number(ot.dataset.opentk)); return; }
     const sc = e.target.closest('[data-seecard]');
     if (sc) { const c = document.querySelector(`#team [data-card="${CSS.escape(sc.dataset.seecard)}"]`); if (c) { c.scrollIntoView({ block: 'center', behavior: 'smooth' }); c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1600); } }
@@ -4025,6 +4031,7 @@
     if (t.dataset.delAgent) { if (t.dataset.confirm) await api(`/agents/${encodeURIComponent(t.dataset.delAgent)}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); else { t.dataset.confirm = '1'; t.textContent = '?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = '×'; }, 2500); } }
   });
   $('#menuBtn').addEventListener('click', () => $('#app').classList.toggle('nav'));
+  $('#agents').addEventListener('keydown', (e) => { const m = e.target.closest?.('.meta[data-edit-agent]'); if (m && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); m.click(); } });
 
   // topic editing
   $('#roomTopic').addEventListener('click', async () => {
@@ -4069,9 +4076,32 @@
     $('#modelList').innerHTML = [...new Set([...known, ...base])].map((m) => `<option value="${esc(m)}">`).join('');
     $('#agErr').textContent = '';
     const del = $('#agDelete'); delete del.dataset.confirm; del.textContent = 'Remove agent';
+    const room = a.project ? `project:${a.project.toLowerCase()}` : '', here = room && room === state.current;
+    const lead = String(state.team[room]?.settings?.lead || '').toLowerCase() === a.name.toLowerCase();
+    $('#agActs').hidden = !room;
+    $('#agActs').innerHTML = !room ? '' : `<button type="button" class="tbtn" data-agact="wake" title="Tell ${esc(a.name)} to read the room now">Wake</button>
+      <button type="button" class="tbtn" data-agact="restart" title="Stop and start its CLI again; it picks up its conversation">Restart</button>
+      ${here ? `<button type="button" class="tbtn" data-agact="clone" title="Add a copy: same CLI, model, role and instructions under a new name">Clone</button>` : ''}
+      ${here && !lead ? `<button type="button" class="tbtn" data-agact="lead">Make lead</button>` : ''}
+      ${here ? '' : `<span class="mut">Open ${esc(a.project)} to clone it.</span>`}`;
+    $('#agActs').dataset.room = room;
     $('#agentDlg').showModal();
     setTimeout(() => $('#agName').select(), 0);
   }
+  $('#agActs').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-agact]'); if (!b || !editing) return;
+    const name = editing, room = encodeURIComponent($('#agActs').dataset.room), act = b.dataset.agact, label = b.textContent;
+    $('#agErr').textContent = '';
+    if (act === 'clone') { $('#agentDlg').close(); openAddAgent({ clone: name }); return; }
+    if (act === 'lead') { $('#agentDlg').close(); openLeadDlg(name); return; }
+    if (act === 'restart' && !confirm(`Restart ${name}? Its CLI is stopped and started again (it picks up its conversation where it left off). Anything it's doing right now is cut off.`)) return;
+    b.disabled = true;
+    try {
+      if (act === 'wake') { const r = await api(`/rooms/${room}/wake`, { method: 'POST', body: { agents: [name] } }); b.textContent = r.woke?.length ? '✓ Woken' : 'Not woken'; }
+      else { await api(`/rooms/${room}/agents/${encodeURIComponent(name)}/restart`, { method: 'POST', body: {} }); b.textContent = '↻ Restarting'; }
+    } catch (err) { b.textContent = 'Failed'; $('#agErr').textContent = err.message; }
+    setTimeout(() => { b.textContent = label; b.disabled = false; }, 2500);
+  });
   $('#agentForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!editing) return;
