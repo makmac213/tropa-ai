@@ -2,6 +2,11 @@
 
 ## 0.5.1 (October 2026)
 
+### Pass the lead
+- **Hand the room to another agent when the lead is stuck**, for example at its usage limit. Say it in the chat: *hey @lead pass the leadership to @developer*, *make @designer the lead*, or *@designer you're the lead now*. Add *for the day* (or *today*) and the old lead takes it back at midnight.
+- **Or click:** **Make lead** on an agent's card (Advanced, Team view) or beside a teammate in Simple's side panel, and **Pass the lead…** on the lead's card when it hits its limit. Pick **For today** or **From now on**. `/lead @agent` (add `today`) works too.
+- **The new lead is told to catch up** on the chat and the task board and take over; the old one is told to finish its cards and take direction. Messages that name nobody go to the new lead right away, and a note in the chat says who leads now.
+
 ### Fixed: the old page after an update
 - **After `tropa self-update`, a reload now shows the new version.** The page was sent without caching rules, so a browser could keep showing its old copy for a while. The page is now always re-checked (cheap when nothing changed).
 

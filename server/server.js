@@ -1423,6 +1423,8 @@ const WAKE_DEFAULTS = { lead: '', wake: 'auto', wake_rules: 'smart', max_wakes_p
   // quiet with unfinished cards gets the lead going again. The watcher tries an agent again once its limit resets and
   // interrupts a step that hangs. (The host helper restarts agents whose CLI stopped, auto-heal or not.)
   auto_heal: true,
+  // passing the lead "for today": who gets it back, and when (0 = for good)
+  lead_back: '', lead_until: 0,
   // "needs attention" limits in minutes (0 = don't flag): quiet in Doing, waiting in Review, on an approval prompt, Blocked, idle with ready work
   attention: { doing_quiet: 15, review_wait: 45, approval_wait: 5, blocked_wait: 60, idle_ready: 20 } };
 const EVERYONE = new Set(['all', 'here', 'team', 'everyone']);
@@ -1430,6 +1432,7 @@ const WATCHER = 'watcher';
 const WATCH_TTL = 45000;
 const qw = {
   get: db.prepare('SELECT * FROM room_wake WHERE room_id = ?'),
+  leadsBack: db.prepare(`SELECT room_id FROM room_wake WHERE settings LIKE '%"lead_until":%' AND settings NOT LIKE '%"lead_until":0%'`),
   put: db.prepare(`INSERT INTO room_wake (room_id, settings, updated_at) VALUES (?,?,?)
     ON CONFLICT(room_id) DO UPDATE SET settings = excluded.settings, updated_at = excluded.updated_at`),
 };
@@ -1442,6 +1445,8 @@ function wakeSettings(roomId) {
 function cleanWake(patch) {
   const out = {};
   if ('lead' in patch) out.lead = cleanName(patch.lead || '');
+  if ('lead_back' in patch) out.lead_back = cleanName(patch.lead_back || '');
+  if ('lead_until' in patch) out.lead_until = Math.max(0, Math.floor(Number(patch.lead_until) || 0));
   if ('auto_approve' in patch) out.auto_approve = patch.auto_approve === true || patch.auto_approve === 'true';
   if ('team_shrink' in patch) {
     if (!['ask', 'auto', 'off'].includes(patch.team_shrink)) throw new UserError('team_shrink must be "ask", "auto" or "off"');
@@ -1661,6 +1666,7 @@ const CMD_ACT = { approve: 'yes', yes: 'yes', allow: 'yes', always: 'always', de
 bus.on('message', (m) => {
   if (m.sender_kind === 'system') return;
   if (m.sender_kind === 'human' && /@tropa\b/i.test(m.content) && (shareCommand(m) || agentCommand(m))) return;
+  if (m.sender_kind === 'human' && leadCommand(m)) return;   // "pass the lead to @agent2": done here, not a message for the old lead
   if (m.sender_kind === 'human' && removalCommand(m)) return;   // "remove x and y from the room" → a confirmation card   // not a message for the agents
   if (m.sender_kind === 'human') { try { agentReqReply(m); } catch (e) { console.error(e); } }   // "approve backend2" (still passed on to the agents)
   const w = watcherFor(m.room_id);
@@ -1685,6 +1691,12 @@ const roomOf = (req) => requireRoom(normalizeRoomId(req.params.id)).id;
 const pickWakeKeys = (o) => Object.fromEntries(Object.keys(WAKE_DEFAULTS).filter((k) => o && k in o).map((k) => [k, o[k]]));
 
 api.get('/rooms/:id/team', wrap((req) => teamView(roomOf(req))));
+api.post('/rooms/:id/lead', wrap((req) => {   // the page's Make lead (and /lead @agent)
+  const roomId = roomOf(req);
+  const [name] = teamMembers(roomId, [String(req.body?.agent || '')]);
+  if (!name) throw new UserError(`@${req.body?.agent} isn't on this team`);
+  return setLead(roomId, name, { today: req.body?.today === true, by: HUMAN_NAME });
+}));
 api.get('/rooms/:id/wake', wrap((req) => wakeSettings(roomOf(req))));
 api.patch('/rooms/:id/wake', wrap((req) => setWakeSettings(roomOf(req), req.body || {})));
 api.post('/rooms/:id/wake', wrap((req) => {
@@ -3502,6 +3514,59 @@ function teamMembers(roomId, words) {
   for (const a of q.listAgents.all()) if ((a.project || '').toLowerCase() === slug) team.set(a.name.toLowerCase(), a.name);
   return [...new Set(words.map((w) => team.get(String(w).replace(/^@/, '').toLowerCase())).filter(Boolean))];
 }
+// ---------- passing the lead ----------
+// "@lead pass the leadership to @agent2" · "make @agent2 the lead" · "@agent2 you're the lead for today" · /lead @agent2 (page)
+const LEAD_ASK = [
+  /\b(?:pass|hand|give|transfer|move)\s+(?:over\s+)?(?:the\s+|your\s+)?(?:lead(?:ership|er role)?|lead role)\s+(?:over\s+)?to\s+@?([\w.-]+)/i,
+  /\bmake\s+@?([\w.-]+)\s+(?:the\s+)?(?:new\s+)?(?:team\s+)?lead(?:er)?\b/i,
+  /@([\w.-]+)[,:]?\s+(?:you(?:'re|\s+are)?|be|is)\s+(?:now\s+)?(?:the\s+)?(?:new\s+)?(?:team\s+)?lead(?:er)?\b/i,
+];
+const LEAD_TODAY = /\b(?:for\s+(?:the\s+)?(?:day|today)|today|until\s+tomorrow|tonight)\b/i;
+const nextMidnight = () => { const d = new Date(); d.setHours(24, 0, 0, 0); return d.getTime(); };
+/** Make `name` the room's lead. today: it goes back to the current lead at midnight. Announces it and wakes the new lead. */
+function setLead(roomId, name, { today = false, by = HUMAN_NAME, back = false } = {}) {
+  const s = wakeSettings(roomId), w = watcherFor(roomId);
+  const old = String(s.lead || '');
+  if (old.toLowerCase() === String(name).toLowerCase()) {
+    if (back || !today) setWakeSettings(roomId, { lead_back: '', lead_until: 0 });
+    return { lead: old, changed: false };
+  }
+  let keepBack = today ? (s.lead_until && s.lead_back ? s.lead_back : old) : '';   // a second "for today" still returns to the original lead
+  if (keepBack.toLowerCase() === String(name).toLowerCase()) keepBack = '';   // handing it back early to the usual lead
+  setWakeSettings(roomId, { lead: name, lead_back: keepBack, lead_until: today && keepBack ? nextMidnight() : 0 });
+  const until = today && keepBack ? ` for today: \`${keepBack}\` takes it back at midnight` : '';
+  watcherSay(roomId, back ? `👑 It's a new day, so \`${name}\` leads this room again (\`${old}\` led it for the day).`
+    : `👑 \`${name}\` leads this room now${old ? ` (was \`${old}\`)` : ''}${until}. Messages that name nobody go to \`${name}\`.`);
+  const agent = w?.agents.find((a) => a.toLowerCase() === String(name).toLowerCase());
+  if (agent) {
+    const lim = old && limitOf(w, w.agents.find((a) => a.toLowerCase() === old.toLowerCase()));
+    fireWake(roomId, agent, { manual: true, reason: back
+      ? `It's a new day: you lead this room again. Catch up on what \`${old}\` did while leading (the room and the task board), then carry on: answer ${HUMAN_NAME} and keep the cards moving with @mentions.`
+      : `${by} made you the lead of this room${old ? `, taking over from \`${old}\`${lim ? ' (it is at its usage limit)' : ''}` : ''}${until ? ' for today' : ''}. Read the recent messages and the task board, then coordinate: answer ${HUMAN_NAME}, assign the next cards with @mentions, review what is handed in.` });
+  }
+  const prevAgent = old && w?.agents.find((a) => a.toLowerCase() === old.toLowerCase());
+  if (prevAgent && !limitOf(w, prevAgent)) fireWake(roomId, prevAgent, { manual: true, reason: `\`${name}\` leads this room now${until ? ' (for today)' : ''}. Finish the cards you own, and take direction from @${name}; don't assign work yourself meanwhile.` });
+  return { lead: name, changed: true, back_to: keepBack, until: today && keepBack ? nextMidnight() : 0 };
+}
+function leadCommand(m) {
+  if (!String(m.room_id).startsWith('project:')) return false;
+  const text = String(m.content);
+  const hit = LEAD_ASK.map((rx) => text.match(rx)).find(Boolean);
+  if (!hit) return false;
+  const [name] = teamMembers(m.room_id, [hit[1]]);
+  if (!name) return false;   // "make the lead happy", an @mention of someone not on the team: just a message
+  try { setLead(m.room_id, name, { today: LEAD_TODAY.test(text), by: m.sender }); }
+  catch (e) { shareNote(m.room_id, `⚠️ ${e.message}`); }
+  return true;
+}
+setInterval(() => {   // "for today" is over: the lead goes back
+  for (const { room_id: roomId } of qw.leadsBack.all()) {
+    const s = wakeSettings(roomId);
+    if (s.lead_until && Date.now() >= s.lead_until && s.lead_back) {
+      try { setLead(roomId, s.lead_back, { back: true }); setWakeSettings(roomId, { lead_back: '', lead_until: 0 }); } catch (e) { console.error('lead back', e); }
+    }
+  }
+}, 60e3).unref();
 /** Every project room keeps its lead: refuse a removal that would take the lead or leave nobody. */
 function keepsLead(roomId, names) {
   if (!String(roomId).startsWith('project:')) return;

@@ -1114,6 +1114,9 @@
   .sp-empty { padding: 2px 18px 6px; color: var(--muted); font-size: 13px; }
   .sp-fix { padding: 6px 18px 2px; font-size: 13px; color: var(--muted); } .sp-fix .linkbtn { margin: 0; }
   .rs-back { display: none; }
+  .sp-row .mk-lead { margin: 0 0 0 auto; font-size: 12px; font-weight: 400; opacity: 0; } .sp-row:hover .mk-lead, .sp-row .mk-lead:focus-visible { opacity: 1; }
+  @media (hover: none) { .sp-row .mk-lead { opacity: 1; } }
+  #leadDlg { width: min(420px, 92vw); }
   body.simple .rs-top .rs-back { margin: 0 4px 0 -8px; } body.simple .rs-top span { flex: 1; }
   button.sp-file, button.sp-dec { width: 100%; background: none; border: 0; text-align: left; font: inherit; color: var(--text); }
   @media (max-width: 760px) {
@@ -1214,6 +1217,19 @@
     </div>
   </main>
 </div>
+
+<dialog id="leadDlg" aria-labelledby="leadDlgTitle">
+  <form method="dialog" id="leadForm">
+    <h3 id="leadDlgTitle">Who leads this room?</h3>
+    <p class="mut" id="leadDlgNow" style="margin:-4px 0 12px;font-size:13px"></p>
+    <label class="h" for="leadPick" style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">New lead</label>
+    <select id="leadPick" style="width:100%;margin-bottom:12px"></select>
+    <div class="err" id="leadErr" style="color:var(--danger);font-size:12.5px;min-height:16px"></div>
+    <div class="btns"><button type="button" id="leadCancel">Cancel</button><span style="flex:1"></span>
+      <button type="button" id="leadToday" title="It goes back to the current lead at midnight">For today</button>
+      <button type="button" class="primary" id="leadForGood">From now on</button></div>
+  </form>
+</dialog>
 
 <dialog id="agentDlg">
   <form id="agentForm" novalidate>
@@ -1707,6 +1723,30 @@
   // keep the sidebar's top as tall as the header (see .side-head)
   const syncHead = () => { const h = $('main > header')?.getBoundingClientRect().height; if (h) document.documentElement.style.setProperty('--hh', `${h}px`); };
   if (window.ResizeObserver) new ResizeObserver(syncHead).observe($('main > header'));
+  // passing the lead: the Make lead buttons, /lead, and the window that asks who and for how long
+  async function setLeadTo(agent, today) {
+    try {
+      const r = await api(`/rooms/${encodeURIComponent(state.current)}/lead`, { method: 'POST', body: { agent, today } });
+      if (!r.changed) infoInline(`${agent} already leads this room.`);
+      return true;
+    } catch (e) { alertInline(e.message); return false; }
+  }
+  function openLeadDlg(name) {
+    const t = state.team[state.current] || {}, cur = String(t.settings?.lead || '');
+    const names = [...new Set([...(t.agents || []), ...state.agents.filter((a) => (a.project || '').toLowerCase() === projectOf(state.current)).map((a) => a.name)])].filter((n) => n.toLowerCase() !== cur.toLowerCase());
+    if (!names.length) { infoInline('There is no other agent on this team to lead it.'); return; }
+    $('#leadPick').innerHTML = names.map((n) => { const p = t.panes?.[n]; return `<option value="${esc(n)}" ${n.toLowerCase() === String(name).toLowerCase() ? 'selected' : ''}>${esc(n)}${p?.limit ? ' · at its limit' : p?.state === 'working' ? ' · working' : ''}</option>`; }).join('');
+    const lim = cur && t.panes?.[cur]?.limit;
+    $('#leadDlgNow').textContent = cur ? `${cur} leads it now${lim ? ` (${limitLabel(t.panes[cur])})` : ''}. The new lead gets the messages that name nobody, and is told to catch up and take over.` : 'Nobody leads it now.';
+    $('#leadErr').textContent = '';
+    $('#leadToday').hidden = !cur;
+    $('#leadDlg').showModal();
+  }
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-mklead]'); if (b) { e.preventDefault(); openLeadDlg(b.dataset.mklead); } });
+  $('#leadCancel').addEventListener('click', () => $('#leadDlg').close());
+  for (const [id, today] of [['#leadToday', true], ['#leadForGood', false]]) {
+    $(id).addEventListener('click', async () => { const b = $(id); b.disabled = true; const ok = await setLeadTo($('#leadPick').value, today); b.disabled = false; if (ok) $('#leadDlg').close(); });
+  }
   function renderAdvTeam() {   // the team's faces in the header, ringed by state; a click opens the Team view
     const b = $('#advTeam'); if (!b) return;
     const proj = projectOf(state.current), t = state.team[state.current] || {};
@@ -2140,7 +2180,7 @@
         if ($('#projDlg').open) renderNpKeys();
         if (state.view === 'team' && !$('#team').hidden && !state.team[state.current]?.watching) renderTeam();
       }
-      else if (e.type === 'wake_settings') { const t = state.team[e.room_id]; if (t) { t.settings = e.settings; if (e.room_id === state.current) { renderRoomNote(); if (state.view === 'team') renderTeamBar(); } } }
+      else if (e.type === 'wake_settings') { const t = state.team[e.room_id]; if (t) { const was = t.settings?.lead; t.settings = e.settings; if (e.room_id === state.current) { renderRoomNote(); if (state.view === 'team') { if (was !== e.settings.lead) renderTeam(); else renderTeamBar(); } if (was !== e.settings.lead) { rsLast = ''; renderSidebar(); renderMessages({ stick: false }); } } } }
       else if (e.type === 'message_deleted') { for (const [k, arr] of state.messages) state.messages.set(k, arr.filter((m) => m.id !== e.id)); renderMessages({ stick: false }); }
     };
   }
@@ -2575,12 +2615,13 @@
       <div class="ca">
         <button class="tbtn" data-model="${esc(name)}" title="Switch ${esc(name)}'s model (keeps its conversation)">Model</button>
         <button class="tbtn" data-wake="${esc(name)}" title="Tell ${esc(name)} to read the room now">Wake</button>
+        ${lead ? '' : `<button class="tbtn" data-mklead="${esc(name)}" title="Make ${esc(name)} the lead of this room (for today, or from now on)">Make lead</button>`}
         <button class="tbtn" data-restart="${esc(name)}" title="Restart ${esc(name)}'s CLI (it resumes its conversation). Use it when it's stuck, crashed or logged out">Restart</button>
         <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)}: same CLI, model, role and instructions under a new name (change the model if this one is rate-limited)">Clone</button>
         <button class="tbtn warn" data-remove="${esc(name)}" title="Remove ${esc(name)} from the team: stops its CLI and moves agents/${esc(name)}/ to agents/.removed/">Remove</button></div>
       ${p.limit && p.state !== 'approval' ? `<div class="appr lim"><span><b>${p.limit.kind === 'credits' ? '💳 Out of credits' : p.limit.kind === 'limit' ? '⏳ Usage limit reached' : '🐢 Rate-limited'}</b>${p.limit.resets ? ` · resets ${esc(p.limit.resets)}` : ''}${p.limit.kind === 'credits' ? ' · top up the account, or' : ' ·'} switch to another model</span>
         <button class="tbtn" data-model="${esc(name)}">Switch model</button>
-        <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)} on another model">Clone</button></div>` : ''}
+        <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)} on another model">Clone</button>${lead ? '<button class="tbtn" data-mklead="" title="Let another agent lead while this one is stuck">Pass the lead…</button>' : ''}</div>` : ''}
       ${p.state === 'approval' ? `<div class="appr"><span>Waiting for approval${p.prompt ? `: <b>${esc(p.prompt)}</b>` : ''}</span>
         <button class="tbtn" data-approve="${esc(name)}" data-act="yes">Approve</button>
         <button class="tbtn" data-approve="${esc(name)}" data-act="always" title="Yes, and don't ask again this session">Always</button>
@@ -3494,6 +3535,11 @@
     { name: 'stop', desc: 'Stop reading aloud', run: () => { ttsStop(); infoInline('Stopped reading.'); } },
     { name: 'tts', desc: 'Show which voice engine reads aloud · /tts kokoro · /tts mac', run: (args) => ttsCommand(args[0]) },
     { name: 'theme', desc: 'Colour theme: /theme light · dark · auto', run: (args) => setTheme(args[0] || 'next') },
+    { name: 'lead', desc: 'Pass the lead: /lead @agent (add "today" to give it back at midnight)', run: (args) => {
+      const who = (args.find((a) => /^@?[\w.-]+$/.test(a) && !/^today$/i.test(a)) || '').replace(/^@/, '');
+      if (!who) { openLeadDlg(''); return; }
+      setLeadTo(who, args.some((a) => /^today$/i.test(a)));
+    } },
     { name: 'pause', desc: 'Pause this room: nothing wakes the agents (no nudges either) until /resume', run: () => setPaused(true) },
     { name: 'resume', desc: 'Resume this room: agents are woken again, and the lead catches up', run: () => setPaused(false) },
     { name: 'help', desc: 'List available commands', run: () => {
@@ -5205,7 +5251,7 @@
     const toMe = !!me && ments.includes(me);
     if (m.sender_kind === 'system' && SLASH_ASK.test(m.content)) return 'slashask';
     if (m.sender_kind === 'system' && SLASH_ANS.test(m.content)) return 'slashans';
-    if (m.sender_kind === 'system') return toMe || shareActs(m) || agentReqActs(m) || roomReqActs(m) || rmReqActs(m) ? 'note' : 'quiet';
+    if (m.sender_kind === 'system') return toMe || /^👑 /.test(m.content) || shareActs(m) || agentReqActs(m) || roomReqActs(m) || rmReqActs(m) ? 'note' : 'quiet';
     if (toMe || state.questions.some((q) => q.message_id === m.id)) return 'agent';
     const toAgents = ments.some((x) => agents.has(x) && x !== m.sender.toLowerCase());
     if (lead && m.sender.toLowerCase() === lead && !toAgents) return 'agent';
@@ -5505,7 +5551,7 @@
         else if (bgTasks(p)) s = 'Running a long task';
         else if (card) s = `Has “${card.title}” in progress`;
         else s = p.state ? 'Waiting for work' : 'Not started';
-        return `<div class="sp-row">${sav(n, paneDot(p))}<div class="bd"><div class="t">${esc(n)}${n.toLowerCase() === lead ? '<span class="lab">lead</span>' : ''}</div><div class="s ${cls}">${esc(s)}</div>
+        return `<div class="sp-row">${sav(n, paneDot(p))}<div class="bd"><div class="t">${esc(n)}${n.toLowerCase() === lead ? '<span class="lab">lead</span>' : `<button type="button" class="linkbtn mk-lead" data-mklead="${esc(n)}">Make lead</button>`}</div><div class="s ${cls}">${esc(s)}</div>
           ${p.state === 'approval' ? `<div class="s" style="white-space:normal">${esc(p.prompt || 'wants to do something that needs your permission')}</div>
             <div class="rs-ask"><button type="button" class="tbtn pri" data-approve="${esc(n)}" data-act="yes">Allow</button><button type="button" class="tbtn" data-approve="${esc(n)}" data-act="no">Don't allow</button></div>` : ''}
           ${menu ? `${menu.question ? `<div class="s" style="white-space:normal">${esc(menu.question)}</div>` : ''}${menuButtons(n, menu)}` : ''}</div></div>`;
