@@ -21,6 +21,7 @@
 #   tropa claude-token set|status|clear  long-lived Claude login for agents (from `claude setup-token`; no 401 expiries)
 #   tropa tts start|stop|status|logs        Kokoro voices for "Read aloud" (one per machine, started by server up)
 #   tropa update [DIR]                      refresh a project's kit to this tropa version
+#   tropa open [-p PORT]                    open TropaAI in the browser (and connect a new browser to it)
 #   tropa self-update                       update tropa itself
 #   tropa models [claude|codex|opencode|qwen|gemini]   models each CLI can use (incl. your accounts' versioned ids)
 #   tropa install [BIN_DIR]                 put this copy of `tropa` on your PATH
@@ -335,7 +336,7 @@ server_up() {
     if [ "$mode" != node ] && docker_ok; then
         mkdir -p "$STATE_DIR" && echo docker >"$mf"
         info "🐳 Starting TropaAI in Docker (project '$name', port $port)..."
-        (cd "$SERVER_DIR" && AI_IRC_PORT="$port" HUMAN_NAME="$human" TZ="$(host_tz)" \
+        (cd "$SERVER_DIR" && AI_IRC_PORT="$port" HUMAN_NAME="$human" TZ="$(host_tz)" TROPA_SECRET="$(tropa_key "$port")" \
             KOKORO_URL="http://host.docker.internal:$KOKORO_PORT" \
             docker compose -p "$name" up -d --build --remove-orphans ai-irc) || die "docker compose failed"
     elif [ "$mode" = docker ]; then
@@ -344,10 +345,10 @@ server_up() {
         info "🟢 Starting TropaAI with node (port $port)..."
         [ "$prev" = docker ] && info "⚠️  Port $port's earlier chats are in Docker; this node server starts with its own, separate history."
         mkdir -p "$STATE_DIR" && echo node >"$mf"
-        mkdir -p "$STATE_DIR/ai-irc-$port"
+        mkdir -p "$STATE_DIR/ai-irc-$port"; tropa_key "$port" >/dev/null
         { [ -d "$SERVER_DIR/node_modules/express" ] && [ -d "$SERVER_DIR/node_modules/marked" ] && [ -d "$SERVER_DIR/node_modules/dompurify" ]; } || (cd "$SERVER_DIR" && npm install --omit=dev --no-audit --no-fund >/dev/null) || die "npm install failed"
         (cd "$SERVER_DIR" || exit 1
-         PORT="$port" HOST=127.0.0.1 DATA_DIR="$STATE_DIR/ai-irc-$port" HUMAN_NAME="$human" TZ="$(host_tz)" \
+         PORT="$port" HOST=127.0.0.1 DATA_DIR="$STATE_DIR/ai-irc-$port" TROPA_STATE="$STATE_DIR" HUMAN_NAME="$human" TZ="$(host_tz)" \
             KOKORO_URL="http://127.0.0.1:$KOKORO_PORT" \
             nohup node --no-warnings server.js </dev/null >>"$STATE_DIR/ai-irc-$port.log" 2>&1 &
          echo $! >"$STATE_DIR/ai-irc-$port.pid")
@@ -423,6 +424,21 @@ cmd_server() {
 }
 
 # ---------------------------------------------------------------- start / stop / autostart
+tropa_key() {   # the server's key, made once: the browser's cookie, and what tropa, the watcher and the host helper send
+    local f="$STATE_DIR/secret-$1.key"
+    if [ ! -s "$f" ]; then
+        mkdir -p "$STATE_DIR"
+        (umask 077; python3 -c 'import secrets; print(secrets.token_hex(32))' >"$f.tmp" && mv -n "$f.tmp" "$f"; rm -f "$f.tmp")
+    fi
+    tr -d '[:space:]' <"$f"
+}
+tpost() {   # tpost PORT METHOD PATH [JSON]: a change on the server, with the key
+    curl -fsS -m 10 -X "$2" -H 'Content-Type: application/json' -H "X-Tropa-Key: $(tropa_key "$1")" ${4:+-d "$4"} "http://localhost:$1/api$3"
+}
+launch_url() {   # a link that connects this browser to TropaAI (sets its cookie once); plain address if the server can't make one
+    local l; l=$(tpost "$1" POST /launch 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("url",""))' 2>/dev/null)
+    if [ -n "$l" ]; then echo "http://localhost:$1$l${2:+&$2}"; else echo "http://localhost:$1/${2:+?$2}"; fi
+}
 open_url() {   # open $1 in the user's browser (macOS, Linux desktop, WSL → Windows)
     if [ "$(uname)" = Darwin ]; then open "$1" >/dev/null 2>&1
     elif is_wsl && command -v cmd.exe >/dev/null; then cmd.exe /c start "" "$1" >/dev/null 2>&1
@@ -453,7 +469,7 @@ cmd_start() {   # the everyday command: server (Node unless this port already ke
         touch "$STATE_DIR/keeper-$port.asked"
         ( cmd_autostart on -p "$port" ) 2>/dev/null || info "   (couldn't set TropaAI to keep running here: run 'tropa start' after you log in)"
     fi
-    local url="http://localhost:$port/?setup=1"
+    local url; url=$(launch_url "$port" setup=1)
     info ""
     info "👉 TropaAI: http://localhost:$port"
     [ "$open" = 1 ] && { open_url "$url" || info "   Open it in your browser."; }
@@ -487,7 +503,13 @@ cmd_restart() {   # stop and start again whatever is running, so it runs the cod
         server_down "$p" >/dev/null
         i=0; while health "$p" && [ $i -lt 15 ]; do sleep 1; i=$((i+1)); done
         TROPA_NO_HOST=0 server_up "$p" "$(default_human)" 0 ""
-        info "   Reload the TropaAI page in your browser to see the new version."
+        if curl -fsS -m 3 "http://localhost:$p/api/linked" 2>/dev/null | grep -q '"linked":false'; then
+            # this version asks the browser to hold the server's key: connect it once, with no terminal step
+            info "   Opening TropaAI in your browser to connect it (once)."
+            open_url "$(launch_url "$p")" || info "   Open it with: tropa open"
+        else
+            info "   Reload the TropaAI page in your browser to see the new version."
+        fi
     done
     [ "$n" -gt 0 ] || info "TropaAI isn't running; 'tropa start' starts the new version."
 }
@@ -669,8 +691,7 @@ cmd_init() {
                 C set human "\"$sh\""; info "  ↻ human set to @$sh (from the server)"
             fi
         fi
-        curl -fsS -X POST -H 'Content-Type: application/json' -d "{\"project\":\"$(C get project)\"}" \
-            "http://localhost:$port/api/rooms" >/dev/null 2>&1 && info "  ✓ room $(C get room) ready"
+        tpost "$port" POST /rooms "{\"project\":\"$(C get project)\"}" >/dev/null 2>&1 && info "  ✓ room $(C get room) ready"
     fi
     python3 "$S/setup_agent.py" refresh >/dev/null
     # every project room keeps a lead orchestrator: one is created for an empty team (or picked, if none is set)
@@ -679,8 +700,7 @@ cmd_init() {
     did=$(printf '%s' "$el" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("did",""))' 2>/dev/null)
     lead_name=$(printf '%s' "$el" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("lead",""))' 2>/dev/null)
     [ -n "$did" ] && info "  🧭 $did"
-    [ -n "$lead_name" ] && curl -fsS -X PATCH -H 'Content-Type: application/json' -d "{\"lead\":\"$lead_name\"}" \
-        "http://localhost:$port/api/rooms/$(C get room | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip(), safe=""))')/wake" >/dev/null 2>&1 || true
+    [ -n "$lead_name" ] && tpost "$port" PATCH "/rooms/$(C get room | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip(), safe=""))')/wake" "{\"lead\":\"$lead_name\"}" >/dev/null 2>&1 || true
     # remember where this project lives, so the host helper (the chat's Start / Add agent buttons) finds it anywhere
     python3 - "$HOME/.tropa/projects-$port.json" "$(C get project)" "$dir" <<'PYREG' || true
 import json, os, sys
@@ -820,6 +840,9 @@ cmd_install() {
 
 case "${1:-help}" in
     start) shift; cmd_start "$@" ;;
+    open) shift; op=""; while [ $# -gt 0 ]; do case "$1" in -p|--port) op="$2"; shift ;; *) die "usage: tropa open [-p PORT]" ;; esac; shift; done
+        op="${op:-$(default_port)}"; health "$op" || die "TropaAI isn't running on port $op: tropa start"
+        u=$(launch_url "$op"); open_url "$u" || info "Open this link in your browser: $u" ;;
     stop) shift; cmd_stop "$@" ;;
     autostart) shift; cmd_autostart "$@" ;;
     init|bootstrap) shift; cmd_init "$@" ;;

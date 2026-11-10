@@ -92,6 +92,20 @@ def tools_catalog():
              "token_set": bool(t.get("token_env") and os.environ.get(t["token_env"]))} for t in tools]
 
 
+def tropa_key(server):
+    """The server's key (~/.tropa/secret-<port>.key, made by tropa start), sent as X-Tropa-Key with every change.
+    Agents never get it, so they can't act as the human or pose as this program."""
+    if os.environ.get("TROPA_SECRET"):
+        return os.environ["TROPA_SECRET"].strip()
+    port = urllib.parse.urlparse(server).port or 80
+    base = os.environ.get("TROPA_STATE") or os.path.join(os.path.expanduser("~"), ".tropa")
+    try:
+        with open(os.path.join(base, "secret-%d.key" % port)) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
 def slugify(s):
     return re.sub(r"[^a-z0-9._-]+", "-", str(s).lower()).strip("-")[:60] or "project"
 
@@ -782,7 +796,7 @@ class Host:
     def http(self, path, body=None, timeout=15, method=None):
         req = urllib.request.Request(self.server + "/api" + path,
                                      data=json.dumps(body).encode() if body is not None else None,
-                                     headers={"Content-Type": "application/json"},
+                                     headers={"Content-Type": "application/json", "X-Tropa-Key": tropa_key(self.server)},
                                      method=method or ("POST" if body is not None else "GET"))
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:

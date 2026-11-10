@@ -16,6 +16,11 @@ services:
       # Read-aloud voices: the machine-wide Kokoro that `tropa tts start` runs on 127.0.0.1:8880
       - KOKORO_URL=${KOKORO_URL:-http://host.docker.internal:8880}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
+      # the server's key (tropa start passes ~/.tropa/secret-<port>.key): the browser's cookie and the helpers' header
+      - TROPA_SECRET=${TROPA_SECRET:-}
+      # the container must listen on all its interfaces; the port above is still published on 127.0.0.1 only
+      - HOST=0.0.0.0
     extra_hosts:
       - "host.docker.internal:host-gateway"   # Linux; built in on Docker Desktop
     volumes:

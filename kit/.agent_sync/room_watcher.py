@@ -59,10 +59,24 @@ def log(msg):
 
 
 # ---------- TropaAI ----------
+def tropa_key(server):
+    """The server's key (~/.tropa/secret-<port>.key, made by tropa start), sent as X-Tropa-Key with every change.
+    Agents never get it, so they can't act as the human or pose as this program."""
+    if os.environ.get("TROPA_SECRET"):
+        return os.environ["TROPA_SECRET"].strip()
+    port = urllib.parse.urlparse(server).port or 80
+    base = os.environ.get("TROPA_STATE") or os.path.join(os.path.expanduser("~"), ".tropa")
+    try:
+        with open(os.path.join(base, "secret-%d.key" % port)) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
 def http(cfg, path, body=None, timeout=10, method=None):
     req = urllib.request.Request(cfg["server"] + "/api" + path,
                                  data=json.dumps(body).encode() if body is not None else None,
-                                 headers={"Content-Type": "application/json"},
+                                 headers={"Content-Type": "application/json", "X-Tropa-Key": tropa_key(cfg["server"])},
                                  method=method or ("POST" if body is not None else "GET"))
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -445,7 +459,7 @@ def sync_files(cfg, resp):
             with open(src, "rb") as f:
                 data = f.read()
             req = urllib.request.Request(cfg["server"] + f"/api/watch/files/{a['id']}", data=data, method="PUT",
-                                         headers={"Content-Type": "application/octet-stream"})
+                                         headers={"Content-Type": "application/octet-stream", "X-Tropa-Key": tropa_key(cfg["server"])})
             urllib.request.urlopen(req, timeout=60).read()
             log(f"uploaded {a['path']} for {a.get('uploader')}")
         except Exception as e:
@@ -1026,7 +1040,7 @@ class Watcher:
             with open(doc_file(self.cfg, rel), "rb") as f:
                 data = f.read()
             req = urllib.request.Request(self.cfg["server"] + f"/api/watch/docs/{urllib.parse.quote(rid)}", data=data, method="PUT",
-                                         headers={"Content-Type": "application/octet-stream"})
+                                         headers={"Content-Type": "application/octet-stream", "X-Tropa-Key": tropa_key(self.cfg["server"])})
             urllib.request.urlopen(req, timeout=60).read()
         except Exception as e:
             log(f"could not send doc {rel}: {e}")
