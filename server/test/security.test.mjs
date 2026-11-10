@@ -117,3 +117,15 @@ test('turning auto-approve on posts who did it', async () => {
   const list = msgs.messages || msgs;
   assert.ok(list.some((m) => /Auto-approve is on/.test(m.content) && /tropa command/.test(m.content)), 'a note says who turned it on');
 });
+
+test('archiving a project hides it, needs the key, and creating it again brings it back', async () => {
+  await req('/api/rooms', { method: 'POST', headers: KEY(), body: { project: 'old-site' } });
+  assert.equal((await req('/api/rooms/project%3Aold-site/archive', { method: 'POST', body: { archived: true } })).status, 401);
+  const a = await (await req('/api/rooms/project%3Aold-site/archive', { method: 'POST', headers: KEY(), body: { archived: true } })).json();
+  assert.ok(a.archived_at > 0);
+  const rooms = await (await req('/api/rooms')).json();
+  assert.ok(rooms.find((r) => r.id === 'project:old-site').archived_at > 0);
+  assert.equal((await req('/api/rooms/general/archive', { method: 'POST', headers: KEY(), body: { archived: true } })).status, 400);
+  const back = await (await req('/api/rooms/project%3Aold-site/archive', { method: 'POST', headers: KEY(), body: { archived: false } })).json();
+  assert.equal(back.archived_at, 0);
+});

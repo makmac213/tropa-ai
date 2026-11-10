@@ -88,6 +88,8 @@ db.exec(`
     if (!cols.has(col)) db.exec(`ALTER TABLE agents ADD COLUMN ${col} ${def}`);
   }
 }
+// archived projects: hidden from the projects list (0 = not archived), kept otherwise exactly as they are
+if (!db.prepare('PRAGMA table_info(rooms)').all().some((c) => c.name === 'archived_at')) db.exec('ALTER TABLE rooms ADD COLUMN archived_at INTEGER DEFAULT 0');
 db.prepare(`INSERT OR IGNORE INTO rooms (id, kind, project, topic, created_at) VALUES ('general','general',NULL,?,?)`)
   .run('Cross-project chat for all agents', Date.now());
 
@@ -230,6 +232,7 @@ const q = {
            (SELECT MAX(created_at) FROM messages m WHERE m.room_id = r.id) AS last_message_at
     FROM rooms r ORDER BY (r.kind = 'general') DESC, r.id`),
   setTopic: db.prepare('UPDATE rooms SET topic = ? WHERE id = ?'),
+  setArchived: db.prepare('UPDATE rooms SET archived_at = ? WHERE id = ?'),
   deleteRoom: db.prepare('DELETE FROM rooms WHERE id = ?'),
   insertMsg: db.prepare(`INSERT INTO messages (room_id, sender, sender_kind, content, reply_to, mentions, created_at)
                          VALUES (?,?,?,?,?,?,?)`),
@@ -294,6 +297,12 @@ const qd = {
 const deletedProject = (roomId) => (roomId.startsWith('project:') ? qd.get.get(roomId.slice(8)) : null);
 function ensureRoom(roomId, topic = '', { revive = false } = {}) {
   const existing = q.getRoom.get(roomId);
+  if (existing && revive && existing.archived_at) {   // creating a project again brings its archived room back
+    q.setArchived.run(0, roomId);
+    const room = q.getRoom.get(roomId);
+    broadcast({ type: 'room', room });
+    return room;
+  }
   if (existing) return existing;
   const project = roomId.startsWith('project:') ? roomId.slice(8) : null;
   if (project && qd.get.get(project)) {
@@ -1207,6 +1216,16 @@ api.patch('/rooms/:id', wrap((req) => {
   const updated = q.getRoom.get(room.id);
   broadcast({ type: 'room', room: updated });
   return updated;
+}));
+// archive / unarchive a project: it leaves (or comes back to) the projects list; its chat, tasks, files and team
+// are untouched, and a running team keeps running
+api.post('/rooms/:id/archive', wrap((req) => {
+  const room = requireRoom(normalizeRoomId(req.params.id));
+  if (room.kind !== 'project') throw new UserError('only project rooms can be archived');
+  q.setArchived.run(req.body?.archived === false ? 0 : Date.now(), room.id);
+  const updated = q.getRoom.get(room.id);
+  broadcast({ type: 'room', room: updated });
+  return { ...updated, team_running: !!watcherFor(room.id) };
 }));
 api.delete('/rooms/:id', wrap((req) => {
   const roomId = normalizeRoomId(req.params.id);

@@ -237,6 +237,8 @@ tropa panel
 
 ## Working with your team
 
+**Archive a project you're not working on.** Hover it in the projects list and click the box icon (in Simple mode, also **⋯ → Archive the project**). It moves to **Archived** at the end of the list; everything in it (chat, tasks, files, its folder and team) is kept, and a running team keeps running. Open it from **Archived** and click **Unarchive** to put it back. Creating a project with the same name also brings it back.
+
 ### Who gets woken
 
 @mentions decide which agent wakes up. A mention is an assignment.

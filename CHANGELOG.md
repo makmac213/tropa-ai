@@ -2,6 +2,9 @@
 
 ## 0.5.1 (October 2026)
 
+### Archive projects
+- **Archive a project to hide it from the projects list.** Hover it and click the box icon, or use **⋯ → Archive the project** in Simple mode. It moves to a collapsed **Archived** list at the end; open it there and click **Unarchive** to bring it back. Nothing in it changes: chat, tasks, files, folder and team are kept, and a running team keeps running.
+
 ### Agents can't act as you
 - **No login, but a key only you hold.** Each TropaAI server has a random key in `~/.tropa/secret-<port>.key`. Your browser gets it once, as a cookie, when you open TropaAI from its shortcut, `tropa start` or the new **`tropa open`**; `tropa`, the watcher and the host helper read the file. Everything that changes something needs it: posting as you, approvals, typing into a terminal, settings, public links and agent requests. Reading doesn't.
 - **Why:** agents only talk to the chat over MCP and never get the key. So an agent, or a web page or README that tricked one, can no longer post as you with `curl`, approve its own prompts, answer its own questions, open its own public link, or pose as the host helper to collect the API keys you save.
