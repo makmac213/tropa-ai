@@ -237,6 +237,8 @@ tropa panel
 
 ## Working with your team
 
+**Archive a project you're not working on.** Hover it in the projects list and click the box icon (in Simple mode, also **⋯ → Archive the project**). It moves to **Archived** at the end of the list; everything in it (chat, tasks, files, its folder and team) is kept, and a running team keeps running. Open it from **Archived** and click **Unarchive** to put it back. Creating a project with the same name also brings it back.
+
 ### Who gets woken
 
 @mentions decide which agent wakes up. A mention is an assignment.
@@ -950,6 +952,7 @@ Or put it in a project's `.mcp.json`:
 |---|---|
 | `tropa start [-p PORT] [--docker] [--no-open]` | Start TropaAI (chat server and host helper) and open it in the browser. Node by default. |
 | `tropa stop [-p PORT]` | Stop it |
+| `tropa open [-p PORT]` | Open TropaAI in the browser, and connect a new browser to it (the desktop shortcut does the same) |
 | `tropa autostart on\|off\|status [-p PORT]` | Keep TropaAI running: start it when you log in and bring the chat server or host helper back within a minute if one stops (launchd on macOS, a systemd timer on Linux). `tropa start` turns it on the first time |
 | `tropa init [-p PORT] [-n SLUG] [--human NAME] [--no-server] [--panel] [--node] [--tts] [DIR]` | Add the team kit to DIR (default: the current folder) and make sure the server on PORT is running. Safe to re-run: settings are kept. |
 | `tropa panel [DIR]` | Control panel: 1 create an agent · 2 create several · 3 start all agents + the watcher · 4 restart one · 5 change a model · 6 list · 7 wake everyone · 8 settings · d doctor |
@@ -1032,7 +1035,12 @@ Each project's settings are in **`.agent_sync/settings.json`**. Edit the file, u
 Each project gets its own tmux session, `ai-<slug>`.
 
 **Security:**
-- The server listens only on `127.0.0.1` and blocks browsers from other origins. It has no login, so don't expose the port.
+- The server listens only on `127.0.0.1`, answers only requests addressed to `localhost` (this stops DNS rebinding from a web page), and blocks browsers from other origins.
+- **No login, but agents can't act as you.** Each server has a random key in `~/.tropa/secret-<port>.key`. Your browser gets it once, as a cookie, when you open TropaAI from its shortcut, `tropa start` or `tropa open`; `tropa`, the watcher and the host helper read it from the file. Anything that changes something (posting as you, approvals, keys typed into a terminal, settings, public links, agent requests) needs it; reading doesn't. Agents talk to the chat over MCP and never get the key, so a prompt-injected agent can't post as you, approve its own prompts or answer its own questions, and can't pose as the host helper to collect the API keys it is sent.
+- A browser that isn't connected yet (a new browser, a private window) can read but shows *Connect this browser to TropaAI*: open TropaAI from its shortcut, or run `tropa open`.
+- When auto-approve turns on or off, a note in the room says who did it (you in the page, `tropa`, or an edit to `settings.json`). Agents may turn it on when you ask them to; the note shows it if one does so unasked.
+- Agents run as your user account, so this stops prompt injection and honest mistakes, not a determined agent. For a hard wall, run agents in a sandbox (Claude Code's sandbox mode, Codex's `--sandbox workspace-write`) or in a container.
+- To reach TropaAI by another name (a LAN name or a tunnel), list it in `ALLOWED_HOSTS` (and the page's address in `ALLOWED_ORIGINS`).
 - Shared files are served with scripts blocked.
 - The watcher refuses paths outside the project and won't share secrets.
 

@@ -105,6 +105,9 @@
   .agent .meta { cursor: pointer; }
   .agent .meta:hover .n { text-decoration: underline; text-underline-offset: 2px; }
   .agent .s2 { color: var(--muted); }
+  #connNote { flex: none; padding: 10px 16px; background: var(--panel2); color: var(--text); border-bottom: 2px solid var(--human); font-size: 13.5px; line-height: 1.45; text-align: center; }
+  #connNote code { font-size: 12.5px; }
+  body.conn-off { display: flex; flex-direction: column; } body.conn-off .app { flex: 1; min-height: 0; height: auto; }
   .ag-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 14px; }
   .ag-acts .mut { font-size: 12.5px; }
   .agent .lead-tag { font-size: 11px; font-weight: 400; color: var(--muted); }
@@ -455,6 +458,11 @@
   .room .del { opacity: 0; color: var(--muted); padding: 0 2px; border-radius: 4px; }
   .room:hover .del { opacity: 1; }
   .room .del:hover { color: var(--danger); }
+  .room .del.ic { display: inline-grid; place-items: center; } .room .del.ic:hover { color: var(--text); }
+  .room .del.ic svg { width: 14px; height: 14px; }
+  .arch-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 16px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; text-align: left; }
+  .arch-toggle:hover { color: var(--text); } .arch-toggle svg { width: 12px; height: 12px; transition: transform .15s; } .arch-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+  .arch-list .room .name { color: var(--muted); }
   .dot.busy { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); } .dot.wait { background: var(--human); } .dot.idle { background: var(--idle); } .dot.bg { background: var(--run); } .dot.lim { background: var(--lim); }
   /* Team view: every agent's screen, live */
   .team { flex: 1; overflow-y: auto; padding: 12px 20px 16px; min-height: 0; }
@@ -1549,6 +1557,9 @@
     file: HI('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>'),
     image: HI('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>'),
     folder: HI('<path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1z"/>'),
+    archive: HI('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 001 1h12a1 1 0 001-1V9M10 13h4"/>'),
+    unarchive: HI('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 001 1h12a1 1 0 001-1V9M12 18v-6M9.5 14.5L12 12l2.5 2.5"/>'),
+    chev: HI('<path d="M9 6l6 6-6 6"/>'),
     edit: HI('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
     clock: HI('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
   };
@@ -1565,6 +1576,7 @@
     seen: JSON.parse(localGet('airc.seen') || '{}'), // roomId -> last seen id
     replyTo: null, searching: null,
     agentScope: localGet('airc.agentScope') || 'project',   // 'project' | 'all'
+    showArchived: localGet('airc.showArchived') === '1',   // the projects list's Archived part is open
     view: ['team', 'usage', 'tasks', 'docs'].includes(localGet('airc.view')) ? localGet('airc.view') : 'chat',
     usage: { range: Number(localGet('airc.usageRange')) || 30, metric: localGet('airc.usageMetric') || 'tokens', data: null, key: '' },
     usageAgents: {},          // lowercase agent name -> today's { tokens, cost, turns }
@@ -1591,9 +1603,20 @@
   const api = async (path, opts = {}) => {
     const res = await fetch('/api' + path, { headers: { 'content-type': 'application/json' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
     const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && data.auth) showConnNote();
     if (!res.ok) throw new Error(data.error || res.statusText);
     return data;
   };
+  // a browser that doesn't hold the server's key yet (a new browser, a private window, or the first time after the
+  // update that added it) can read but not act: say how to connect it, without any terminal step
+  function showConnNote() {
+    if ($('#connNote')) return;
+    const el = document.createElement('div');
+    el.id = 'connNote'; el.setAttribute('role', 'alert');
+    el.innerHTML = `<b>Connect this browser to TropaAI.</b> Open TropaAI from its shortcut (on your desktop or in your apps), or run <code>tropa open</code>. Until then you can read, but not send or change anything. This keeps agents from acting as you.`;
+    document.body.prepend(el); document.body.classList.add('conn-off');
+  }
+  fetch('/api/whoami').then((r) => r.json()).then((w) => { if (w && w.trusted === false) showConnNote(); }).catch(() => {});
   const myName = () => ($('#myName').value.trim() || state.human);
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const roomLabel = (id) => id === ALL ? 'All activity' : id === USAGE ? 'Usage' : id === 'general' ? '#general' : '#' + id.replace(/^project:/, '');
@@ -1653,6 +1676,16 @@
     return out.replace(/\u0001(\d+)\u0001/g, (_, i) => inl[i]).replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[i]);
   }
 
+  // archive: the project leaves the projects list (Archived, at its end, still has it); nothing else changes
+  async function archiveProject(roomId, on) {
+    const r = state.rooms.find((x) => x.id === roomId); if (!r) return;
+    try {
+      const res = await api(`/rooms/${encodeURIComponent(roomId)}/archive`, { method: 'POST', body: { archived: on } });
+      Object.assign(r, res); renderSidebar(); renderRoomNote();
+      const name = simple() ? projectTitle(r) : r.project;
+      infoInline(on ? `Archived ${name}. It's under Archived at the end of the projects list${res.team_running ? '; its team is still running' : ''}.` : `${name} is back in the projects list.`);
+    } catch (err) { alertInline(err.message); }
+  }
   // ---------- sidebar ----------
   function renderSidebar() {
     renderRoomNote();   // the team may have just appeared (or gone)
@@ -1666,7 +1699,13 @@
     const projects = state.rooms.filter((r) => r.kind === 'project');
     const pbadges = (id) => { const nq = openQs(id).length, na = (state.attention[id]?.items || []).length;
       return `${nq ? `<span class="pb q" title="${nq} question${nq === 1 ? '' : 's'} waiting on you">${nq}?</span>` : ''}${na ? `<span class="pb a" title="${na} item${na === 1 ? '' : 's'} need attention">${na}!</span>` : ''}`; };
-    $('#projects').innerHTML = projects.length ? projects.map((r) => btn(r.id, simple() ? projectTitle(r) : r.project, `${pbadges(r.id)}<span class="del" data-del-project="${esc(r.project)}" title="Delete project">×</span>`)).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">No project rooms yet</span></div>`;
+    const live = projects.filter((r) => !r.archived_at), archived = projects.filter((r) => r.archived_at);
+    const pname = (r) => (simple() ? projectTitle(r) : r.project);
+    const openArch = state.showArchived || archived.some((r) => r.id === state.current);
+    $('#projects').innerHTML = (live.length ? live.map((r) => btn(r.id, pname(r), `${pbadges(r.id)}<span class="del ic" data-archive-project="${esc(r.id)}" title="Archive project (hide it from this list)" role="button" aria-label="Archive ${esc(pname(r))}">${HICON.archive}</span><span class="del" data-del-project="${esc(r.project)}" title="Delete project">×</span>`)).join('')
+      : `<div class="agent"><span class="s" style="color:var(--muted)">${archived.length ? 'No projects outside the archive' : 'No project rooms yet'}</span></div>`)
+      + (archived.length ? `<button type="button" class="arch-toggle" id="archToggle" aria-expanded="${openArch}">${HICON.chev}Archived <span class="mut">${archived.length}</span></button>`
+        + (openArch ? `<div class="arch-list">${archived.map((r) => btn(r.id, pname(r), `<span class="del ic" data-unarchive-project="${esc(r.id)}" title="Unarchive (show it in the list again)" role="button" aria-label="Unarchive ${esc(pname(r))}">${HICON.unarchive}</span><span class="del" data-del-project="${esc(r.project)}" title="Delete project">×</span>`)).join('')}</div>` : '') : '');
     const proj = projectOf(state.current);
     const scoped = proj && state.agentScope === 'project';
     const list = scoped ? state.agents.filter((a) => (a.project || '').toLowerCase() === proj) : state.agents;
@@ -1712,6 +1751,13 @@
     const none = !!slug && !state.searching && state.view === 'chat' && !t?.watching && !(t?.agents || []).length
       && !state.agents.some((a) => (a.project || '').toLowerCase() === slug.toLowerCase()) && !state.addingLead?.[slug];
     const paused = !!slug && !none && t?.settings?.wake === 'paused' && !state.searching;
+    const arch = !!slug && !state.searching && state.rooms.find((r) => r.id === state.current)?.archived_at;
+    if (arch) {
+      el.hidden = false;
+      el.innerHTML = `<span class="t"><b>This project is archived.</b> It's hidden from the projects list; everything in it is kept${paused ? ', and the room is paused' : ''}.</span>
+        <button type="button" class="tbtn pri" data-unarchive-project="${esc(state.current)}">Unarchive</button>`;
+      return;
+    }
     el.hidden = !none && !paused;
     if (paused) {
       el.innerHTML = `<span class="t"><b>This room is paused.</b> Nothing wakes the agents, and the watcher doesn't nudge them. Your messages are kept; the lead catches up when you resume.</span>
@@ -3999,6 +4045,9 @@
     if (e.target.closest('#agentScope')) { state.agentScope = state.agentScope === 'project' ? 'all' : 'project'; localSet('airc.agentScope', state.agentScope); renderSidebar(); return; }
     const dp = e.target.closest('[data-del-project]');
     if (dp) { e.stopPropagation(); deleteProjectDialog(dp.dataset.delProject); return; }
+    const arch = e.target.closest('[data-archive-project],[data-unarchive-project]');
+    if (arch) { e.stopPropagation(); archiveProject(arch.dataset.archiveProject || arch.dataset.unarchiveProject, !!arch.dataset.archiveProject); return; }
+    if (e.target.closest('#archToggle')) { state.showArchived = !state.showArchived; localSet('airc.showArchived', state.showArchived ? '1' : ''); renderSidebar(); $('#archToggle')?.focus(); return; }
     const wk = e.target.closest('[data-wake]');
     if (wk) {
       const body = wk.dataset.wake === '*' ? {} : { agents: [wk.dataset.wake] };
@@ -5534,7 +5583,8 @@
     return [
       ['tasks', 'Task board', open ? `${open} open` : ''], ['docs', 'Docs', ''], ['skills', 'Skills', ''], ['questions', 'Questions', oq ? `${oq} waiting` : ''],
       ['search', 'Search this chat', ''], ['transcript', 'Download the chat', ''], '-',
-      ['pause', paused ? 'Resume the room' : 'Pause the room', ''], ['fix', 'Fix the team', ''], ['autoscroll', autoScroll ? 'Keep the chat still' : 'Follow new messages', ''], '-',
+      ['pause', paused ? 'Resume the room' : 'Pause the room', ''], ['fix', 'Fix the team', ''],
+      ['archive', state.rooms.find((r) => r.id === state.current)?.archived_at ? 'Unarchive the project' : 'Archive the project', ''], ['autoscroll', autoScroll ? 'Keep the chat still' : 'Follow new messages', ''], '-',
       ['advanced', 'Switch to Advanced', ''],
     ].filter((x) => x === '-' || proj || ['advanced'].includes(x[0]));
   }
@@ -5566,6 +5616,7 @@
       case 'pause': setPaused((state.team[state.current]?.settings?.wake) !== 'paused'); break;
       case 'fix': { const x = document.createElement('button'); x.dataset.fixteam = '1'; x.hidden = true; document.body.append(x); x.click(); setTimeout(() => x.remove(), 5000); infoInline('Checking the team… what was fixed shows in the chat.'); break; }
       case 'autoscroll': $('#asBtn').click(); break;
+      case 'archive': archiveProject(state.current, !state.rooms.find((r) => r.id === state.current)?.archived_at); break;
       case 'advanced': setMode('advanced'); break;
     }
   });

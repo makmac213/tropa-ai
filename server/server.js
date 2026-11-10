@@ -88,6 +88,8 @@ db.exec(`
     if (!cols.has(col)) db.exec(`ALTER TABLE agents ADD COLUMN ${col} ${def}`);
   }
 }
+// archived projects: hidden from the projects list (0 = not archived), kept otherwise exactly as they are
+if (!db.prepare('PRAGMA table_info(rooms)').all().some((c) => c.name === 'archived_at')) db.exec('ALTER TABLE rooms ADD COLUMN archived_at INTEGER DEFAULT 0');
 db.prepare(`INSERT OR IGNORE INTO rooms (id, kind, project, topic, created_at) VALUES ('general','general',NULL,?,?)`)
   .run('Cross-project chat for all agents', Date.now());
 
@@ -230,6 +232,7 @@ const q = {
            (SELECT MAX(created_at) FROM messages m WHERE m.room_id = r.id) AS last_message_at
     FROM rooms r ORDER BY (r.kind = 'general') DESC, r.id`),
   setTopic: db.prepare('UPDATE rooms SET topic = ? WHERE id = ?'),
+  setArchived: db.prepare('UPDATE rooms SET archived_at = ? WHERE id = ?'),
   deleteRoom: db.prepare('DELETE FROM rooms WHERE id = ?'),
   insertMsg: db.prepare(`INSERT INTO messages (room_id, sender, sender_kind, content, reply_to, mentions, created_at)
                          VALUES (?,?,?,?,?,?,?)`),
@@ -294,6 +297,12 @@ const qd = {
 const deletedProject = (roomId) => (roomId.startsWith('project:') ? qd.get.get(roomId.slice(8)) : null);
 function ensureRoom(roomId, topic = '', { revive = false } = {}) {
   const existing = q.getRoom.get(roomId);
+  if (existing && revive && existing.archived_at) {   // creating a project again brings its archived room back
+    q.setArchived.run(0, roomId);
+    const room = q.getRoom.get(roomId);
+    broadcast({ type: 'room', room });
+    return room;
+  }
   if (existing) return existing;
   const project = roomId.startsWith('project:') ? roomId.slice(8) : null;
   if (project && qd.get.get(project)) {
@@ -1065,6 +1074,72 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 
+// ---------- who's calling ----------
+// TropaAI runs on one computer, with no accounts. Two things still matter: a web page in the browser must not reach
+// it (DNS rebinding), and an agent, or a page an agent read, must not act as the human. So:
+//  - every request must be addressed to localhost (the Host header), and browsers must come from it (Origin);
+//  - anything that changes something (any non-GET /api call) needs the server's key: the human's browser holds it
+//    as a cookie, and tropa, the watcher and the host helper read it from ~/.tropa/secret-<port>.key. Agents talk
+//    over MCP and never get it, so they can't post as the human, approve their own prompts or answer their own
+//    questions, and can't pose as the host helper to collect the API keys it is sent.
+// Agents run as the same OS user, so this stops prompt injection and honest mistakes, not a determined agent.
+const crypto = require('node:crypto');
+const STATE_DIR = process.env.TROPA_STATE || path.join(require('node:os').homedir(), '.tropa');
+const SECRET = (() => {
+  if (/^[0-9a-f]{32,}$/i.test(process.env.TROPA_SECRET || '')) return process.env.TROPA_SECRET;   // Docker: tropa passes its file in
+  for (const f of [path.join(STATE_DIR, `secret-${PORT}.key`), path.join(DATA_DIR, 'secret.key')]) {
+    try { const k = fs.readFileSync(f, 'utf8').trim(); if (/^[0-9a-f]{32,}$/i.test(k)) return k; } catch {}
+    try {
+      fs.mkdirSync(path.dirname(f), { recursive: true, mode: 0o700 });
+      const k = crypto.randomBytes(32).toString('hex');
+      fs.writeFileSync(f, k + '\n', { mode: 0o600, flag: 'wx' });
+      return k;
+    } catch (e) { if (e.code === 'EEXIST') { try { return fs.readFileSync(f, 'utf8').trim(); } catch {} } }
+  }
+  throw new Error(`can't create the server key in ${STATE_DIR} or ${DATA_DIR}`);
+})();
+const COOKIE = `tropa_${crypto.createHash('sha256').update(SECRET).digest('hex').slice(0, 10)}`;   // one per server, even on one host
+function cookieOf(req, name) {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === name) { try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return ''; } }
+  }
+  return '';
+}
+const isSecret = (v) => { const a = Buffer.from(String(v || '')), b = Buffer.from(SECRET); return a.length === b.length && crypto.timingSafeEqual(a, b); };
+const trusted = (req) => isSecret(req.get('x-tropa-key')) || isSecret(cookieOf(req, COOKIE));
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((x) => x.trim()).filter(Boolean);
+const ALLOWED_HOSTS = [...(process.env.ALLOWED_HOSTS || '').split(','), ...ALLOWED_ORIGINS.map((o) => o.replace(/^https?:\/\//, ''))]
+  .map((x) => x.trim().toLowerCase().replace(/\/.*$/, '')).filter(Boolean);
+const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+const hostOk = (h) => { const v = String(h || '').toLowerCase(); return LOCAL.test(v) || ALLOWED_HOSTS.includes(v) || ALLOWED_HOSTS.includes(v.replace(/:\d+$/, '')); };
+const originOk = (o) => !o || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(o) || ALLOWED_ORIGINS.includes(o);
+// a link that sets the browser's cookie once: tropa start (and the shortcut) opens /?launch=<one-time token>
+const launches = new Map();   // token -> expires at
+function launchLink() {
+  const t = crypto.randomBytes(24).toString('hex'), now = Date.now();
+  for (const [k, exp] of launches) if (exp < now) launches.delete(k);
+  launches.set(t, now + 5 * 60e3);
+  return `/?launch=${t}`;
+}
+
+app.use((req, res, next) => {
+  if (!hostOk(req.headers.host)) return res.status(403).json({ error: 'host not allowed (set ALLOWED_HOSTS to reach TropaAI by another name)' });
+  next();
+});
+app.get('/', (req, res, next) => {
+  const t = String(req.query.launch || '');
+  if (!t) return next();
+  const ok = (launches.get(t) || 0) > Date.now();
+  launches.delete(t);
+  if (ok) {
+    res.append('Set-Cookie', `${COOKIE}=${SECRET}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${10 * 365 * 86400}`);
+    try { fs.writeFileSync(path.join(DATA_DIR, 'browser-linked'), String(Date.now())); } catch {}
+  }
+  const rest = new URLSearchParams(req.query); rest.delete('launch');
+  res.redirect(302, '/' + (rest.toString() ? `?${rest}` : ''));
+});
+
 // Only allow browsers on this machine (blocks DNS-rebinding from random websites).
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -1103,6 +1178,21 @@ app.get('/mcp', (req, res) => res.status(405).set('Allow', 'POST').json({ error:
 app.delete('/mcp', (req, res) => res.status(405).set('Allow', 'POST').end());
 
 const api = express.Router();
+// changes need the key (see "who's calling"); reading doesn't. A project's watcher from before this update keeps
+// working for a few minutes, until tropa update gives it the new code (it restarts on it by itself).
+const STARTED = Date.now();
+const WATCH_GRACE_MS = Number(process.env.TROPA_WATCH_GRACE_MS ?? 20 * 60e3);
+api.use((req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS' || trusted(req)) return next();
+  if (req.path.startsWith('/watch/') && Date.now() - STARTED < WATCH_GRACE_MS) return next();
+  // what an agent can already do over MCP stays open for agents without MCP (AGENT_GUIDE.md): never as the human
+  if (req.method === 'POST' && (req.path === '/agents/register' || req.path === '/read'
+    || (/^\/rooms\/[^/]+\/messages$/.test(req.path) && req.body?.sender_kind !== 'human'))) return next();
+  res.status(401).json({ error: "This browser isn't connected to TropaAI yet: open TropaAI from its shortcut (or run tropa start).", auth: true });
+});
+api.get('/whoami', (req, res) => res.json({ trusted: trusted(req) }));
+api.get('/linked', (req, res) => res.json({ linked: fs.existsSync(path.join(DATA_DIR, 'browser-linked')) }));   // has a browser been connected yet (tropa restart)
+api.post('/launch', (req, res) => res.json({ url: launchLink() }));   // tropa start / tropa open: a fresh link for the browser
 const wrap = (fn) => async (req, res) => {
   try { res.json(await fn(req, res)); } catch (e) {
     if (e instanceof UserError) return res.status(400).json({ error: e.message });
@@ -1126,6 +1216,16 @@ api.patch('/rooms/:id', wrap((req) => {
   const updated = q.getRoom.get(room.id);
   broadcast({ type: 'room', room: updated });
   return updated;
+}));
+// archive / unarchive a project: it leaves (or comes back to) the projects list; its chat, tasks, files and team
+// are untouched, and a running team keeps running
+api.post('/rooms/:id/archive', wrap((req) => {
+  const room = requireRoom(normalizeRoomId(req.params.id));
+  if (room.kind !== 'project') throw new UserError('only project rooms can be archived');
+  q.setArchived.run(req.body?.archived === false ? 0 : Date.now(), room.id);
+  const updated = q.getRoom.get(room.id);
+  broadcast({ type: 'room', room: updated });
+  return { ...updated, team_running: !!watcherFor(room.id) };
 }));
 api.delete('/rooms/:id', wrap((req) => {
   const roomId = normalizeRoomId(req.params.id);
@@ -1491,9 +1591,14 @@ function cleanWake(patch) {
   }
   return out;
 }
-function setWakeSettings(roomId, patch) {
+function setWakeSettings(roomId, patch, by = '') {
   const cur = wakeSettings(roomId); delete cur.updated_at;
   const next = { ...cur, ...cleanWake(patch) };
+  if (!!cur.auto_approve !== !!next.auto_approve) {   // say who switched it, so a switch nobody asked for is seen
+    setTimeout(() => watcherSay(roomId, next.auto_approve
+      ? `Auto-approve is on for this team: agents run commands and edit files without asking. Turned on ${by || 'by an unknown caller'}.`
+      : `Auto-approve is off: agents ask before running commands again. Turned off ${by || 'by an unknown caller'}.`), 0);
+  }
   const now = Date.now();
   qw.put.run(roomId, JSON.stringify(next), now);
   const settings = { ...next, updated_at: now };
@@ -1740,7 +1845,7 @@ api.post('/rooms/:id/lead', wrap((req) => {   // the page's Make lead (and /lead
   return setLead(roomId, name, { today: req.body?.today === true, by: HUMAN_NAME });
 }));
 api.get('/rooms/:id/wake', wrap((req) => wakeSettings(roomOf(req))));
-api.patch('/rooms/:id/wake', wrap((req) => setWakeSettings(roomOf(req), req.body || {})));
+api.patch('/rooms/:id/wake', wrap((req) => setWakeSettings(roomOf(req), req.body || {}, req.get('x-tropa-key') ? 'from the tropa command' : `by ${HUMAN_NAME} in the page`)));
 api.post('/rooms/:id/wake', wrap((req) => {
   const roomId = roomOf(req);
   const w = watcherFor(roomId);
@@ -1945,7 +2050,7 @@ api.post('/watch/poll', wrap(async (req, res) => {
   for (const k of Object.keys(w.panes)) if (!agents.includes(k)) delete w.panes[k];
   // settings: seed from the project the first time; afterwards a local edit is pushed explicitly
   const local = pickWakeKeys(req.body.settings);
-  if (Object.keys(local).length && (!qw.get.get(roomId) || req.body.settings_changed)) setWakeSettings(roomId, local);
+  if (Object.keys(local).length && (!qw.get.get(roomId) || req.body.settings_changed)) setWakeSettings(roomId, local, 'by an edit to .agent_sync/settings.json (an agent, or you in an editor)');
   if (!wasOn || changed) broadcastTeam(roomId);
   const t = Math.min(Math.max(Number(req.body.timeout) || 0, 0), 25) * 1000;
   if (!w.queue.length && t) {
@@ -2567,7 +2672,7 @@ function createProject(b) {
   const files = (Array.isArray(b.files) ? b.files : []).map(Number).filter(Boolean);
   const room = ensureRoom(roomId, String(b.topic || name || '').slice(0, 300), { revive: true });
   if (b.topic || name) { q.setTopic.run(String(b.topic || name).slice(0, 300), roomId); broadcast({ type: 'room', room: q.getRoom.get(roomId) }); }
-  setWakeSettings(roomId, { lead: lead_, auto_approve: b.auto_approve === true });
+  setWakeSettings(roomId, { lead: lead_, auto_approve: b.auto_approve === true }, `by ${HUMAN_NAME} when creating the project`);
   const brief_ = renamed.size ? String(b.brief || '').slice(0, MAX_CONTENT - 500) : brief;
   const intro = [existing ? `**Team added to existing project: ${name || slug}** (\`${path || folder}\`)` : `**New project: ${name || slug}**`, b.origin ? String(b.origin).slice(0, 300) : '', brief_ ? `\n${brief_}` : '',
     renamed.size ? `\nThese names were already used in other projects, so this team has: ${[...renamed].map(([o, n]) => `${o} → @${n}`).join(', ')}.` : '',
@@ -3841,6 +3946,7 @@ function broadcast(event) {
   for (const c of wss.clients) if (c.readyState === 1) c.send(data);
 }
 wss.on('connection', (ws, req) => {
+  if (!hostOk(req.headers.host)) { ws.close(1008, 'host not allowed'); return; }
   const origin = req.headers.origin;
   if (origin && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin) && !(process.env.ALLOWED_ORIGINS || '').split(',').includes(origin)) {
     ws.close(1008, 'origin not allowed'); return;
@@ -3858,7 +3964,7 @@ setInterval(() => {
   broadcast({ type: 'agents', agents: q.listAgents.all().map(agentView) });
 }, 30000).unref();
 
-server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
+server.listen(PORT, process.env.HOST || '127.0.0.1', () => {
   console.log(`TropaAI chat listening on http://localhost:${PORT}  (MCP: /mcp, API: /api, UI: /)`);
 });
 

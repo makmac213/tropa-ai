@@ -1,0 +1,45 @@
+# Checks every push and pull request: the server's security tests, the page's script, the Python kit on the
+# oldest Python TropaAI supports (macOS ships 3.9), and the shell scripts. Users never see or need any of this.
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install the server's packages
+        run: npm ci --omit=dev --no-audit --no-fund
+        working-directory: server
+      - name: Server syntax
+        run: node --check server/server.js
+      - name: Page script syntax
+        run: node -e "const h=require('fs').readFileSync('server/public/index.html','utf8');for(const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g))new Function(m[1]);"
+      - name: Server security tests
+        run: npm test
+        working-directory: server
+      - name: Python compiles on 3.9
+        run: python -m compileall -q -x '__pycache__' kit host tests
+      - name: Python tests
+        run: python -m unittest discover -s tests -v
+      - name: Shell syntax
+        run: for f in tropa install.sh kit/.agent_sync/*.sh scripts/*.sh; do [ -f "$f" ] && bash -n "$f" || exit 1; done
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    continue-on-error: true   # reported, not enforced (yet)
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck -S warning tropa install.sh kit/.agent_sync/*.sh scripts/*.sh || true
