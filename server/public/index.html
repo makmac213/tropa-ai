@@ -78,6 +78,60 @@
   body { background: var(--bg); color: var(--text); font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   button, input, textarea { font: inherit; color: inherit; }
   .app { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
+  /* ---- the new layout ("quiet"): an icon rail, a command bar, room for the conversation (wide screens only) ---- */
+  #rail { display: none; }
+  @media (min-width: 761px) {
+    body.quiet .app { grid-template-columns: 64px 1fr; }
+    body.quiet:not(.simple) .app { grid-template-columns: 64px 248px 1fr; }
+    body.quiet #rail { display: flex; }
+    body.quiet.simple .app > aside { display: none; }
+    body.quiet .app > aside .side-head, body.quiet #newProjBtn, body.quiet #secProjects, body.quiet #projects, body.quiet #secFeeds, body.quiet #feeds, body.quiet .app > aside > .me { display: none !important; }
+    body.quiet .app > aside .side-scroll { padding-top: 10px; }
+    body.quiet #menuBtn, body.quiet .dl-wrap, body.quiet #skillsBtn { display: none !important; }
+    body.quiet #search:not(.show) { display: none; }
+    body.quiet #cmdkBtn { display: inline-flex; }
+  }
+  #rail { flex-direction: column; align-items: center; gap: 6px; padding: 14px 0 12px; background: var(--bg); border-right: 1px solid var(--line); min-height: 0; position: relative; z-index: 30; }
+  .rail-logo { width: 30px; height: 30px; margin-bottom: 12px; }
+  .rail-proj { display: flex; flex-direction: column; gap: 6px; align-items: center; overflow-y: auto; overflow-x: visible; max-height: 52vh; scrollbar-width: none; padding: 0 12px; }
+  .rail-btn { position: relative; width: 40px; height: 40px; flex: none; border-radius: 12px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; display: grid; place-items: center; cursor: pointer; }
+  .rail-btn:hover, .rail-btn:focus-visible { background: var(--panel2); color: var(--text); }
+  .rail-btn.active { background: var(--panel2); color: var(--text); }
+  .rail-btn.active::before { content: ""; position: absolute; left: -12px; top: 11px; width: 3px; height: 18px; border-radius: 2px; background: var(--text); }
+  .rail-btn.dashed { border: 1px dashed var(--line); }
+  .rail-btn svg { width: 18px; height: 18px; }
+  .rail-btn .dot { position: absolute; right: 1px; top: 1px; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--bg); }
+  .rail-btn .dot.q { background: var(--human); } .rail-btn .dot.a { background: var(--danger); } .rail-btn .dot.u { background: var(--accent); }
+  .rail-btn[data-tip]:hover::after, .rail-btn[data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; left: 50px; top: 50%; transform: translateY(-50%); white-space: nowrap; background: var(--panel2); color: var(--text); border: 1px solid var(--line); font-size: 12.5px; font-weight: 500; padding: 5px 9px; border-radius: 8px; box-shadow: 0 6px 20px var(--shadow); pointer-events: none; z-index: 40; }
+  .rail-sep { width: 24px; height: 1px; background: var(--line); margin: 6px 0; }
+  .rail-feeds, .rail-foot { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+  .rail-sp { flex: 1; }
+  .rail-foot .gear { width: 40px; height: 40px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; border-radius: 12px; margin: 0; }
+  .rail-foot .gear:hover { background: var(--panel2); color: var(--text); }
+  .rail-me { width: 32px; height: 32px; border-radius: 50%; border: 0; margin-top: 8px; background: #b07a1e; color: #fff; font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+  .rail-pop { position: absolute; left: 62px; z-index: 50; min-width: 230px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 40px var(--shadow); padding: 8px; }
+  .rail-pop .room { width: 100%; }
+  .me-pop { bottom: 12px; display: flex; flex-direction: column; gap: 6px; padding: 12px; } .me-pop label { font-size: 12px; color: var(--muted); }
+  .me-pop input { width: 100%; }
+  .hdr-mode { display: contents; }
+  body.quiet .hdr-mode .mode-sw { margin: 0 0 0 6px; width: 190px; flex: none; }
+  .cmdk-btn { display: none; align-items: center; gap: 10px; height: 34px; padding: 0 10px 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; width: 280px; white-space: nowrap; margin-left: auto; }
+  .cmdk-btn:hover { color: var(--text); } .cmdk-btn .cmdk-t { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+  .cmdk-btn kbd, .cmdk-foot span { font: inherit; font-size: 11.5px; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
+  body.quiet .s-tabs { margin-left: 12px; }
+  #cmdk { width: min(640px, 92vw); padding: 0; border-radius: 16px; top: 12vh; margin: 0 auto; }
+  #cmdk::backdrop { background: rgba(0,0,0,.45); }
+  .cmdk-in { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .cmdk-in input { flex: 1; border: 0; background: none; outline: none; font: inherit; font-size: 16px; color: var(--text); padding: 0; }
+  #cmdkList { max-height: 52vh; overflow-y: auto; padding: 6px; }
+  .cmdk-g { font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 10px 10px 4px; }
+  .cmdk-i { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 9px; background: none; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+  .cmdk-i .h { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .cmdk-i[aria-selected="true"] { background: var(--panel2); }
+  .cmdk-i svg { flex: none; color: var(--muted); }
+  .cmdk-foot { display: flex; gap: 14px; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  .cmdk-foot span { border: 0; padding: 0; }
+  .cmdk-empty { padding: 18px 12px; color: var(--muted); font-size: 14px; }
   aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
   /* the sidebar's top is exactly as tall as the page header, so their bottom lines meet in one straight line
      (Simple: the logo row; Advanced: the logo and the mode switch, beside the header and its tabs) */
@@ -1200,6 +1254,19 @@
 </head>
 <body>
 <div class="app" id="app">
+  <nav id="rail" aria-label="Projects">
+    <img class="rail-logo" src="logo-mark.png" alt="TropaAI" width="30" height="30">
+    <div class="rail-proj" id="railProj"></div>
+    <button type="button" class="rail-btn dashed" id="railNew" data-tip="New project" aria-label="New project"></button>
+    <button type="button" class="rail-btn" id="railArch" data-tip="Archived projects" aria-label="Archived projects" aria-expanded="false" hidden></button>
+    <div class="rail-pop" id="railArchPop" hidden></div>
+    <span class="rail-sep"></span>
+    <div class="rail-feeds" id="railFeeds"></div>
+    <span class="rail-sp"></span>
+    <div class="rail-foot" id="railFoot"></div>
+    <button type="button" class="rail-me" id="railMe" aria-label="Your name" aria-expanded="false"></button>
+    <div class="rail-pop me-pop" id="railMePop" hidden><label for="myName">You are</label></div>
+  </nav>
   <aside>
     <div class="side-head">
     <div class="brand"><img class="logo-img" src="logo-mark.png" alt="" width="30" height="30"><b>TropaAI</b><span class="conn" id="conn" title="disconnected"></span></div>
@@ -1242,11 +1309,13 @@
       <button class="dl-btn" id="skillsBtn" hidden title="How-tos your agents load when a task matches: add, edit or remove them">Skills</button>
       <button type="button" class="adv-team" id="advTeam" hidden></button>
       <input class="search" id="search" placeholder="Search…">
+      <button type="button" class="cmdk-btn" id="cmdkBtn" aria-label="Search or run a command (Ctrl+K)"><span class="cmdk-ic"></span><span class="cmdk-t">Search or run a command</span><kbd id="cmdkKey">⌘K</kbd></button>
       <div class="s-tabs" id="sTabs" role="tablist" aria-label="View" hidden><button type="button" role="tab" data-sview="chat">Chat</button><button type="button" role="tab" data-sview="board">Board</button><button type="button" role="tab" data-sview="flow">Flow</button></div>
       <button type="button" class="dl-btn" id="backBtn" hidden>← Back to the chat</button>
       <button type="button" class="hbtn s-team-btn" id="sTeamBtn" hidden aria-label="What your team is doing"><span class="s-avs" id="sTeamAvs"></span></button>
       <button type="button" class="hbtn" id="moreBtn" hidden aria-label="More options" aria-haspopup="menu" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
       <button type="button" class="hbtn" id="panelBtn" hidden aria-label="Hide the side panel" aria-pressed="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path></svg></button>
+      <div class="hdr-mode" id="hdrMode"></div>
       <div class="more-menu" id="moreMenu" role="menu" hidden></div>
       </div>
       <nav class="vtabs" id="viewTabs" aria-label="Views" hidden>
@@ -1281,6 +1350,12 @@
     </div>
   </main>
 </div>
+
+<dialog id="cmdk" aria-label="Command bar">
+  <div class="cmdk-in"><span class="cmdk-ic" aria-hidden="true"></span><input id="cmdkIn" placeholder="Search or run a command" autocomplete="off" spellcheck="false" role="combobox" aria-controls="cmdkList" aria-expanded="true"></div>
+  <div id="cmdkList" role="listbox" aria-label="Results"></div>
+  <div class="cmdk-foot"><span>↑ ↓ to move</span><span>Enter to run</span><span>Esc to close</span></div>
+</dialog>
 
 <dialog id="leadDlg" aria-labelledby="leadDlgTitle">
   <form method="dialog" id="leadForm">
@@ -1345,6 +1420,12 @@
 <dialog id="settingsDlg">
   <form method="dialog">
     <h3>Settings</h3>
+    <div class="set-sec">
+      <span class="h">Layout</span>
+      <label class="set-radio"><input type="radio" name="layout" value="quiet"><span>New <small>An icon rail for projects, a command bar (Ctrl+K or ⌘K), and more room for the conversation.</small></span></label>
+      <label class="set-radio"><input type="radio" name="layout" value="classic"><span>Classic <small>The sidebar with projects, team and feeds, as before.</small></span></label>
+      <small class="mut" style="display:block;font-size:12px">On a phone, TropaAI always uses its compact layout.</small>
+    </div>
     <div class="set-sec">
       <span class="h">Dark mode colours</span>
       <div class="pal-grid" role="radiogroup" aria-label="Dark mode colours"><label class="pal-tile"><input type="radio" name="palette" value="graphite"><span class="pal-sw" style="background:#0c0e13"><i style="background:#1f2430"></i><i style="background:#93a8ff"></i></span><span class="pal-n">Graphite<small>Cool near-black, periwinkle accent</small></span></label><label class="pal-tile"><input type="radio" name="palette" value="ink"><span class="pal-sw" style="background:#0a0f1c"><i style="background:#18233a"></i><i style="background:#5cc8ff"></i></span><span class="pal-n">Ink<small>Deep blue-black, cyan accent</small></span></label><label class="pal-tile"><input type="radio" name="palette" value="ember"><span class="pal-sw" style="background:#121110"><i style="background:#25221e"></i><i style="background:#f0a35e"></i></span><span class="pal-n">Ember<small>Warm charcoal, amber accent</small></span></label><label class="pal-tile"><input type="radio" name="palette" value="plum"><span class="pal-sw" style="background:#0f0d15"><i style="background:#211c2e"></i><i style="background:#b49cff"></i></span><span class="pal-n">Plum<small>Midnight violet, lavender accent</small></span></label><label class="pal-tile"><input type="radio" name="palette" value="moss"><span class="pal-sw" style="background:#0b0f0d"><i style="background:#1a221d"></i><i style="background:#6fdcae"></i></span><span class="pal-n">Moss<small>Green-black, mint accent</small></span></label><label class="pal-tile"><input type="radio" name="palette" value="oled"><span class="pal-sw" style="background:#000000"><i style="background:#161618"></i><i style="background:#8ab4ff"></i></span><span class="pal-n">Black (OLED)<small>True black, highest contrast</small></span></label></div>
@@ -1788,6 +1869,7 @@
       </div>`).join('') : `<div class="agent"><span class="s" style="color:var(--muted)">${scoped ? `No agents in ${esc(proj)} yet` : 'No agents yet'}</span></div>`;
     renderRside();   // background tasks follow the same pane and status updates
     renderAdvTeam();
+    if (typeof renderRail === 'function') renderRail();
   }
 
   // what an agent of this room is doing, in words: "Building the menu page · 4 min", "Asking you on its screen", "Idle 12 min"
@@ -2665,7 +2747,7 @@
       voices.filter((v) => !NOVELTY.test(v.name)).map((v) => `<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)}${v.localService ? '' : ', online'})</option>`).join('');
     mv.value = voices.some((v) => v.name === tts.mVoice) ? tts.mVoice : '';
   }
-  function openSettings() { renderOr(); api('/host').then((h) => { state.host = h; renderOr(); }).catch(() => {}); renderTtsSettings(); $('#notifySound').checked = localGet('airc.notifySound') !== 'off'; const pv = localGet('airc.palette') || 'graphite'; document.querySelectorAll('input[name="palette"]').forEach((r) => { r.checked = r.value === pv; }); renderPalNote(); $('#settingsDlg').showModal(); ttsInit(); waitForVoices().then(() => renderTtsSettings()); }
+  function openSettings() { renderOr(); api('/host').then((h) => { state.host = h; renderOr(); }).catch(() => {}); renderTtsSettings(); $('#notifySound').checked = localGet('airc.notifySound') !== 'off'; document.querySelectorAll('input[name="layout"]').forEach((r) => { r.checked = r.value === (localGet('airc.layout') === 'classic' ? 'classic' : 'quiet'); }); const pv = localGet('airc.palette') || 'graphite'; document.querySelectorAll('input[name="palette"]').forEach((r) => { r.checked = r.value === pv; }); renderPalNote(); $('#settingsDlg').showModal(); ttsInit(); waitForVoices().then(() => renderTtsSettings()); }
   try { window.speechSynthesis?.addEventListener?.('voiceschanged', () => { if ($('#settingsDlg')?.open) renderTtsSettings(); }); } catch {}
 
   function readCommand(arg) {
@@ -5443,6 +5525,123 @@
   }
   if (state.mode) setMode(state.mode, false, false);
   $('#modeSw').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
+
+  // ---------- the new layout ("quiet"): an icon rail, a command bar, the mode switch in the header (wide screens) ----------
+  const WIDE = matchMedia('(min-width: 761px)');
+  const layoutPref = () => (localGet('airc.layout') === 'classic' ? 'classic' : 'quiet');
+  const quietOn = () => layoutPref() === 'quiet' && WIDE.matches;
+  const meBox = document.querySelector('.app > aside > .me'), sideHead = document.querySelector('.side-head');
+  const RIC = {
+    plus: HI('<path d="M12 5v14M5 12h14"/>'), feed: HI('<path d="M4 6h16M4 12h16M4 18h10"/>'), hash: HI('<path d="M5 9h14M5 15h14M10 4l-2 16M16 4l-2 16"/>'),
+    find: HI('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>'), go: HI('<path d="M5 12h14M13 6l6 6-6 6"/>'), act: HI('<path d="M13 3L4 14h7l-1 7 9-11h-7z"/>'),
+  };
+  $('#railNew').innerHTML = RIC.plus; $('#railArch').innerHTML = HICON.archive;
+  document.querySelectorAll('.cmdk-ic').forEach((el) => { el.innerHTML = RIC.find; });
+  $('#cmdkKey').textContent = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘K' : 'Ctrl K';
+  function applyLayout() {
+    const q = quietOn();
+    document.body.classList.toggle('quiet', q);
+    if (q) { $('#railFoot').append($('#bellBtn'), $('#themeBtn'), $('#settingsBtn')); $('#railMePop').append($('#myName')); $('#hdrMode').append($('#modeSw')); }
+    else { meBox.append($('#myName'), $('#bellBtn'), $('#themeBtn'), $('#settingsBtn')); sideHead.append($('#modeSw')); }
+    renderRail();
+  }
+  const projInitials = (r) => { const w = String(r.project || r.id).split(/[\s\-_.]+/).filter(Boolean); return (w.length > 1 ? w[0][0] + w[1][0] : (w[0] || '?').slice(0, 2)).toUpperCase(); };
+  function renderRail() {
+    if (!document.body.classList.contains('quiet')) return;
+    const projects = state.rooms.filter((r) => r.kind === 'project');
+    const live = projects.filter((r) => !r.archived_at), arch = projects.filter((r) => r.archived_at);
+    const name = (r) => (simple() ? projectTitle(r) : r.project);
+    const dot = (r) => { const nq = openQs(r.id).length, na = (state.attention[r.id]?.items || []).length, u = r.id !== state.current ? (r.unread_live || 0) : 0;
+      return nq ? '<i class="dot q"></i>' : na ? '<i class="dot a"></i>' : u ? '<i class="dot u"></i>' : ''; };
+    const tip = (r) => { const nq = openQs(r.id).length; return name(r) + (nq ? ` · ${nq} question${nq === 1 ? '' : 's'} for you` : ''); };
+    $('#railProj').innerHTML = live.map((r) => `<button type="button" class="rail-btn ${r.id === state.current ? 'active' : ''}" data-room="${esc(r.id)}" data-tip="${esc(tip(r))}" aria-label="${esc(tip(r))}"${r.id === state.current ? ' aria-current="page"' : ''}>${esc(projInitials(r))}${dot(r)}</button>`).join('');
+    $('#railArch').hidden = !arch.length;
+    $('#railArchPop').innerHTML = '<div class="cmdk-g">Archived projects</div>' + arch.map((r) => `<button type="button" class="room ${r.id === state.current ? 'active' : ''}" data-room="${esc(r.id)}"><span class="hash">#</span><span class="name">${esc(name(r))}</span><span class="del ic" data-unarchive-project="${esc(r.id)}" title="Unarchive" role="button" aria-label="Unarchive ${esc(name(r))}">${HICON.unarchive}</span></button>`).join('');
+    const feeds = [[ALL, 'All activity', RIC.feed], ...(simple() ? [] : [[USAGE, 'Usage', HICON.usage]]), ['general', '#general', RIC.hash]];
+    $('#railFeeds').innerHTML = feeds.map(([id, l, ic]) => { const u = id !== state.current && state.rooms.find((x) => x.id === id)?.unread_live;
+      return `<button type="button" class="rail-btn ${id === state.current ? 'active' : ''}" data-room="${esc(id)}" data-tip="${esc(l)}" aria-label="${esc(l)}">${ic}${u ? '<i class="dot u"></i>' : ''}</button>`; }).join('');
+    const ini = String(myName()).replace(/[^A-Za-z0-9]/g, ''); $('#railMe').textContent = (ini.slice(0, 1).toUpperCase() + ini.slice(1, 2).toLowerCase()) || '?'; $('#railMe').title = `You are ${myName()}`; $('#railMe').setAttribute('aria-label', `You are ${myName()}: change your name`);
+  }
+  const closePops = () => { document.querySelectorAll('.rail-pop').forEach((p) => { p.hidden = true; }); ['#railArch', '#railMe'].forEach((id) => $(id).setAttribute('aria-expanded', 'false')); };
+  const togglePop = (btn, pop) => {
+    const open = pop.hidden; closePops(); if (!open) return;
+    pop.hidden = false; btn.setAttribute('aria-expanded', 'true');
+    if (pop.id === 'railArchPop') pop.style.top = Math.max(8, btn.offsetTop - 8) + 'px';
+  };
+  $('#railNew').addEventListener('click', () => $('#newRoom').click());
+  $('#railArch').addEventListener('click', () => togglePop($('#railArch'), $('#railArchPop')));
+  $('#railMe').addEventListener('click', () => { togglePop($('#railMe'), $('#railMePop')); if (!$('#railMePop').hidden) $('#myName').focus(); });
+  document.addEventListener('click', (e) => { if (e.target.closest('.rail-pop [data-room]') || !e.target.closest('.rail-pop, #railArch, #railMe')) closePops(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.querySelector('.rail-pop:not([hidden])')) closePops(); });
+  $('#myName').addEventListener('input', () => renderRail());
+  WIDE.addEventListener('change', applyLayout);
+  document.addEventListener('change', (e) => { if (e.target.name === 'layout') { localSet('airc.layout', e.target.value); applyLayout(); renderHeader(); } });
+
+  // ---------- the command bar (Ctrl+K / ⌘K): projects, views, actions and message search in one list ----------
+  let cmdkSel = 0, cmdkList = [];
+  function goView(v, tab) {
+    if (tab) { state.taskTab = tab; localSet('airc.taskTab', tab); }
+    state.view = v; localSet('airc.view', v); applyView(); renderHeader();
+    if (v === 'chat') renderMessages({ bottom: true });
+  }
+  function cmdkItems(q) {
+    const proj = projectOf(state.current), t = state.team[state.current] || {}, out = [];
+    const add = (group, label, run, hint = '', ic = RIC.go) => out.push({ group, label, run, hint, ic });
+    if (q) add('Search', `Search all messages for “${q}”`, () => { const el = $('#search'); el.classList.add('show'); el.value = q; el.dispatchEvent(new Event('input')); }, '', RIC.find);
+    if (state.searching) add('Search', 'Clear the search', () => { const el = $('#search'); el.value = ''; el.classList.remove('show'); el.dispatchEvent(new Event('input')); }, '', RIC.find);
+    for (const r of state.rooms.filter((x) => x.kind === 'project' && !x.archived_at)) add('Projects', simple() ? projectTitle(r) : r.project, () => selectRoom(r.id), r.id === state.current ? 'open now' : (openQs(r.id).length ? `${openQs(r.id).length} for you` : ''));
+    add('Projects', '#general', () => selectRoom('general'), '', RIC.hash);
+    add('Projects', 'All activity', () => selectRoom(ALL), '', RIC.feed);
+    if (proj) {
+      add('Views', 'Chat', () => goView('chat'));
+      add('Views', simple() ? 'Board' : 'Tasks', () => goView('tasks', 'board'));
+      add('Views', 'Flow', () => goView('tasks', 'flow'));
+      if (!simple()) add('Views', 'Team', () => goView('team'));
+      add('Views', 'Docs', () => goView('docs'));
+      if (!simple()) add('Views', 'Usage', () => goView('usage'));
+      if (openQs(state.current).length) add('This project', 'Questions for you', () => openQPanel(), `${openQs(state.current).length} waiting`, RIC.act);
+      if (t.watching) add('This project', 'Wake the whole team', async () => { try { const r = await api(`/rooms/${encodeURIComponent(state.current)}/wake`, { method: 'POST', body: {} }); infoInline(`Woke ${(r.woke || []).length} agent(s).`); } catch (err) { alertInline(err.message); } }, '', RIC.act);
+      add('This project', t.settings?.wake === 'paused' ? 'Resume the room' : 'Pause the room', () => setPaused(t.settings?.wake !== 'paused'), '', RIC.act);
+      add('This project', 'Skills', () => $('#skillsBtn').click(), '', RIC.act);
+      add('This project', 'Download the chat', () => downloadTranscript('md'), 'Markdown', RIC.act);
+      if (!simple()) add('This project', 'Share a link to an app', () => $('#shareBtn').click(), '', RIC.act);
+      const arch = state.rooms.find((x) => x.id === state.current)?.archived_at;
+      add('This project', arch ? 'Unarchive this project' : 'Archive this project', () => archiveProject(state.current, !arch), '', RIC.act);
+    }
+    add('TropaAI', 'New project', () => $('#newRoom').click(), '', RIC.plus);
+    add('TropaAI', simple() ? 'Switch to Advanced' : 'Switch to Simple', () => setMode(simple() ? 'advanced' : 'simple'), '', RIC.act);
+    add('TropaAI', 'Change the theme', () => setTheme('next'), currentTheme(), RIC.act);
+    add('TropaAI', 'Settings', () => openSettings(), 'dark mode colours, voice, keys', RIC.act);
+    add('TropaAI', 'Use the classic layout', () => { localSet('airc.layout', 'classic'); applyLayout(); renderHeader(); }, '', RIC.act);
+    if (!q) return out;
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    return out.filter((it) => it.group === 'Search' || words.every((w) => (it.label + ' ' + it.group + ' ' + it.hint).toLowerCase().includes(w)));
+  }
+  function renderCmdk() {
+    const q = $('#cmdkIn').value.trim();
+    cmdkList = cmdkItems(q).slice(0, 60);
+    cmdkSel = Math.min(cmdkSel, Math.max(0, cmdkList.length - 1));
+    let html = '', group = '';
+    cmdkList.forEach((it, i) => {
+      if (it.group !== group) { group = it.group; html += `<div class="cmdk-g">${esc(group)}</div>`; }
+      html += `<button type="button" class="cmdk-i" role="option" id="cmdk${i}" data-cmdk="${i}" aria-selected="${i === cmdkSel}">${it.ic}<span>${esc(it.label)}</span>${it.hint ? `<span class="h">${esc(it.hint)}</span>` : ''}</button>`;
+    });
+    $('#cmdkList').innerHTML = html || '<div class="cmdk-empty">Nothing matches. Try a project name, a view (Board, Flow, Docs) or an action (pause, wake, archive).</div>';
+    $('#cmdkIn').setAttribute('aria-activedescendant', cmdkList.length ? `cmdk${cmdkSel}` : '');
+    document.getElementById('cmdk' + cmdkSel)?.scrollIntoView({ block: 'nearest' });
+  }
+  function openCmdk() { closePops(); $('#cmdkIn').value = ''; cmdkSel = 0; renderCmdk(); if (!$('#cmdk').open) $('#cmdk').showModal(); $('#cmdkIn').focus(); }
+  function runCmdk(i) { const it = cmdkList[i]; if (!it) return; $('#cmdk').close(); it.run(); }
+  $('#cmdkBtn').addEventListener('click', openCmdk);
+  $('#cmdkIn').addEventListener('input', () => { cmdkSel = 0; renderCmdk(); });
+  $('#cmdkIn').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); cmdkSel = (cmdkSel + (e.key === 'ArrowDown' ? 1 : -1) + cmdkList.length) % Math.max(1, cmdkList.length); renderCmdk(); }
+    else if (e.key === 'Enter') { e.preventDefault(); runCmdk(cmdkSel); }
+  });
+  $('#cmdkList').addEventListener('click', (e) => { const b = e.target.closest('[data-cmdk]'); if (b) runCmdk(+b.dataset.cmdk); });
+  $('#cmdk').addEventListener('click', (e) => { if (e.target.id === 'cmdk') $('#cmdk').close(); });   // click on the backdrop
+  document.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#cmdk').open ? $('#cmdk').close() : openCmdk(); } });
+  applyLayout();
 
   // ---------- Simple mode, chat-first: your messages and what's for you; the team's chatter folded away ----------
   const simpleChat = () => simple() && !!projectOf(state.current) && !state.searching && state.current !== ALL;

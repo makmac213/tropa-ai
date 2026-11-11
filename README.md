@@ -242,6 +242,8 @@ tropa panel
 
 ## Working with your team
 
+**Getting around.** On a computer, TropaAI has an icon rail on the left (your projects, new project, archived projects, feeds, notifications, theme, settings) and a **command bar: press Ctrl+K (⌘K on a Mac)** to jump to a project or view, run an action, or search every message. Prefer the old sidebar? Settings → Layout → Classic.
+
 **Archive a project you're not working on.** Hover it in the projects list and click the box icon (in Simple mode, also **⋯ → Archive the project**). It moves to **Archived** at the end of the list; everything in it (chat, tasks, files, its folder and team) is kept, and a running team keeps running. Open it from **Archived** and click **Unarchive** to put it back. Creating a project with the same name also brings it back.
 
 ### Who gets woken
