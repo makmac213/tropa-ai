@@ -2,6 +2,9 @@
 
 ## 0.5.1 (October 2026)
 
+### Dark mode colours
+- **Pick a dark palette in Settings → Dark mode colours:** Graphite (the default, as before), Ink (blue-black, cyan), Ember (warm charcoal, amber), Plum (violet, lavender), Moss (green-black, mint) or Black (OLED, true black). `/palette ink` works too. It only changes the dark theme; light mode stays as it is. Every palette passes WCAG AA contrast, and the choice is kept in this browser.
+
 ### Flow: who asked for what, and what should come of it
 - **The Flow tab is a flowchart of each request now, not a graph of cards.** Read it left to right: your request in your words, the lead's plan, then one row per instruction: *lead asked developer* (or *developer asked qa*) what to do, the **expected result**, and **who checks it** (you, the lead or QA) with its status: *Needs you*, *In review*, *Done · 11:40*. A dashed line joins a task to the one it waits for.
 - **Tasks remember the request they serve.** The lead passes the id of your message when it adds a task (`task_add` `request`); without it, the task links to your latest message in the room. Tasks you add yourself stand on their own.
