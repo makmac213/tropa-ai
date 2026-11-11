@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TropaAI</title>
 <link rel="icon" type="image/png" href="favicon.png">
-<script>try { const t = localStorage.getItem("airc.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}</script>
+<script>try { const t = localStorage.getItem("airc.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; const p = localStorage.getItem("airc.palette"); if (p && p !== "graphite") document.documentElement.dataset.palette = p; } catch {}</script>
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
   /* Themes: dark by default; light via the OS setting (Auto) or the ◐ toggle (data-theme on <html>). */
@@ -57,6 +57,17 @@
     --hm0: #ebedf0; --hm1: #9be9a8; --hm2: #40c463; --hm3: #30a14e; --hm4: #216e39;
     }
   }
+  /* dark mode palettes (Settings → Dark mode colours): Graphite is the base above; these only change the dark theme */
+  :root[data-palette="ink"][data-theme="dark"] { --bg: #0a0f1c; --panel: #0f1626; --panel2: #18233a; --line: #22304a; --text: #e6edf7; --muted: #97a4ba; --system: #97a4ba; --accent: #5cc8ff; --accent-weak: rgba(92,200,255,0.14); --fill-accent: #0b6fa8; --code: #070b15; --hm0: #18233a; }
+  @media (prefers-color-scheme: dark) { :root[data-palette="ink"]:not([data-theme="light"]) { --bg: #0a0f1c; --panel: #0f1626; --panel2: #18233a; --line: #22304a; --text: #e6edf7; --muted: #97a4ba; --system: #97a4ba; --accent: #5cc8ff; --accent-weak: rgba(92,200,255,0.14); --fill-accent: #0b6fa8; --code: #070b15; --hm0: #18233a; } }
+  :root[data-palette="ember"][data-theme="dark"] { --bg: #121110; --panel: #1a1816; --panel2: #25221e; --line: #34302a; --text: #efeae3; --muted: #a69e94; --system: #a69e94; --accent: #f0a35e; --accent-weak: rgba(240,163,94,0.14); --fill-accent: #a8520f; --code: #0d0c0b; --hm0: #25221e; }
+  @media (prefers-color-scheme: dark) { :root[data-palette="ember"]:not([data-theme="light"]) { --bg: #121110; --panel: #1a1816; --panel2: #25221e; --line: #34302a; --text: #efeae3; --muted: #a69e94; --system: #a69e94; --accent: #f0a35e; --accent-weak: rgba(240,163,94,0.14); --fill-accent: #a8520f; --code: #0d0c0b; --hm0: #25221e; } }
+  :root[data-palette="plum"][data-theme="dark"] { --bg: #0f0d15; --panel: #16131f; --panel2: #211c2e; --line: #2e2840; --text: #ece8f5; --muted: #a39cb6; --system: #a39cb6; --accent: #b49cff; --accent-weak: rgba(180,156,255,0.14); --fill-accent: #6a4bd0; --code: #0b0910; --hm0: #211c2e; }
+  @media (prefers-color-scheme: dark) { :root[data-palette="plum"]:not([data-theme="light"]) { --bg: #0f0d15; --panel: #16131f; --panel2: #211c2e; --line: #2e2840; --text: #ece8f5; --muted: #a39cb6; --system: #a39cb6; --accent: #b49cff; --accent-weak: rgba(180,156,255,0.14); --fill-accent: #6a4bd0; --code: #0b0910; --hm0: #211c2e; } }
+  :root[data-palette="moss"][data-theme="dark"] { --bg: #0b0f0d; --panel: #111714; --panel2: #1a221d; --line: #26302a; --text: #e6eee9; --muted: #97a59c; --system: #97a59c; --accent: #6fdcae; --accent-weak: rgba(111,220,174,0.14); --fill-accent: #16704d; --code: #080b09; --hm0: #1a221d; }
+  @media (prefers-color-scheme: dark) { :root[data-palette="moss"]:not([data-theme="light"]) { --bg: #0b0f0d; --panel: #111714; --panel2: #1a221d; --line: #26302a; --text: #e6eee9; --muted: #97a59c; --system: #97a59c; --accent: #6fdcae; --accent-weak: rgba(111,220,174,0.14); --fill-accent: #16704d; --code: #080b09; --hm0: #1a221d; } }
+  :root[data-palette="oled"][data-theme="dark"] { --bg: #000000; --panel: #0a0a0b; --panel2: #161618; --line: #26262a; --text: #f2f2f3; --muted: #9a9aa0; --system: #9a9aa0; --accent: #8ab4ff; --accent-weak: rgba(138,180,255,0.14); --fill-accent: #2f5bea; --code: #000000; --hm0: #161618; }
+  @media (prefers-color-scheme: dark) { :root[data-palette="oled"]:not([data-theme="light"]) { --bg: #000000; --panel: #0a0a0b; --panel2: #161618; --line: #26262a; --text: #f2f2f3; --muted: #9a9aa0; --system: #9a9aa0; --accent: #8ab4ff; --accent-weak: rgba(138,180,255,0.14); --fill-accent: #2f5bea; --code: #000000; --hm0: #161618; } }
   * { box-sizing: border-box; }
   ::selection { background: color-mix(in srgb, var(--accent) 32%, transparent); color: var(--text); }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -445,6 +456,14 @@
   .set-radio { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; cursor: pointer; }
   .set-radio input { width: auto; margin: 3px 0 0; }
   .set-radio small { display: block; color: var(--muted); font-size: 12px; }
+  .pal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 6px; }
+  .pal-tile { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+  .pal-tile:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .pal-tile:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .pal-tile input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .pal-sw { width: 34px; height: 34px; border-radius: 8px; flex: none; position: relative; border: 1px solid rgba(255,255,255,.14); overflow: hidden; }
+  .pal-sw i { position: absolute; left: 6px; right: 6px; height: 7px; border-radius: 3px; } .pal-sw i:first-child { top: 8px; } .pal-sw i:last-child { bottom: 8px; right: 14px; }
+  .pal-n { font-size: 13px; font-weight: 500; line-height: 1.25; } .pal-n small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; }
   .set-status { font-size: 12px; color: var(--muted); padding: 6px 10px; border-radius: 6px; background: var(--panel2); display: flex; gap: 8px; align-items: center; }
   .set-status.ok { color: var(--ok); }
   .set-status.warn { color: var(--human); }
@@ -1319,6 +1338,11 @@
 <dialog id="settingsDlg">
   <form method="dialog">
     <h3>Settings</h3>
+    <div class="set-sec">
+      <span class="h">Dark mode colours</span>
+      <div class="pal-grid" role="radiogroup" aria-label="Dark mode colours"><label class="pal-tile"><input type="radio" name="palette" value="graphite"><span class="pal-sw" style="background:#0c0e13"><i style="background:#1f2430"></i><i style="background:#93a8ff"></i></span><span class="pal-n">Graphite<small>Cool near-black, periwinkle accent</small></span></label><label class="pal-tile"><input type="radio" name="palette" value="ink"><span class="pal-sw" style="background:#0a0f1c"><i style="background:#18233a"></i><i style="background:#5cc8ff"></i></span><span class="pal-n">Ink<small>Deep blue-black, cyan accent</small></span></label><label class="pal-tile"><input type="radio" name="palette" value="ember"><span class="pal-sw" style="background:#121110"><i style="background:#25221e"></i><i style="background:#f0a35e"></i></span><span class="pal-n">Ember<small>Warm charcoal, amber accent</small></span></label><label class="pal-tile"><input type="radio" name="palette" value="plum"><span class="pal-sw" style="background:#0f0d15"><i style="background:#211c2e"></i><i style="background:#b49cff"></i></span><span class="pal-n">Plum<small>Midnight violet, lavender accent</small></span></label><label class="pal-tile"><input type="radio" name="palette" value="moss"><span class="pal-sw" style="background:#0b0f0d"><i style="background:#1a221d"></i><i style="background:#6fdcae"></i></span><span class="pal-n">Moss<small>Green-black, mint accent</small></span></label><label class="pal-tile"><input type="radio" name="palette" value="oled"><span class="pal-sw" style="background:#000000"><i style="background:#161618"></i><i style="background:#8ab4ff"></i></span><span class="pal-n">Black (OLED)<small>True black, highest contrast</small></span></label></div>
+      <small class="mut" id="palNote" style="display:block;margin-top:6px;font-size:12px"></small>
+    </div>
     <div class="set-sec">
       <span class="h">Read-aloud voice engine</span>
       <label class="set-radio"><input type="radio" name="ttsEngine" value="kokoro"><span>Kokoro <small>Local neural voices in Docker. Most natural; falls back to system voices if it isn't running.</small></span></label>
@@ -2634,7 +2658,7 @@
       voices.filter((v) => !NOVELTY.test(v.name)).map((v) => `<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)}${v.localService ? '' : ', online'})</option>`).join('');
     mv.value = voices.some((v) => v.name === tts.mVoice) ? tts.mVoice : '';
   }
-  function openSettings() { renderOr(); api('/host').then((h) => { state.host = h; renderOr(); }).catch(() => {}); renderTtsSettings(); $('#notifySound').checked = localGet('airc.notifySound') !== 'off'; $('#settingsDlg').showModal(); ttsInit(); waitForVoices().then(() => renderTtsSettings()); }
+  function openSettings() { renderOr(); api('/host').then((h) => { state.host = h; renderOr(); }).catch(() => {}); renderTtsSettings(); $('#notifySound').checked = localGet('airc.notifySound') !== 'off'; const pv = localGet('airc.palette') || 'graphite'; document.querySelectorAll('input[name="palette"]').forEach((r) => { r.checked = r.value === pv; }); renderPalNote(); $('#settingsDlg').showModal(); ttsInit(); waitForVoices().then(() => renderTtsSettings()); }
   try { window.speechSynthesis?.addEventListener?.('voiceschanged', () => { if ($('#settingsDlg')?.open) renderTtsSettings(); }); } catch {}
 
   function readCommand(arg) {
@@ -3613,6 +3637,20 @@
     b.title = `Theme: ${t === 'auto' ? 'Auto (follows your system)' : t[0].toUpperCase() + t.slice(1)} — click to change`;
     b.setAttribute('aria-label', b.title);
   }
+  // dark mode palettes: only the dark theme changes; the choice is kept in this browser
+  const PALETTES = ['graphite', 'ink', 'ember', 'plum', 'moss', 'oled'];
+  function applyPalette(p) { if (p && p !== 'graphite') document.documentElement.dataset.palette = p; else delete document.documentElement.dataset.palette; }
+  function setPalette(p) {
+    if (!PALETTES.includes(p)) p = 'graphite';
+    localSet('airc.palette', p); applyPalette(p); renderPalNote();
+  }
+  function renderPalNote() {
+    const el = $('#palNote'); if (!el) return;
+    const dark = document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+    el.textContent = dark ? '' : 'You are in light mode now: these colours show when TropaAI is dark (the moon button at the bottom of the sidebar).';
+  }
+  applyPalette(localGet('airc.palette') || 'graphite');
+  document.addEventListener('change', (e) => { if (e.target.name === 'palette') setPalette(e.target.value); });
   function setTheme(t) {
     if (t === 'next') t = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
     if (!THEMES.includes(t)) { alertInline('Use /theme light, /theme dark or /theme auto.'); return; }
@@ -3631,6 +3669,7 @@
     { name: 'read', desc: 'Read aloud: /read (last message) · /read 5 (last 5) · /read #37', run: (args) => readCommand(args[0]) },
     { name: 'stop', desc: 'Stop reading aloud', run: () => { ttsStop(); infoInline('Stopped reading.'); } },
     { name: 'tts', desc: 'Show which voice engine reads aloud · /tts kokoro · /tts mac', run: (args) => ttsCommand(args[0]) },
+    { name: 'palette', desc: 'Dark mode colours: /palette graphite · ink · ember · plum · moss · oled', run: (args) => { const p = String(args[0] || '').toLowerCase().replace('black', 'oled'); if (!PALETTES.includes(p)) { infoInline('Use /palette graphite, ink, ember, plum, moss or oled (or Settings → Dark mode colours).'); return; } setPalette(p); infoInline(`Dark mode colours: ${p}.`); } },
     { name: 'theme', desc: 'Colour theme: /theme light · dark · auto', run: (args) => setTheme(args[0] || 'next') },
     { name: 'lead', desc: 'Pass the lead: /lead @agent (add "today" to give it back at midnight)', run: (args) => {
       const who = (args.find((a) => /^@?[\w.-]+$/.test(a) && !/^today$/i.test(a)) || '').replace(/^@/, '');

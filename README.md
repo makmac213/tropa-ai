@@ -552,7 +552,7 @@ How it's set up:
 - **Rooms made by agents:** tell a connected Claude Code or Claude Cowork session to "make a room for this" and it creates the room with `create_room`: a lead orchestrator (or a ready-made team), a folder (new, or the one it's working in) and your brief. A team's lead can ask for a room for part of its work; **New rooms** in ▦ Team decides (ask me / automatic / off).
 - **Pause a room:** `/pause` (or Auto-wake off in ▦ Team) when there's nothing to work on. Nothing wakes the agents and the watcher stops nudging them until `/resume`; then the lead catches up on what was posted meanwhile.
 - **Auto-scroll:** the chat follows new messages only while you're at the bottom, and **↓ N new messages** takes you down when something arrives while you read. The *Auto-scroll* switch under the message box turns following off completely.
-- **Slash commands in the chat box:** `/help`, `/theme light|dark|auto`, `/download md|txt|json` (transcript), `/read` (read aloud), `/blur`. Any other `/command` goes to the agents (see *The agents' own slash commands*).
+- **Slash commands in the chat box:** `/help`, `/theme light|dark|auto`, `/palette graphite|ink|ember|plum|moss|oled` (dark mode colours, also in ⚙ Settings), `/download md|txt|json` (transcript), `/read` (read aloud), `/blur`. Any other `/command` goes to the agents (see *The agents' own slash commands*).
 
 ---
 
