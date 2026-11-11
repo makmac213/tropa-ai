@@ -2,6 +2,13 @@
 
 ## 0.5.1 (October 2026)
 
+### The new layout
+- **An icon rail replaces the sidebar** on wider screens: your projects as small squares (a dot when one needs you; hover for the name), New project, Archived projects, All activity, Usage and #general, then notifications, theme, settings and your name.
+- **A command bar: Ctrl+K (⌘K on a Mac)** or the search box in the header. Jump to a project or a view (Chat, Board, Flow, Team, Docs, Usage), run an action (wake the team, pause, archive, download the chat, skills, share, new project, switch mode, theme, settings), or search all messages.
+- **The Simple / Advanced switch moves to the header.** Simple has no sidebar at all.
+- **A quieter look throughout:** rounded faces, soft question cards, folded team updates as a single hairline, and the floating message box in Advanced too. Advanced keeps a **team column** (each agent's face, status dot, what it's doing and its CLI) and a **Details** panel. The Team view's cards have quiet buttons, and the board, Flow, Docs and Usage have softer surfaces with fewer lines.
+- **Classic layout is one click away** in Settings → Layout (or "Use the classic layout" in the command bar) and is unchanged. Phones keep their compact layout. Every combination passes an automated contrast check.
+
 ### Simple mode: the board and the flowchart
 - **Chat · Board · Flow** tabs in Simple's header for every project: see the task board and the Flow chart of who asked whom for what, then go back to the chat with one click. They were only in the ⋯ menu before.
 - **A Tasks summary in the side panel** ("2 to do · 1 doing · 1 in review") with **Open the board** and **See the flow**.
