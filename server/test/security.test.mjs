@@ -145,3 +145,22 @@ test("an agent's long question to the human is kept whole, with its line breaks"
   assert.deepEqual(q.options, ['Item 1', 'Item 2']);
   assert.equal(q.recommended, 2);
 });
+
+test('a task an agent adds is linked to the request it serves (for the Flow view)', async () => {
+  await req('/api/rooms', { method: 'POST', headers: KEY(), body: { project: 'flow-x' } });
+  const ask = await (await req('/api/rooms/project%3Aflow-x/messages', { method: 'POST', headers: KEY(), body: { sender_kind: 'human', content: '@lead build the menu page' } })).json();
+  const mcp = async (agent, name, args) => {
+    const r = await req(`/mcp?agent=${agent}&project=flow-x`, { method: 'POST', headers: { accept: 'application/json, text/event-stream' },
+      body: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: { agent, room: 'project:flow-x', ...args } } } });
+    return r.text();
+  };
+  await mcp('lead-x', 'task_add', { title: 'Menu page', assignee: 'dev-x', description: 'Build /menu.\nDone when: /menu shows the menu' });
+  await req('/api/rooms/project%3Aflow-x/tasks', { method: 'POST', headers: KEY(), body: { title: 'Mine', assignee: 'dev-x' } });
+  const tasks = await (await req('/api/rooms/project%3Aflow-x/tasks')).json();
+  const list = Array.isArray(tasks) ? tasks : tasks.tasks;
+  const byLead = list.find((t) => t.title === 'Menu page'), mine = list.find((t) => t.title === 'Mine');
+  assert.equal(byLead.created_by, 'lead-x');
+  assert.equal(byLead.request_id, ask.id, "the lead's task points at the human's request");
+  assert.equal(byLead.request.content, '@lead build the menu page');
+  assert.equal(mine.request_id, 0, "the human's own task has no request");
+});

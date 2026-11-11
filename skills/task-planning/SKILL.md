@@ -29,7 +29,7 @@ Plan for <feature>:
 Contract: POST /api/login {email,password} → 200 {user} | 401 {error}
 Order: 1 and 2 in parallel; 3 after both merge. I review each branch, QA tests it, I merge.
 ```
-Before posting, put each task on the board with `task_add` (title, assignee, branch, a **description**: what to build, the acceptance criteria, the contract and files involved, in a few Markdown bullets) and **its dependencies**: `depends_on` for cards it can only start after they're merged, `contract_from` for cards whose agreed contract is enough to start in parallel. Add cards in order so the ids exist, and write each id in the plan (`#12 @backend api-auth …`). The human follows progress there. Move cards to `qa` when you send a branch to QA, and to `done` after you merge: that wakes the owners of the cards it unblocks.
+Before posting, put each task on the board with `task_add` (title, assignee, branch, `request` = the id of the human's message you're planning, a **description**: what to build, a line **`Done when: <the result you expect>`** (the Flow view shows it as the expected result), the acceptance criteria, the contract and files involved, in a few Markdown bullets) and **its dependencies**: `depends_on` for cards it can only start after they're merged, `contract_from` for cards whose agreed contract is enough to start in parallel. Add cards in order so the ids exist, and write each id in the plan (`#12 @backend api-auth …`). The human follows progress there. Move cards to `qa` when you send a branch to QA, and to `done` after you merge: that wakes the owners of the cards it unblocks.
 
 The board draws the plan as a flowchart (the `plan-flowchart` skill).
 

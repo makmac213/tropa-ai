@@ -767,9 +767,10 @@ const tools = () => [
       title: { type: 'string', description: 'Short task title, e.g. "POST /todos with validation".' },
       assignee: { type: 'string', description: 'Agent name it is assigned to.' },
       branch: { type: 'string', description: 'Git branch for it, e.g. "backend/todos-api".' },
-      description: { type: 'string', description: 'What to build and how it will be checked (markdown): scope, acceptance criteria, contract or files involved. The human reads it on the board.' },
+      description: { type: 'string', description: 'What to do and how it will be checked (markdown): scope, contract or files involved, and always one line "Done when: <the result you expect>". The human reads it on the board and in the Flow view.' },
       depends_on: { type: 'array', items: { type: 'integer' }, description: 'Task ids that must be done (merged) before this one can start.' },
       contract_from: { type: 'array', items: { type: 'integer' }, description: 'Task ids whose agreed contract is enough: this one can start as soon as they have started.' },
+      request: { type: 'integer', description: 'The id (#N) of the message this task serves, usually the human\'s request you are planning. Leave it out to use the latest message from the human in the room.' },
     }, required: ['agent', 'room', 'title'] },
   },
   {
@@ -984,7 +985,7 @@ async function callTool(name, args, ctx) {
       const a = agent();
       const roomId = normalizeRoomId(args.room || '');
       requireRoom(roomId);
-      const t = addTask(roomId, { title: args.title, assignee: args.assignee, branch: args.branch, description: args.description, depends_on: args.depends_on, contract_from: args.contract_from, by: a.name });
+      const t = addTask(roomId, { title: args.title, assignee: args.assignee, branch: args.branch, description: args.description, depends_on: args.depends_on, contract_from: args.contract_from, request: args.request, by: a.name });
       return `Task #${t.id} added (${t.status}${t.assignee ? `, @${t.assignee}` : ''}${t.branch ? `, ${t.branch}` : ''}${t.waits_for?.length ? `, waits for ${t.waits_for.map((n) => '#' + n).join(' ')}` : t.ready ? ', ready to start' : ''}).`;
     }
     case 'task_update': {
@@ -2974,8 +2975,22 @@ if (!db.prepare('PRAGMA table_info(tasks)').all().some((c) => c.name === 'descri
 // deps: JSON [{id, kind}] — kind "merge" (wait until that task is done) or "contract" (it only needs to have started,
 // i.e. its contract is posted and work can run in parallel against it)
 if (!db.prepare('PRAGMA table_info(tasks)').all().some((c) => c.name === 'deps')) db.exec("ALTER TABLE tasks ADD COLUMN deps TEXT DEFAULT '[]'");
+// request_id: the message the task serves (the human's request the lead planned it from); the Flow view starts there
+if (!db.prepare('PRAGMA table_info(tasks)').all().some((c) => c.name === 'request_id')) db.exec('ALTER TABLE tasks ADD COLUMN request_id INTEGER DEFAULT 0');
 const TASK_STATUS = ['todo', 'doing', 'review', 'qa', 'blocked', 'done'];
+/** The message a new task serves: the one given (if it's in this room), else, for a task an agent adds, the human's
+ *  latest message in the room from the last two days (what the lead is most likely planning). 0 for none. */
+function requestFor(roomId, given, by) {
+  const m = Number(given) > 0 && q.getMsg.get(Number(given));
+  if (m && m.room_id === roomId) return m.id;
+  if (!by || sameName(by, HUMAN_NAME)) return 0;
+  const h = tq.lastHuman.get(roomId, Date.now() - 2 * 86400e3);
+  return h?.id || 0;
+}
 const tq = {
+  setRequest: db.prepare('UPDATE tasks SET request_id = ? WHERE id = ?'),
+  lastHuman: db.prepare("SELECT id FROM messages WHERE room_id = ? AND sender_kind = 'human' AND created_at > ? ORDER BY id DESC LIMIT 1"),
+  doneBy: db.prepare("SELECT by, at FROM task_events WHERE task_id = ? AND field = 'status' AND new = 'done' ORDER BY id DESC LIMIT 1"),
   list: db.prepare('SELECT * FROM tasks WHERE room_id = ? ORDER BY id'),
   get: db.prepare('SELECT * FROM tasks WHERE id = ?'),
   ins: db.prepare('INSERT INTO tasks (room_id, title, assignee, status, branch, note, created_by, created_at, updated_at, updated_by, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
@@ -3033,8 +3048,20 @@ function taskViews(roomId) {
   return rows.map((t) => {
     const deps = parseDeps(t).filter((d) => byId.has(d.id)).map((d) => ({ ...d, status: byId.get(d.id).status, title: byId.get(d.id).title }));
     const waits = deps.filter((d) => !depMet(d.kind, d.status));
-    return { ...t, deps, waits_for: waits.map((d) => d.id), ready: t.status === 'todo' && !waits.length, unblocks: unblocks.get(t.id) || [] };
+    const done = t.status === 'done' ? tq.doneBy.get(t.id) : null;
+    return { ...t, deps, waits_for: waits.map((d) => d.id), ready: t.status === 'todo' && !waits.length, unblocks: unblocks.get(t.id) || [],
+      request: requestView(t.request_id), done_by: done?.by || '', done_at: done?.at || 0 };
   });
+}
+const reqCache = new Map();   // message id -> what the Flow view shows of it (messages don't change, except deletes)
+function requestView(id) {
+  if (!id) return null;
+  if (reqCache.has(id)) return reqCache.get(id);
+  const m = q.getMsg.get(id);
+  const v = m ? { id: m.id, sender: m.sender, sender_kind: m.sender_kind, content: String(m.content).slice(0, 1200), created_at: m.created_at } : null;
+  if (reqCache.size > 2000) reqCache.clear();
+  reqCache.set(id, v);
+  return v;
 }
 const taskView = (t) => taskViews(t.room_id).find((x) => x.id === t.id) || t;
 function broadcastTasks(roomId) {
@@ -3089,7 +3116,7 @@ function schedulePlanFile(roomId) {
   planTimers.set(roomId, timer);
 }
 
-function addTask(roomId, { title, assignee, branch, status, description, by, depends_on, contract_from }) {
+function addTask(roomId, { title, assignee, branch, status, description, by, depends_on, contract_from, request }) {
   title = String(title || '').trim().slice(0, 200);
   if (!title) throw new UserError('a task needs a title');
   status = TASK_STATUS.includes(status) ? status : 'todo';
@@ -3097,6 +3124,7 @@ function addTask(roomId, { title, assignee, branch, status, description, by, dep
   const now = Date.now();
   const r = tq.ins.run(roomId, title, cleanName(assignee || ''), status, cleanBranch(branch), '', by || '', now, now, by || '', String(description || '').slice(0, 8000));
   tq.setDeps.run(JSON.stringify(deps), r.lastInsertRowid);
+  tq.setRequest.run(requestFor(roomId, request, by), r.lastInsertRowid);
   const t = tq.get.get(r.lastInsertRowid);
   tq.ev.run(t.id, now, by || '', 'created', '', t.status);
   if (deps.length) tq.ev.run(t.id, now, by || '', 'deps', '', deps.map((d) => `${d.kind === 'contract' ? '~' : '#'}${d.id}`).join(' '));

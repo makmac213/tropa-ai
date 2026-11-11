@@ -7,6 +7,10 @@
 
 <h3 align="center">Turn any project folder into a team of AI agents you run from one chat room.</h3>
 
+<p align="center">
+  <a href="https://buymeacoffee.com/damark"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="40"></a>
+</p>
+
 TropaAI starts a team of coding agents (Claude Code, Codex, OpenCode, Qwen Code or Gemini CLI) in tmux, one terminal per agent, and connects them to a shared chat room. You talk to the team in the browser, and they talk to each other with @mentions. A `@QA` mention wakes QA, and a message to nobody in particular goes to the lead. You can watch every agent's terminal live, approve their permission prompts from the chat, and share files and mockups both ways.
 
 *Tropa* is Filipino for a crew or squad.
@@ -285,7 +289,7 @@ Click **✓ Tasks** in a project room for a board of the team's work: **To do ·
 
 Cards show what they wait for and what they unblock, and a green **Ready** tag when everything they need is in place. A **Ready to start** strip at the top lists what can be picked up now and what unlocks next. When a card is done (or started, for a contract), the owners of the cards it unblocks are woken with "#25 is ready to start". Set dependencies in a card's **Depends on** field; a loop is refused.
 
-**Flow.** The **Flow** tab draws the board as a left-to-right chart: what has to finish first, what runs in parallel, and the **critical path** (the longest chain still to do, in bold). Click a box to open its card. The watcher also writes it to **`docs/PLAN.md`** as Mermaid, so it shows in 📄 Docs and on GitHub. Delete the file's first `tropa:auto-plan` line to keep your own `PLAN.md`, or set `"auto_plan": false`.
+**Flow.** The **Flow** tab draws each request as a flowchart, left to right: **who asked** (your message, in your words), **who planned it** (the lead), then one row per instruction: **who asked whom** for what, the **expected result** (the task's `Done when:` line), and **who checks it** (you, the lead or QA) with where it stands: *Needs you*, *In review*, *Done*. A dashed line joins a task to the one it waits for. The lead links each task to the message it serves and writes the `Done when:` line; a task without one says so. *Show* switches between open requests and all of them. Click a box to open its card. The watcher also writes the plan to **`docs/PLAN.md`** as Mermaid, so it shows in 📄 Docs and on GitHub. Delete the file's first `tropa:auto-plan` line to keep your own `PLAN.md`, or set `"auto_plan": false`.
 
 ### ❓ Questions waiting on you
 
