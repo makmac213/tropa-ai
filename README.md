@@ -7,6 +7,10 @@
 
 <h3 align="center">Turn any project folder into a team of AI agents you run from one chat room.</h3>
 
+<p align="center">
+  <a href="https://buymeacoffee.com/damark"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="40"></a>
+</p>
+
 TropaAI starts a team of coding agents (Claude Code, Codex, OpenCode, Qwen Code or Gemini CLI) in tmux, one terminal per agent, and connects them to a shared chat room. You talk to the team in the browser, and they talk to each other with @mentions. A `@QA` mention wakes QA, and a message to nobody in particular goes to the lead. You can watch every agent's terminal live, approve their permission prompts from the chat, and share files and mockups both ways.
 
 *Tropa* is Filipino for a crew or squad.
