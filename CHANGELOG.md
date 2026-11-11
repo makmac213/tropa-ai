@@ -2,6 +2,11 @@
 
 ## 0.5.1 (October 2026)
 
+### Simple mode: the board and the flowchart
+- **Chat · Board · Flow** tabs in Simple's header for every project: see the task board and the Flow chart of who asked whom for what, then go back to the chat with one click. They were only in the ⋯ menu before.
+- **A Tasks summary in the side panel** ("2 to do · 1 doing · 1 in review") with **Open the board** and **See the flow**.
+- In Simple, the board hides the technical *branch* field and its own Board/Flow switch (the header tabs do that).
+
 ### Dark mode colours
 - **Pick a dark palette in Settings → Dark mode colours:** Graphite (the default, as before), Ink (blue-black, cyan), Ember (warm charcoal, amber), Plum (violet, lavender), Moss (green-black, mint) or Black (OLED, true black). `/palette ink` works too. It only changes the dark theme; light mode stays as it is. Every palette passes WCAG AA contrast, and the choice is kept in this browser.
 

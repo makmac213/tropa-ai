@@ -127,7 +127,8 @@ The switch at the top of the sidebar picks how much you see. New users start in 
     - **Running now:** what the agents left running in the background, such as a dev server, with a link to open it and **Stop**.
     - **Decisions:** what you answered, what went ahead without an answer, and what still needs you.
     - **Files:** what the team changed lately and what was shared in the chat.
-  - Everything else (task board, docs, skills, search, download, pause, Fix the team) is in the **⋯** menu. Terminals, models, usage and public links are hidden.
+  - **Chat · Board · Flow** tabs at the top switch between the conversation, the task board and the Flow chart (who asked whom for what, and the expected result). The side panel's **Tasks** part has the same shortcuts.
+  - Everything else (docs, skills, search, download, pause, Fix the team) is in the **⋯** menu. Terminals, models, usage and public links are hidden.
 - **Advanced** is everything below: the full New project form, the Team view with live terminals, models and CLIs per agent, usage, and public links.
 
 ### Option A: start a project from the browser (recommended)

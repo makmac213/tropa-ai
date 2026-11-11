@@ -1091,6 +1091,12 @@
   body.simple .room .hash { display: none; }
   body.simple .room.active { background: var(--panel2); font-weight: 600; }
   body.simple .me input { color: var(--text); }
+  .s-tabs { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--panel2); margin-left: auto; margin-right: 8px; }
+  .s-tabs[hidden] { display: none; }
+  .s-tabs button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13.5px; font-weight: 500; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+  .s-tabs button:hover { color: var(--text); } .s-tabs button.on { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px var(--shadow); }
+  body.simple #tkBranch, body.simple #tasks .seg[aria-label="Task view"] { display: none; }
+  @media (max-width: 760px) { .s-tabs button { padding: 6px 10px; font-size: 13px; } }
   body.simple main > header .hrow { min-height: 64px; } body.simple #viewTabs, body.simple #advTeam { display: none !important; }
   body.simple #roomTopic { visibility: hidden; }
   body.simple header .dl-btn:not(#backBtn), body.simple header .dl-wrap, body.simple header .search:not(.show) { display: none !important; }
@@ -1236,6 +1242,7 @@
       <button class="dl-btn" id="skillsBtn" hidden title="How-tos your agents load when a task matches: add, edit or remove them">Skills</button>
       <button type="button" class="adv-team" id="advTeam" hidden></button>
       <input class="search" id="search" placeholder="Search…">
+      <div class="s-tabs" id="sTabs" role="tablist" aria-label="View" hidden><button type="button" role="tab" data-sview="chat">Chat</button><button type="button" role="tab" data-sview="board">Board</button><button type="button" role="tab" data-sview="flow">Flow</button></div>
       <button type="button" class="dl-btn" id="backBtn" hidden>← Back to the chat</button>
       <button type="button" class="hbtn s-team-btn" id="sTeamBtn" hidden aria-label="What your team is doing"><span class="s-avs" id="sTeamAvs"></span></button>
       <button type="button" class="hbtn" id="moreBtn" hidden aria-label="More options" aria-haspopup="menu" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
@@ -2251,7 +2258,7 @@
       }
       else if (e.type === 'tasks') {
         state.tasks[e.room_id] = e.tasks;
-        if (e.room_id === state.current) { renderHeader(); if (!$('#tasks').hidden) renderTasks(); if (state.view === 'team' && typeof renderAttention === 'function') renderAttention(); }
+        if (e.room_id === state.current) { renderHeader(); if (!$('#tasks').hidden) renderTasks(); if (state.view === 'team' && typeof renderAttention === 'function') renderAttention(); if (simple()) renderRside(); }
         if ($('#taskDlg').open && e.tasks.some((t) => t.id === td.id)) tdRenderDeps();
       }
       else if (e.type === 'task' || e.type === 'task_deleted') {
@@ -3322,6 +3329,7 @@
     if (e.target.closest('[data-rs-toggle]')) { localSet('airc.rside', localGet('airc.rside') === 'off' ? 'on' : 'off'); rsLast = ''; renderRside(); renderSimpleHeader(); return; }
     if (e.target.closest('[data-rs-back]')) { document.body.classList.remove('sheet-open'); $('#sTeamBtn').focus(); return; }
     if (e.target.closest('[data-sdocs]')) { document.body.classList.remove('sheet-open'); $('#docsBtn').click(); return; }
+    const svg_ = e.target.closest('[data-sview-go]'); if (svg_) { document.body.classList.remove('sheet-open'); $(`#sTabs [data-sview="${svg_.dataset.sviewGo}"]`).click(); return; }
     const sg = e.target.closest('[data-sgo]');
     if (sg) { document.body.classList.remove('sheet-open'); const el = document.getElementById('m' + sg.dataset.sgo); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('flash'); } else openQPanel(); return; }
     const sp = e.target.closest('[data-stopproc]');
@@ -5684,7 +5692,11 @@
     const off = localGet('airc.rside') === 'off';
     $('#panelBtn').setAttribute('aria-pressed', String(!off)); $('#panelBtn').classList.toggle('on', !off);
     $('#panelBtn').setAttribute('aria-label', off ? 'Show what your team is doing' : 'Hide the side panel');
-    $('#backBtn').hidden = !simple() || !proj || state.view === 'chat';
+    $('#backBtn').hidden = !simple() || !proj || ['chat', 'tasks'].includes(state.view);
+    // Simple's own view switch: the chat, the task board, the flowchart
+    const sv = state.view === 'tasks' ? (state.taskTab === 'flow' ? 'flow' : 'board') : state.view === 'chat' ? 'chat' : '';
+    $('#sTabs').hidden = !on;
+    $('#sTabs').querySelectorAll('[data-sview]').forEach((b) => { b.setAttribute('aria-selected', String(b.dataset.sview === sv)); b.classList.toggle('on', b.dataset.sview === sv); });
     $('#sTeamBtn').hidden = !on || state.view !== 'chat' || !(t.agents || []).length;
     if (on) {
       const ags = t.agents || [];
@@ -5740,6 +5752,11 @@
     }
   });
   $('#search').addEventListener('blur', () => { if (!$('#search').value) $('#search').classList.remove('show'); });
+  $('#sTabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sview]'); if (!b) return;
+    if (b.dataset.sview === 'chat') { state.view = 'chat'; localSet('airc.view', 'chat'); applyView(); renderHeader(); renderMessages({ bottom: true }); return; }
+    state.view = 'tasks'; state.taskTab = b.dataset.sview; localSet('airc.view', 'tasks'); localSet('airc.taskTab', state.taskTab); applyView();
+  });
   $('#backBtn').addEventListener('click', () => { state.view = 'chat'; localSet('airc.view', 'chat'); applyView(); renderHeader(); renderMessages({ bottom: true }); });
   $('#panelBtn').addEventListener('click', () => { localSet('airc.rside', localGet('airc.rside') === 'off' ? 'on' : 'off'); rsLast = ''; renderRside(); renderSimpleHeader(); });
   $('#sTeamBtn').addEventListener('click', () => { document.body.classList.add('sheet-open'); rsLast = ''; renderRside(); $('#rside').querySelector('.rs-back')?.focus(); });
@@ -5805,7 +5822,12 @@
           : f.url ? `<a class="sp-file" href="${f.url}" target="_blank" rel="noopener" title="${esc(f.name)}">${inner}</a>` : `<div class="sp-file" title="${esc(f.name)}">${inner}</div>`;
       }).join('') + '<div class="sp-fix"><button type="button" class="linkbtn" data-sdocs>Browse the docs</button></div>';
     const openDecs = decs.filter((q) => q.status === 'open').length;
-    return sec('who', 'Team', t.watching ? (t.agents || []).length : '', team) + sec('run', 'Running now', procs.length || '', run)
+    const tl = state.tasks[room] || [], open = tl.filter((x) => x.status !== 'done');
+    const tcount = (st) => tl.filter((x) => x.status === st).length;
+    const tsum = !tl.length ? '<div class="sp-empty">The lead adds tasks here when it plans your request.</div>'
+      : `<div class="sp-empty" style="color:var(--text)">${[['todo', 'to do'], ['doing', 'doing'], ['review', 'in review'], ['qa', 'in QA'], ['blocked', 'blocked'], ['done', 'done']].filter(([k]) => tcount(k)).map(([k, l]) => `${tcount(k)} ${l}`).join(' · ')}</div>`;
+    const tasksSec = sec('tsk', 'Tasks', open.length || '', tsum + '<div class="sp-fix"><button type="button" class="linkbtn" data-sview-go="board">Open the board</button> · <button type="button" class="linkbtn" data-sview-go="flow">See the flow</button></div>');
+    return sec('who', 'Team', t.watching ? (t.agents || []).length : '', team) + tasksSec + sec('run', 'Running now', procs.length || '', run)
       + sec('dec', 'Decisions', openDecs ? `${openDecs} need you` : '', dec) + sec('chg', 'Files', '', fl);
   }
 
