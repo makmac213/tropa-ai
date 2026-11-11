@@ -1095,6 +1095,7 @@
   .sq { margin-top: 8px; border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--panel); }
   .sq-h { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
   .sq-q { font-size: 15.5px; font-weight: 600; line-height: 1.45; } .sq-q p { margin: 0 0 4px; }
+  .sq-q.long { font-size: 15px; font-weight: 400; line-height: 1.55; } .sq-q.long p { margin: 0 0 8px; } .sq-q.long ul, .sq-q.long ol { margin: 4px 0 8px; padding-left: 22px; }
   .sq-opts { display: flex; flex-wrap: wrap; gap: 8px; }
   .sq-opts .qopt { min-height: 44px; border-radius: 22px; padding: 8px 16px; font-size: 14px; font-weight: 500; background: var(--panel); }
   .sq-opts .qopt.rec { background: var(--accent-weak); }
@@ -3461,7 +3462,7 @@
     const keep = Object.fromEntries([...box.querySelectorAll('input[data-qother]')].map((i) => [i.dataset.qother, i.value]));
     const card = (q) => `<article class="qcard">
       <div class="qh"><span class="av" style="background:${colorFor(q.agent)}">${esc(q.agent.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase())}</span><b>${esc(q.agent)}</b>${q.task_id ? `<button type="button" class="chip" data-opentask="${q.task_id}">#${q.task_id}</button>` : ''}<span class="sp"></span><span class="${Date.now() - q.created_at > 10 * 60e3 ? 'late' : 'mut'}">${agoShort(q.created_at)}</span></div>
-      <div class="qq">${md(q.question)}</div>
+      <div class="qq">${md(fullQuestion(q))}</div>
       ${q.options.length ? `<div class="qopts">${q.options.map((o, i) => `<button type="button" class="qopt ${i + 1 === q.recommended ? 'rec' : ''}" data-qans="${q.id}" data-ans="${esc(`${i + 1}. ${o}`)}"><b>${i + 1}</b> ${esc(o)}${i + 1 === q.recommended ? ' <span class="mut">· recommended</span>' : ''}</button>`).join('')}</div>` : ''}
       <form class="qother" data-qform="${q.id}"><input data-qother="${q.id}" aria-label="Answer ${esc(q.agent)}" placeholder="${q.options.length ? 'Another answer…' : 'Your answer…'}" value="${esc(keep[q.id] || '')}"><button type="submit" class="tbtn">Send</button></form>
       <div class="qf"><span class="mut">${q.fallback ? (q.deadline_at ? `Goes with “${esc(q.fallback)}” in ${untilShort(q.deadline_at)}` : `If no answer: ${esc(q.fallback)}`) : 'Waits for your answer'}</span><span class="sp"></span>
@@ -5426,11 +5427,20 @@
     return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? '' : `<div class="sn">${esc(m.sender)}${adv ? `${when}${agentTag(m.sender)}` : ''}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;
   }
   const ansText = (q) => String(q.answer || '').replace(new RegExp('^@' + q.agent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').replace(/^\d+\.\s+/, '');
+  // the question in full: questions stored before the fix were cut at 1,000 characters with their line breaks
+  // squashed, so rebuild those from the message they came with (minus the options and the fallback line)
+  function fullQuestion(q) {
+    const m = q.message_id && findMsg(q.message_id);
+    if (!m || String(q.question).length < 990) return q.question;
+    const me = new RegExp(`@${myName().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b[,:]?[ \\t]*`, 'gi');
+    const text = String(m.content).split('\n').filter((l) => !/^\s*\d+[.)]\s+/.test(l) && !/^If there's no answer/.test(l)).join('\n').replace(me, '').trim();
+    return text.length > String(q.question).length ? text : q.question;
+  }
   function sqCard(q) {
     const open = q.status === 'open';
     return `<div class="sq" role="group" aria-label="Question from ${esc(q.agent)}">
       <div class="sq-h">${open ? `${esc(q.agent)} is asking you` : `${esc(q.agent)} asked`}</div>
-      <div class="sq-q">${md(q.question)}</div>
+      <div class="sq-q${fullQuestion(q).length > 280 ? ' long' : ''}">${md(fullQuestion(q))}</div>
       ${open ? `${q.options.length ? `<div class="sq-opts">${q.options.map((o, i) => `<button type="button" class="qopt ${i + 1 === q.recommended ? 'rec' : ''}" data-qans="${q.id}" data-ans="${esc(`${i + 1}. ${o}`)}">${esc(o)}${i + 1 === q.recommended ? ' <span class="mut">· suggested</span>' : ''}</button>`).join('')}</div>` : ''}
         <form class="qother" data-qform="${q.id}"><input aria-label="Answer ${esc(q.agent)}" placeholder="${q.options.length ? 'Or type your own answer…' : 'Your answer…'}"><button type="submit" class="tbtn">Send</button></form>
         <div class="sq-f">${q.fallback ? `<span>${q.deadline_at ? `Goes with “${esc(q.fallback)}” in ${untilShort(q.deadline_at)}` : `If you don't answer: ${esc(q.fallback)}`}</span>` : ''}<span class="sp"></span><button type="button" class="lnk mutl" data-qdismiss="${q.id}">Not now</button></div>`

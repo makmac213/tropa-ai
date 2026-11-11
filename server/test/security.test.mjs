@@ -129,3 +129,19 @@ test('archiving a project hides it, needs the key, and creating it again brings 
   const back = await (await req('/api/rooms/project%3Aold-site/archive', { method: 'POST', headers: KEY(), body: { archived: false } })).json();
   assert.equal(back.archived_at, 0);
 });
+
+test("an agent's long question to the human is kept whole, with its line breaks", async () => {
+  await req('/api/rooms', { method: 'POST', headers: KEY(), body: { project: 'long-q' } });
+  const bullets = Array.from({ length: 12 }, (_, i) => `- **Item ${i + 1}:** ${'details that matter '.repeat(6)}`).join('\n');
+  const content = `@tester Status first:\n\n${bullets}\n\nWhich one should ship first?\n1. Item 1\n2. Item 2 (recommended)`;
+  assert.ok(content.length > 1500);
+  assert.equal((await req('/api/rooms/project%3Along-q/messages', { method: 'POST', body: { agent: 'lead', content } })).status, 200);
+  await new Promise((ok) => setTimeout(ok, 200));
+  const all = await (await req('/api/questions')).json();
+  const q = (Array.isArray(all) ? all : all.questions).find((x) => x.room_id === 'project:long-q');
+  assert.ok(q, 'the question is listed');
+  assert.ok(q.question.endsWith('Which one should ship first?'), 'not cut short');
+  assert.match(q.question, /\n- \*\*Item 12:\*\*/, 'line breaks kept');
+  assert.deepEqual(q.options, ['Item 1', 'Item 2']);
+  assert.equal(q.recommended, 2);
+});

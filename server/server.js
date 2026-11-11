@@ -3215,7 +3215,7 @@ function asksHuman(text) {
 }
 let asking = false;   // set while ask_human posts its own message, so the mention detector skips it
 function askHuman({ roomId, agent, question, options, recommended, fallback, minutes, task_id }) {
-  question = String(question || '').trim().slice(0, 1000);
+  question = String(question || '').trim().slice(0, MAX_CONTENT);   // the whole question: the card shows it all
   if (!question) throw new UserError('ask_human needs a question');
   const opts = (Array.isArray(options) ? options : []).map((o) => String(o || '').trim().slice(0, 200)).filter(Boolean).slice(0, 8);
   const rec = Number.isInteger(Number(recommended)) && Number(recommended) >= 1 && Number(recommended) <= opts.length ? Number(recommended) : 0;
@@ -3245,8 +3245,9 @@ bus.on('message', (m) => {
       const lines = String(m.content).split('\n');
       const opts = lines.map((l) => l.match(/^\s*(\d+)[.)]\s+(.+)$/)).filter(Boolean).map((x) => x[2].trim());
       const rec = opts.findIndex((o) => /recommend/i.test(o)) + 1;
-      const q = lines.filter((l) => !/^\s*\d+[.)]\s+/.test(l)).join(' ').replace(new RegExp(`@${HUMAN_NAME}\\b`, 'gi'), '').replace(/\s+/g, ' ').trim().slice(0, 1000);
-      const r = qq.ins.run(m.room_id, m.id, m.sender, q || m.content.slice(0, 1000), JSON.stringify(opts.map((o) => o.replace(/\s*\(?recommended[^)]*\)?\s*$/i, '').slice(0, 200)).slice(0, 8)), rec > 0 ? rec : 0, '', 0, 0, 'mention', Date.now());
+      // the message minus its numbered options, line breaks kept (lists and paragraphs stay as written), never cut short
+      const q = lines.filter((l) => !/^\s*\d+[.)]\s+/.test(l)).join('\n').replace(new RegExp(`@${HUMAN_NAME}\\b[,:]?[ \\t]*`, 'gi'), '').replace(/\n{3,}/g, '\n\n').trim();
+      const r = qq.ins.run(m.room_id, m.id, m.sender, q || String(m.content), JSON.stringify(opts.map((o) => o.replace(/\s*\(?recommended[^)]*\)?\s*$/i, '').slice(0, 200)).slice(0, 8)), rec > 0 ? rec : 0, '', 0, 0, 'mention', Date.now());
       broadcastQuestion(r.lastInsertRowid);
     } else if (m.sender_kind === 'human') {
       // the human answered: a reply to the question's message, or a message to the agent that asked
