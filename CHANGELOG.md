@@ -2,6 +2,11 @@
 
 ## 0.5.1 (October 2026)
 
+### Flow: who asked for what, and what should come of it
+- **The Flow tab is a flowchart of each request now, not a graph of cards.** Read it left to right: your request in your words, the lead's plan, then one row per instruction: *lead asked developer* (or *developer asked qa*) what to do, the **expected result**, and **who checks it** (you, the lead or QA) with its status: *Needs you*, *In review*, *Done · 11:40*. A dashed line joins a task to the one it waits for.
+- **Tasks remember the request they serve.** The lead passes the id of your message when it adds a task (`task_add` `request`); without it, the task links to your latest message in the room. Tasks you add yourself stand on their own.
+- **Every task says the result it expects:** the lead now writes a `Done when:` line in each task, and the chart shows it. Older tasks without one say so.
+
 ### Fixed: an agent's question to you was cut short
 - **The whole question shows now.** Questions were cut at 1,000 characters, so a long one (a status report ending in a question) stopped mid-word. A question asked in a normal message also lost its line breaks, so lists ran together into one paragraph. Both are fixed, and questions already cut short show in full from their message.
 - **Long questions are easier to read:** normal weight instead of all bold, with lists and paragraphs as the agent wrote them.

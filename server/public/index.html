@@ -588,6 +588,32 @@
   .fl-e { fill: none; stroke: #6b7385; stroke-width: 1.6; } .fl-e.k-contract { stroke-dasharray: 6 5; } .fl-e.crit { stroke: var(--accent); stroke-width: 2.4; }
   .fl-ah { fill: #6b7385; } .fl-ah.crit { fill: var(--accent); }
   .fl-lbl { fill: var(--muted); font-size: 11px; letter-spacing: .06em; }
+  .fl-bar .sp { flex: 1; } .fl-bar select { font: inherit; font-size: 12.5px; }
+  .fw-wrap { padding: 20px; } .fw-sep { border: 0; border-top: 1px solid var(--line); margin: 26px 0; }
+  .fw { position: relative; }
+  .fw-svg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+  .fw-e { fill: none; stroke: #6b7385; stroke-width: 1.6; } .fw-e.dep { stroke: var(--accent); stroke-dasharray: 5 4; }
+  .fw-ah { fill: #6b7385; } .fw-ah.dep { fill: var(--accent); }
+  .fw-lb { fill: var(--panel); stroke: var(--line); } .fw-lt { fill: var(--muted); font-size: 11px; font-family: inherit; }
+  .fw-dia { fill: var(--panel2); stroke: var(--line); }
+  .fw-box { position: absolute; box-sizing: border-box; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); padding: 9px 11px; overflow: hidden; text-align: left; font: inherit; color: var(--text); }
+  button.fw-box { cursor: pointer; } button.fw-box:hover, button.fw-box:focus-visible { border-color: var(--accent); }
+  .fw-req { border-color: color-mix(in srgb, var(--human) 55%, var(--line)); background: color-mix(in srgb, var(--human) 7%, var(--panel2)); }
+  .fw-exp { border-style: dashed; background: var(--panel); } .fw-exp.none .fw-x { color: var(--muted); font-style: italic; }
+  .fw-who { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 6px; flex-wrap: wrap; } .fw-who.sm { font-size: 11.5px; color: var(--muted); margin-bottom: 5px; } .fw-who.sm b { color: var(--text); font-weight: 600; }
+  .fw-av { border-radius: 6px; color: #fff; font-size: 9px; font-weight: 700; display: inline-grid; place-items: center; flex: none; }
+  .fw-q { font-size: 13px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
+  .fw-s { font-size: 12.5px; color: var(--text); line-height: 1.4; } .fw-xs { font-size: 11.5px; margin-top: 3px; }
+  .fw-t { font-size: 13.5px; font-weight: 600; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fw-w { font-size: 11.5px; color: var(--accent); margin-top: 4px; }
+  .fw-a { font-size: 12.5px; color: var(--text); opacity: .85; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .fw-h { font-size: 10.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+  .fw-x { font-size: 12.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .fw-dav { position: absolute; }
+  .fw-st { position: absolute; width: 136px; font-size: 12px; line-height: 1.35; }
+  .fw-chip { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; font-weight: 600; font-size: 11.5px; } .fw-chip i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .fw-chip.c-ok { color: var(--ok); } .fw-chip.c-accent { color: var(--accent); } .fw-chip.c-warn { color: var(--human); } .fw-chip.c-danger { color: var(--danger); } .fw-chip.c-muted { color: var(--muted); }
+  .fl-legend .sw.dash { border-style: dashed; background: none; } .fl-legend .sw.dia { width: 9px; height: 9px; transform: rotate(45deg); border-radius: 1px; } .fl-legend .sw.line { width: 16px; height: 0; border: 0; border-top: 1.5px dashed var(--accent); border-radius: 0; background: none; }
   .fl-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; align-items: center; }
   .fl-legend span { display: inline-flex; gap: 6px; align-items: center; }
   .fl-legend .sw { width: 14px; height: 10px; border-radius: 3px; border: 1px solid #6b7280; background: var(--panel2); display: inline-block; }
@@ -4918,84 +4944,128 @@
         return `<div class="tk-col c-${v} ${cs.length ? '' : 'is-empty'}" data-tkcol="${v}"><h5>${l}<span>${cs.length}</span></h5><div class="tk-list">${cs.map(card).join('') || `<div class="tk-empty">${v === 'todo' && !list.length ? 'The lead adds tasks here when it plans (or add one above).' : `Nothing ${v === 'todo' ? 'to do' : v === 'doing' ? 'in progress' : v === 'done' ? 'done yet' : v === 'blocked' ? 'blocked' : `in ${esc(l)}`}`}</div>`}</div></div>`; }).join('')}</div>`}`;
   }
   const TK_LABEL = { todo: 'to do', doing: 'doing', review: 'review', qa: 'QA', blocked: 'blocked', done: 'done' };
-  // ---- Flow: the board's dependencies as a left-to-right graph ----
-  function flowModel(list, showDone) {
-    const shown = list.filter((t) => showDone || t.status !== 'done');
-    const ids = new Set(shown.map((t) => t.id));
-    const edges = []; for (const t of shown) for (const d of t.deps || []) if (ids.has(d.id)) edges.push({ from: d.id, to: t.id, kind: d.kind });
-    const inE = new Map(), outE = new Map();
-    for (const e of edges) { (inE.get(e.to) || inE.set(e.to, []).get(e.to)).push(e); (outE.get(e.from) || outE.set(e.from, []).get(e.from)).push(e); }
-    const lone = shown.filter((t) => !inE.has(t.id) && !outE.has(t.id));
-    const linked = shown.filter((t) => inE.has(t.id) || outE.has(t.id));
-    const level = new Map();
-    const lv = (id, seen = new Set()) => {
-      if (level.has(id)) return level.get(id);
-      if (seen.has(id)) return 0; seen.add(id);
-      const v = Math.max(-1, ...(inE.get(id) || []).map((e) => lv(e.from, seen))) + 1;
-      level.set(id, v); return v;
-    };
-    linked.forEach((t) => lv(t.id));
-    const cols = []; for (const t of linked) (cols[level.get(t.id)] ||= []).push(t);
-    const row = new Map();
-    cols.forEach((c, ci) => {   // order each column by the average row of what it waits for (fewer crossings)
-      if (ci) c.sort((a, b) => avg(a) - avg(b) || a.id - b.id); else c.sort((a, b) => a.id - b.id);
-      c.forEach((t, i) => row.set(t.id, i));
-      function avg(t) { const r = (inE.get(t.id) || []).map((e) => row.get(e.from) ?? 0); return r.length ? r.reduce((x, y) => x + y, 0) / r.length : 0; }
-    });
-    // critical path: the longest chain of unfinished cards
-    const open = (t) => t.status !== 'done';
-    const best = new Map(), prev = new Map();
-    for (const c of cols) for (const t of c) {
-      let b = 0, p = null;
-      for (const e of inE.get(t.id) || []) { const v = best.get(e.from) || 0; if (v > b) { b = v; p = e.from; } }
-      best.set(t.id, b + (open(t) ? 1 : 0)); prev.set(t.id, p);
+  // ---- Flow: one chart per request: who asked, what they asked of whom, the result they expect, who checks it ----
+  const DONE_WHEN = /^\s*(?:[-*]\s+)?(?:\*\*|__)?\s*(?:done when|expected(?: result)?|acceptance(?: criteria)?|definition of done|result)\s*(?:\*\*|__)?\s*:\s*(?:\*\*|__)?\s*(.+)$/i;
+  function flowParts(t) {   // the instruction (the description minus its "Done when:" line) and the expected result
+    let expect = ''; const rest = [];
+    for (const l of String(t.description || '').split('\n')) { const m = !expect && l.match(DONE_WHEN); if (m) expect = m[1].replace(/\*\*|__|`/g, '').trim(); else rest.push(l); }
+    const ask = rest.join('\n').replace(/^\s*[-*]\s+/gm, '').replace(/[#*_`>]/g, '').replace(/\s+/g, ' ').trim();
+    return { ask, expect };
+  }
+  function flowCheck(t, lead) {   // who checks the result, and where it stands
+    const by = t.created_by || lead || '';
+    const you = (w) => sameName(w, myName());
+    if (state.questions.some((x) => x.task_id === t.id && x.status === 'open')) return { who: myName(), label: 'You decide', st: 'Needs you', c: 'warn' };
+    switch (t.status) {
+      case 'done': { const w = t.done_by || t.updated_by || by; return { who: w, label: sameName(w, myName()) ? 'You approved it' : sameName(w, t.assignee) ? `${w} finished it` : `${w} approved it`, st: `Done · ${fmtTime(t.done_at || t.updated_at)}`, c: 'ok' }; }
+      case 'review': return { who: lead || by, label: you(lead || by) ? 'You review it' : `${lead || by} reviews`, st: `In review · ${agoShort(t.updated_at)}`, c: 'accent' };
+      case 'qa': { const qa = teamNames().find((n) => /(^|[-_])(qa|test)/i.test(n)); return { who: qa || lead || by, label: `${qa || 'QA'} tests it`, st: 'In QA', c: 'accent' }; }
+      case 'blocked': return { who: by, label: you(by) ? 'You unblock it' : `${by} unblocks it`, st: 'Blocked', c: 'danger' };
+      case 'doing': return { who: by, label: you(by) ? 'You check it' : `${by} checks it`, st: `Doing · ${agoShort(t.updated_at)}`, c: 'accent' };
+      default: return { who: by, label: you(by) ? 'You check it' : `${by} checks it`, st: t.ready ? 'Ready to start' : `Waits for ${(t.waits_for || []).map((n) => '#' + n).join(', ')}`, c: t.ready ? 'ok' : 'muted' };
     }
-    let end = null; for (const [id, v] of best) if (v > (best.get(end) || 0)) end = id;
-    const crit = []; for (let id = end; id != null; id = prev.get(id)) crit.unshift(id);
-    return { cols, lone, edges, crit: (best.get(end) || 0) > 1 ? crit : [], left: best.get(end) || 0 };
+  }
+  function flowGroups(list, showDone) {
+    const groups = new Map();
+    for (const t of list) {
+      const k = t.request?.id ? 'r' + t.request.id : 'c' + (t.created_by || '').toLowerCase();
+      if (!groups.has(k)) groups.set(k, { key: k, req: t.request || null, tasks: [] });
+      groups.get(k).tasks.push(t);
+    }
+    let gs = [...groups.values()];
+    if (!showDone) gs = gs.filter((g) => g.tasks.some((t) => t.status !== 'done'));
+    gs.sort((a, b) => Math.max(...b.tasks.map((t) => t.updated_at)) - Math.max(...a.tasks.map((t) => t.updated_at)));   // most recent first
+    for (const g of gs) {
+      const n = new Map(); for (const t of g.tasks) n.set(t.created_by || '', (n.get(t.created_by || '') || 0) + 1);
+      g.planner = [...n].sort((a, b) => b[1] - a[1])[0][0];
+      // in task order, but a card always below what it waits for
+      const ids = new Map(g.tasks.map((t) => [t.id, t])), placed = new Set(), out = [];
+      const place = (t, seen = new Set()) => {
+        if (placed.has(t.id) || seen.has(t.id)) return; seen.add(t.id);
+        for (const x of (t.deps || []).filter((x) => ids.has(x.id)).sort((a, b) => a.id - b.id)) place(ids.get(x.id), seen);
+        placed.add(t.id); out.push(t);
+      };
+      [...g.tasks].sort((a, b) => a.id - b.id).forEach((t) => place(t));
+      g.tasks = out;
+    }
+    return gs;
+  }
+  function flowGroupHtml(g, lead) {
+    const RH = 124, GAP = 40, n = g.tasks.length, H = Math.max(n * RH + (n - 1) * GAP, 170);
+    const reqBy = g.req?.sender || '', humanPlanned = !g.planner || sameName(g.planner, reqBy) || (!g.req && sameName(g.planner, myName()));
+    const hasPlan = !!g.req && !humanPlanned;
+    const insX = g.req && hasPlan ? 370 : 220, IW = 270, expX = insX + IW + 30, EW = 172, dia = expX + EW + 34, stX = dia + 38, W = stX + 140;
+    const rowY = (i) => (H - (n * RH + (n - 1) * GAP)) / 2 + i * (RH + GAP);
+    const pos = new Map(g.tasks.map((t, i) => [t.id, rowY(i)]));
+    const av = (name, size = 18) => `<span class="fw-av" style="width:${size}px;height:${size}px;background:${colorFor(name)}">${esc(avInitials(name))}</span>`;
+    const parts = [], paths = [];
+    const arrow = (d, cls = '', label = '', lx = 0, ly = 0) => {
+      paths.push(`<path class="fw-e ${cls}" d="${d}" marker-end="url(#fwA${cls.includes('dep') ? 'd' : ''})"/>`);
+      if (label) { const w = label.length * 6.1 + 14; paths.push(`<rect class="fw-lb" x="${lx - w / 2}" y="${ly - 10}" width="${w}" height="19" rx="9.5"/><text class="fw-lt" x="${lx}" y="${ly + 3.5}" text-anchor="middle">${esc(label)}</text>`); }
+    };
+    // where it starts: the request, then who planned it
+    const midY = H / 2;
+    let srcX, srcName;
+    if (g.req) {
+      const rh = Math.min(H, 190);
+      parts.push(`<div class="fw-box fw-req" style="left:0;top:${midY - rh / 2}px;width:190px;height:${rh}px" title="${esc(g.req.content)}">
+        <div class="fw-who">${av(reqBy, 22)}<b>${esc(sameName(reqBy, myName()) ? `${reqBy} (you)` : reqBy)}</b><span class="mut">asked · ${esc(fmtTime(g.req.created_at))}</span></div>
+        <div class="fw-q">${esc(String(g.req.content).replace(/@[\w.-]+[,:]?\s*/g, '').replace(/[#*_`>]/g, '').trim())}</div></div>`);
+      srcX = 190; srcName = reqBy;
+      if (hasPlan) {
+        parts.push(`<div class="fw-box fw-plan" style="left:226px;top:${midY - 52}px;width:124px;height:104px"><div class="fw-who">${av(g.planner, 22)}<b>${esc(g.planner)}</b></div>
+          <div class="fw-s">Planned it: ${n} task${n === 1 ? '' : 's'}</div></div>`);
+        arrow(`M190 ${midY} L224 ${midY}`, '', 'asked', 207, midY - 18);
+        srcX = 350; srcName = g.planner;
+      }
+    } else {
+      parts.push(`<div class="fw-box fw-plan" style="left:0;top:${midY - 52}px;width:180px;height:104px"><div class="fw-who">${av(g.planner || '?', 22)}<b>${esc(g.planner || 'Someone')}</b></div>
+        <div class="fw-s">Added ${n} task${n === 1 ? '' : 's'}${sameName(g.planner, myName()) ? ' on the board' : ''}</div><div class="mut fw-xs">No request linked</div></div>`);
+      srcX = 180; srcName = g.planner;
+    }
+    g.tasks.forEach((t) => {
+      const y = pos.get(t.id), cy = y + RH / 2, { ask, expect } = flowParts(t), ck = flowCheck(t, lead);
+      const giver = t.created_by || '?', doer = t.assignee || 'anyone';
+      parts.push(`<button type="button" class="fw-box fw-ins s-${t.status}" data-opentk="${t.id}" style="left:${insX}px;top:${y}px;width:${IW}px;height:${RH}px">
+        <div class="fw-who sm">${av(giver)}<b>${esc(giver)}</b> asked ${t.assignee ? av(doer) : ''}<b>${esc(doer)}</b>${sameName(giver, doer) ? '<span class="mut">(itself)</span>' : ''}</div>
+        <div class="fw-t"><span class="mut">#${t.id}</span> ${esc(t.title)}</div>${ask ? `<div class="fw-a">${esc(ask)}</div>` : ''}${(t.deps || []).length ? `<div class="fw-w">${t.deps.map((x) => x.kind === 'contract' ? `uses #${x.id}'s contract` : `waits for #${x.id}`).join(' · ')}</div>` : ''}</button>`);
+      parts.push(`<button type="button" class="fw-box fw-exp ${expect ? '' : 'none'}" data-opentk="${t.id}" style="left:${expX}px;top:${y + 12}px;width:${EW}px;height:${RH - 24}px">
+        <div class="fw-h">Expected result</div><div class="fw-x">${expect ? esc(expect) : 'Not written yet: the task has no “Done when:” line'}</div></button>`);
+      paths.push(`<path class="fw-dia" d="M${dia} ${cy - 28} L${dia + 28} ${cy} L${dia} ${cy + 28} L${dia - 28} ${cy} Z"/>`);
+      parts.push(`<div class="fw-dav" style="left:${dia - 10}px;top:${cy - 10}px">${av(ck.who || '?', 20)}</div>`);
+      parts.push(`<div class="fw-st" style="left:${stX}px;top:${cy - 22}px"><div>${esc(ck.label)}</div><span class="fw-chip c-${ck.c}"><i></i>${esc(ck.st)}</span>${t.status === 'blocked' && t.note ? `<div class="mut fw-xs">${esc(t.note.slice(0, 80))}</div>` : ''}</div>`);
+      arrow(`M${insX + IW} ${cy} L${expX - 2} ${cy}`);
+      arrow(`M${expX + EW} ${cy} L${dia - 30} ${cy}`);
+      // the instruction: from whoever gave it
+      const from = sameName(giver, srcName) ? null : g.tasks.find((x) => x.id !== t.id && sameName(x.assignee, giver) && pos.get(x.id) < y);
+      if (from) {
+        const fy = pos.get(from.id) + RH;
+        arrow(`M${insX + 24} ${fy} C${insX - 30} ${fy + 20} ${insX - 40} ${cy} ${insX - 2} ${cy}`);
+      } else {
+        arrow(`M${srcX} ${midY} C${srcX + 20} ${midY} ${insX - 20} ${cy} ${insX - 2} ${cy}`);
+      }
+      // what it waits for, in this request
+      for (const dep of t.deps || []) {   // a line only to the row right above: further up, the card says it
+        const di = g.tasks.findIndex((x) => x.id === dep.id), ti = g.tasks.indexOf(t);
+        if (di < 0 || ti - di !== 1) continue;
+        const dy = pos.get(dep.id) + RH - 12, sx = expX + EW / 2, ex = insX + IW * 0.62;
+        arrow(`M${sx} ${dy} C${sx} ${dy + 22} ${ex} ${y - 22} ${ex} ${y - 2}`, 'dep');
+      }
+    });
+    return `<div class="fw" style="width:${W}px;height:${H}px"><svg class="fw-svg" width="${W}" height="${H}" aria-hidden="true"><defs>
+      <marker id="fwA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fw-ah"/></marker>
+      <marker id="fwAd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fw-ah dep"/></marker></defs>${paths.join('')}</svg>${parts.join('')}</div>`;
   }
   function flowHtml(list) {
+    if (!list.length) return '<div class="u-empty">No tasks yet. When the lead plans your request, each assignment shows here: who asked whom, what for, and the result they expect.</div>';
     const showDone = localGet('airc.flowDone') === '1';
-    const m = flowModel(list, showDone);
-    if (!list.length) return '<div class="u-empty">No tasks yet. The lead adds them when it plans, with what each one waits for.</div>';
-    const W = 196, H = 62, GX = 84, GY = 22, PAD = 24;
-    const pos = new Map();
-    m.cols.forEach((c, ci) => c.forEach((t, ri) => pos.set(t.id, { x: PAD + ci * (W + GX), y: PAD + ri * (H + GY), t, col: ci })));
-    const graphH = Math.max(0, ...m.cols.map((c) => c.length)) * (H + GY);
-    const loneY = PAD + graphH + (graphH ? 34 : 18);
-    const perRow = Math.max(1, Math.max(m.cols.length, 4));
-    m.lone.forEach((t, i) => pos.set(t.id, { x: PAD + (i % perRow) * (W + GX), y: loneY + Math.floor(i / perRow) * (H + GY), t }));
-    const width = PAD * 2 + Math.max(m.cols.length, Math.min(m.lone.length, perRow), 1) * (W + GX) - GX;
-    const height = (m.lone.length ? loneY + Math.ceil(m.lone.length / perRow) * (H + GY) : PAD + graphH) + PAD - (m.lone.length || graphH ? GY : 0);
-    const crit = new Set(m.crit), critE = new Set(m.crit.slice(1).map((id, i) => `${m.crit[i]}>${id}`));
-    const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
-    const edges = m.edges.map((e) => {
-      const a = pos.get(e.from), b = pos.get(e.to); if (!a || !b) return '';
-      const x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x - 6, y2 = b.y + H / 2;
-      let d;
-      if ((b.col ?? 0) - (a.col ?? 0) > 1) {   // skips a column: run along the gap between rows instead of through the boxes in between
-        const ym = Math.max(a.y, b.y) + H + GY / 2, r = GX / 2 - 6;
-        d = `M${x1} ${y1} C${x1 + r} ${y1} ${x1 + r} ${ym} ${x1 + GX / 2} ${ym} L${x2 - GX / 2 + 6} ${ym} C${x2 - r} ${ym} ${x2 - r} ${y2} ${x2} ${y2}`;
-      } else {
-        const dx = Math.max(30, (x2 - x1) / 2);
-        d = `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
-      }
-      return `<path class="fl-e ${e.kind === 'contract' ? 'k-contract' : ''} ${critE.has(`${e.from}>${e.to}`) ? 'crit' : ''}" d="${d}" marker-end="url(#flArrow${critE.has(`${e.from}>${e.to}`) ? 'C' : ''})"/>`;
-    }).join('');
-    const nodes = [...pos.values()].map(({ x, y, t }) => `<g class="fl-n s-${t.ready ? 'ready' : t.status} ${crit.has(t.id) ? 'crit' : ''}" data-opentk="${t.id}" tabindex="0" role="button" aria-label="#${t.id} ${esc(t.title)}, ${t.ready ? 'ready' : esc(t.status)}">
-      <rect class="bg" x="${x}" y="${y}" width="${W}" height="${H}" rx="9"/><rect x="${x}" y="${y}" width="${W}" height="${H}" rx="9"/>
-      <text x="${x + 12}" y="${y + 24}" class="t1"><tspan class="id">#${t.id}</tspan> ${esc(cut(t.title, 24))}</text>
-      <text x="${x + 12}" y="${y + 45}" class="t2">${t.assignee ? '@' + esc(cut(t.assignee, 14)) + ' · ' : ''}${t.ready ? 'ready' : esc(TK_LABEL[t.status] || t.status)}${t.waits_for?.length ? ` · waits ${t.waits_for.map((n) => '#' + n).join(' ')}` : ''}</text></g>`).join('');
-    const loneLabel = m.lone.length ? `<text x="${PAD}" y="${loneY - 10}" class="fl-lbl">NO DEPENDENCIES</text>` : '';
-    return `<div class="fl-bar"><span class="mut">${m.crit.length ? `<b>Critical path</b> ${m.crit.map((n) => '#' + n).join(' → ')} · ${m.left} task${m.left === 1 ? '' : 's'} left` : 'Drawn from what each card waits for. Click a box to open it.'}</span><span style="flex:1"></span>
-        <label class="mut"><input type="checkbox" id="flDone" ${showDone ? 'checked' : ''}> Show done</label>
-        <a class="tbtn" href="/api/rooms/${encodeURIComponent(state.current)}/plan.md" target="_blank" rel="noopener" title="The same chart as Mermaid; the watcher keeps docs/PLAN.md in step">PLAN.md</a></div>
-      <div class="fl-wrap"><svg class="fl" width="${width}" height="${Math.max(height, 80)}" viewBox="0 0 ${width} ${Math.max(height, 80)}" role="img" aria-label="Task dependencies">
-        <defs><marker id="flArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="fl-ah"/></marker>
-        <marker id="flArrowC" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="fl-ah crit"/></marker></defs>
-        ${loneLabel}${edges}${nodes}</svg></div>
-      <div class="fl-legend mut"><span><i class="sw s-todo"></i>to do</span><span><i class="sw s-ready"></i>ready</span><span><i class="sw s-doing"></i>doing</span><span><i class="sw s-review"></i>review</span><span><i class="sw s-qa"></i>QA</span><span><i class="sw s-blocked"></i>blocked</span><span><i class="sw s-done"></i>done</span>
-        <span>Solid arrow: waits for it to be done · dashed: needs only its contract · thick: critical path</span></div>`;
+    const lead = String(state.team[state.current]?.settings?.lead || '');
+    const gs = flowGroups(list, showDone);
+    return `<div class="fl-bar"><span class="mut">Read left to right: who asked, what they asked and of whom, the result they expect, and who checks it. Click a box for the task.</span><span class="sp"></span>
+        <label class="mut">Show <select id="flShow"><option value="open" ${showDone ? '' : 'selected'}>Open requests</option><option value="all" ${showDone ? 'selected' : ''}>All, with finished</option></select></label>
+        <a class="tbtn" href="/api/rooms/${encodeURIComponent(state.current)}/plan.md" target="_blank" rel="noopener" title="The plan as a Mermaid chart; the watcher keeps docs/PLAN.md in step">PLAN.md</a></div>
+      <div class="fl-wrap fw-wrap">${gs.length ? gs.map((g) => flowGroupHtml(g, lead)).join('<hr class="fw-sep">') : '<div class="u-empty">Every request is finished. Show “All, with finished” to see them.</div>'}</div>
+      <div class="fl-legend mut"><span><i class="sw"></i>instruction</span><span><i class="sw dash"></i>expected result</span><span><i class="sw dia"></i>who checks it</span><span><i class="sw line"></i>waits for</span></div>`;
   }
   $('#tasks').addEventListener('submit', async (e) => {
     if (e.target.id !== 'tkAdd') return;
@@ -5095,7 +5165,7 @@
     finally { $('#tdSave').disabled = false; }
   });
   $('#tasks').addEventListener('change', (e) => {
-    if (e.target.id === 'flDone') { localSet('airc.flowDone', e.target.checked ? '1' : '0'); renderTasks(); return; }
+    if (e.target.id === 'flShow') { localSet('airc.flowDone', e.target.value === 'all' ? '1' : '0'); renderTasks(); return; }
     const s = e.target.closest('[data-tkmove]');
     if (s) api(`/tasks/${s.dataset.tkmove}`, { method: 'PATCH', body: { status: s.value } }).catch((err) => alertInline(err.message));
   });
