@@ -2,6 +2,10 @@
 
 ## 0.5.1 (October 2026)
 
+### Fixed: an agent's question to you was cut short
+- **The whole question shows now.** Questions were cut at 1,000 characters, so a long one (a status report ending in a question) stopped mid-word. A question asked in a normal message also lost its line breaks, so lists ran together into one paragraph. Both are fixed, and questions already cut short show in full from their message.
+- **Long questions are easier to read:** normal weight instead of all bold, with lists and paragraphs as the agent wrote them.
+
 ### Archive projects
 - **Archive a project to hide it from the projects list.** Hover it and click the box icon, or use **⋯ → Archive the project** in Simple mode. It moves to a collapsed **Archived** list at the end; open it there and click **Unarchive** to bring it back. Nothing in it changes: chat, tasks, files, folder and team are kept, and a running team keeps running.
 
