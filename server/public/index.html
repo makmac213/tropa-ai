@@ -1610,6 +1610,15 @@
       <div><label class="f" for="aaRuns">Runs on</label><select id="aaRuns"><option value="cloud">Cloud</option><option value="ollama">Ollama</option><option value="openrouter">OpenRouter</option></select></div>
       <div><label class="f" for="aaModel">Model</label><input id="aaModel" spellcheck="false"></div>
     </div>
+    <div id="aaWhereRow" hidden>
+      <label class="f" for="aaWhere">Where it works</label>
+      <select id="aaWhere"><option value="local">This computer</option><option value="cloud">Claude's cloud (claude.ai/code)</option></select>
+      <div class="hint" id="aaWhereHelp" style="margin-bottom:10px" hidden>It works on your project's GitHub repository in a Claude Code cloud session, so its work goes on even while this computer sleeps. It can't read the room: TropaAI sends it the messages meant for it, and posts what it pushes to <code>tropa/&lt;name&gt;/…</code> branches here, while TropaAI is running on this computer. Before you add it:
+        <ul><li>Claude Code is signed in with your claude.ai account (Pro, Max, Team or Enterprise; API keys don't work)</li>
+        <li>GitHub is connected at <a href="https://claude.ai/code" target="_blank" rel="noopener">claude.ai/code</a>, and this project is on GitHub with its branch pushed</li>
+        <li>Optional: at claude.ai/code, pick the cloud environment (network access, setup script, variables) your sessions use</li></ul>
+        Its usage counts toward your Claude plan.</div>
+    </div>
     <label class="f" for="aaInstr">First instruction <small>optional · by default it asks the lead for work</small></label>
     <textarea id="aaInstr" rows="2"></textarea>
     <label class="set-radio"><input type="checkbox" id="aaStart" checked><span>Start it now<small>it joins the team's tmux session; the lead is told</small></span></label>
@@ -5420,14 +5429,19 @@
     $('#aaModel').setAttribute('list', listFor(aa.tool, runs));
     $('#aaModel').placeholder = hintFor(aa.tool, runs);
     if (resetModel) $('#aaModel').value = defaultFor(aa.tool, runs);
+    const canCloud = aa.tool === 'claude' && runs === 'cloud';
+    $('#aaWhereRow').hidden = !canCloud;
+    if (!canCloud) $('#aaWhere').value = 'local';
+    $('#aaWhereHelp').hidden = $('#aaWhere').value !== 'cloud';
   }
+  $('#aaWhere').addEventListener('change', () => aaRender(false));
   async function openAddAgent(fromReq) {
     try { state.host = await api('/host'); } catch { state.host = { connected: false }; }
     fillModelLists();
     const slug = projectOf(state.current);
     $('#aaTitle').textContent = `Add an agent to ${slug}`;
     $('#aaErr').innerHTML = state.host.connected ? '' : helperOff('agents can\'t be added right now');
-    $('#aaName').value = ''; $('#aaRole').value = ''; $('#aaInstr').value = ''; $('#aaStart').checked = true;
+    $('#aaName').value = ''; $('#aaRole').value = ''; $('#aaInstr').value = ''; $('#aaStart').checked = true; $('#aaWhere').value = 'local';
     aa.tool = (state.host.clis || []).includes('claude') || !(state.host.clis || []).length ? 'claude' : state.host.clis[0];
     aa.req = fromReq?.status === 'requested' ? fromReq : null;
     aa.clone = fromReq?.clone || aa.req?.agent?.clone_of || '';
@@ -5462,7 +5476,8 @@
     if ($('#aaModel').value.trim() === 'openrouter/') { $('#aaErr').textContent = 'Pick an OpenRouter model (openrouter/author/model).'; return; }
     $('#aaGo').disabled = true; $('#aaErr').textContent = '';
     try {
-      const body = { name, tool: aa.tool, model: fullModel(aa.tool, $('#aaModel').value), role: $('#aaRole').value.trim(), instruction: $('#aaInstr').value.trim(), ...(aa.clone ? { clone_of: aa.clone } : {}) };
+      const body = { name, tool: aa.tool, model: fullModel(aa.tool, $('#aaModel').value), role: $('#aaRole').value.trim(), instruction: $('#aaInstr').value.trim(), ...(aa.clone ? { clone_of: aa.clone } : {}),
+        ...(!$('#aaWhereRow').hidden && $('#aaWhere').value === 'cloud' ? { where: 'cloud' } : {}) };
       if (aa.req && aa.req.agent.name.toLowerCase() === name.toLowerCase()) await api(`/agent-requests/${aa.req.id}/approve`, { method: 'POST', body });
       else await api(`/projects/${encodeURIComponent(projectOf(state.current))}/agents`, { method: 'POST', body: { ...body, start: $('#aaStart').checked } });
       $('#addAgentDlg').close(); infoInline(`Adding @${name}… progress shows in the room.`);

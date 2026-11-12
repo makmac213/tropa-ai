@@ -3459,7 +3459,8 @@ function agentSpec(slug, b) {
     if (!src) throw new UserError(`there's no agent @${cleanName(b.clone_of)} on this team to clone`);
   }
   const a = { name: cleanName(b.name) || (src ? freeName(roomId, src) : ''), tool: String(b.tool || b.cli || (src ? '' : 'claude')).toLowerCase(), model: String(b.model || '').trim(),
-    role: String(b.role || '').trim().slice(0, 200), instruction: String(b.instruction || '').trim().slice(0, 2000), ...(src ? { clone_of: src } : {}) };
+    role: String(b.role || '').trim().slice(0, 200), instruction: String(b.instruction || '').trim().slice(0, 2000), ...(src ? { clone_of: src } : {}),
+    ...(b.where === 'cloud' ? { where: 'cloud' } : {}) };
   if (!a.name) throw new UserError('the agent needs a name (letters, digits, . _ -)');
   const low = a.name.toLowerCase();
   if (RESERVED.has(low) || low === HUMAN_NAME.toLowerCase()) throw new UserError(`"${a.name}" is a reserved name`);
@@ -3469,6 +3470,8 @@ function agentSpec(slug, b) {
   if (!(src && !a.tool) && !CLI_TOOLS.includes(a.tool)) throw new UserError(`CLI must be ${CLI_TOOLS.join(', ')}`);
   if (a.tool === 'gemini' && /^(ollama|openrouter)\//.test(a.model)) throw new UserError('Gemini CLI only runs Google\'s Gemini models');
   if (a.model && !/^[A-Za-z0-9._:/@-]{1,80}$/.test(a.model)) throw new UserError('invalid model id');
+  if (a.where === 'cloud' && (a.tool || 'claude') !== 'claude') throw new UserError("only Claude agents can work in Claude's cloud");
+  if (a.where === 'cloud' && /^(ollama|openrouter)\//.test(a.model)) throw new UserError("an agent in Claude's cloud runs Claude's own models");
   return a;
 }
 /** "<base>-2", "<base>-3"… : the first name not used by any agent (or pending request) */

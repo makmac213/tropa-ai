@@ -1147,7 +1147,23 @@ class Host:
         instr = a.get("instruction") or (f"You joined the team after it started. Read .agent_sync/TEAM.md, docs/ and the recent room history, "
                                          f"then ask {'@' + lead if lead else 'the human'} for your first task (one message) and wait for it.")
         setup = os.path.join(root, ".agent_sync", "setup_agent.py")
-        self.run([sys.executable, setup, "create", a["name"], a["tool"], role, instr, a.get("model") or ""])
+        cloud = a.get("where") == "cloud" and a["tool"] == "claude"
+        if cloud:   # Claude's cloud works on the project's GitHub repo: check it's there before creating anything
+            chk = os.path.join(root, ".agent_sync", "cloud_agent.py")
+            if not os.path.exists(chk):
+                raise RuntimeError("this project's team kit is older than cloud agents: it updates by itself within a few minutes (or run `tropa update` in the project folder)")
+            r = subprocess.run([sys.executable, chk, "check"], cwd=root, capture_output=True, text=True, timeout=60)
+            try:
+                c = json.loads(r.stdout.strip().splitlines()[-1])
+            except (ValueError, IndexError):
+                c = {}
+            if not c.get("claude"):
+                raise RuntimeError("Claude Code isn't installed on this computer, and cloud agents are started with it")
+            if not c.get("github"):
+                raise RuntimeError("Claude's cloud works on a GitHub repository, and this project isn't on GitHub yet. Push it to GitHub, then add the agent again")
+            if not c.get("pushed"):
+                self.report(job, f"Note: the branch `{c.get('branch') or '?'}` has work that isn't on GitHub yet; the cloud agent only sees what's pushed.")
+        self.run([sys.executable, setup, "create", a["name"], a["tool"], role, instr, a.get("model") or "", *(["--cloud"] if cloud else [])])
         self.run([sys.executable, setup, "refresh"])            # TEAM.md and everyone's roster now list the newcomer
         if a["tool"] == "claude" and job.get("trust"):
             self.trust_claude(root, [a["name"]])
@@ -1155,7 +1171,7 @@ class Host:
             self.trust_codex(root)
         if a["tool"] == "gemini" and job.get("trust"):
             self.trust_gemini(root)
-        desc = f"@{a['name']} ({a['tool']}{' · ' + a['model'] if a.get('model') else ''}), {role}" + (f" (a copy of @{src})" if src else "")
+        desc = f"@{a['name']} ({a['tool']}{' · ' + a['model'] if a.get('model') else ''}{' · in Claude' + chr(39) + 's cloud' if cloud else ''}), {role}" + (f" (a copy of @{src})" if src else "")
         if not job.get("start", True):
             self.report(job, f"➕ Added {desc}. Start it with `tropa panel {root}` (option 4).", status="done")
             return
