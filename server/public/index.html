@@ -437,7 +437,7 @@
   .msg .who { font-weight: 600; }
   .msg .who.k-human { color: var(--human); }
   .msg .tag { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
-  .msg .time, .msg .rid { color: var(--muted); font-size: 12px; }
+  .msg .time, .msg .rid { color: var(--muted); font-size: 12px; } .msg a.rid { text-decoration: none; } .msg a.rid:hover { text-decoration: underline; }
   .msg .roomtag { font-size: 12px; color: var(--accent); cursor: pointer; }
   .msg.k-system .body { color: var(--system); }
   .body { word-wrap: break-word; overflow-wrap: anywhere; }
@@ -1230,6 +1230,12 @@
   .sm .quote { margin-bottom: 6px; }
   .sm .st { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
   .smeta { margin-top: 3px; } .smeta .st { margin-left: 0; }
+  .sm .srid { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; text-decoration: none; opacity: 0; transition: opacity .15s; }
+  .su .srid { font-size: 11.5px; color: var(--muted); margin-left: 8px; text-decoration: none; opacity: 0; transition: opacity .15s; }
+  .sm:hover .srid, .sm:focus-within .srid, .su:hover .srid, .srid:focus-visible { opacity: 1; } .sm .srid:hover { text-decoration: underline; }
+  .smeta .srid:first-child { margin-left: 0; }
+  @media (hover: none) { .sm .srid, .su .srid { opacity: .7; } }
+  a.mref { color: var(--accent); text-decoration: none; font-weight: 500; } a.mref:hover { text-decoration: underline; }
   .sm-ag .ptag { opacity: 0; margin-left: 8px; font-weight: 400; transition: opacity .15s; } .sm-ag:hover .ptag { opacity: 1; }
   .sm-sys { display: flex; gap: 8px; align-items: flex-start; margin-left: 42px; color: var(--muted); } .sm-sys svg { flex: none; margin-top: 2px; }
   .sm-sys .body { font-size: 12.5px; color: var(--muted); } .sm-sys .body p { display: inline; margin: 0; } .sm-sys .body pre { font-size: 12px; }
@@ -1860,6 +1866,8 @@
          .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?]|$)/g, '$1<i>$2</i>')
          .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
          .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
+         .replace(/(^|[\s(\[])#(\d{1,12})\b(?![\w-])/g, (m, pre, id, off, all) => (/\b(?:PRs?|pr|pull|[Ii]ssues?|[Tt]ickets?)\s*$/.test(all.slice(0, off + pre.length)) ? m
+           : `${pre}<a href="#m${id}" class="mref" data-jump="${id}" title="Go to message #${id}">#${id}</a>`))
          .replace(/(^|[^\w&])@([A-Za-z0-9._-]{1,40})/g, (m, pre, n) => `${pre}<span class="at${n.toLowerCase() === myName().toLowerCase() ? ' at-me' : ''}">@${n}</span>`);
     // lists + paragraphs
     const lines = s.split('\n'); let out = ''; let list = null;
@@ -2096,7 +2104,7 @@
       <div>
         ${cont ? '' : `<div class="head"><span class="who k-${kind}">${esc(kind === 'system' ? 'TropaAI' : m.sender)}</span>${kind === 'human' ? '' : agentTag(m.sender)}${mentioned ? '<span class="foryou">For you</span>' : ''}
           ${showRoom ? `<span class="roomtag" data-room="${esc(m.room_id)}">${esc(roomLabel(m.room_id))}</span>` : ''}
-          <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><span class="rid">#${m.id}</span></div>`}
+          <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><a href="#m${m.id}" class="rid" data-jump="${m.id}" title="Message #${m.id}">#${m.id}</a></div>`}
         ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
         <div class="body">${md(msgText(m))}${kind === 'system' && !mentioned && !slashMsg ? `<span class="stime">${fmtTime(m.created_at)}</span>` : ''}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}${screenQ(m)}${oq ? `${oq.options?.length ? `<div class="mq">${oq.options.map((o, i) => `<button type="button" class="qopt ${i + 1 === oq.recommended ? 'rec' : ''}" data-qans="${oq.id}" data-ans="${esc(`${i + 1}. ${o}`)}">${esc(o)}${i + 1 === oq.recommended ? ' <span class="mut">· suggested</span>' : ''}</button>`).join('')}</div>` : ''}<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} · ${oq.options?.length ? 'other answer' : 'answer'}</button>` : ''}
       </div>
@@ -2177,6 +2185,27 @@
     if (!a || !(a.provider || a.model)) return '';
     const label = [a.provider, a.model].filter(Boolean).join(' · ');
     return `<span class="ptag" title="${esc(label)}">${esc(label)}</span>`;
+  }
+  // Go to a message by its number: in this room, an older part of it, or another room
+  async function jumpToMsg(id) {
+    const flash = () => { const el = document.getElementById('m' + id); if (!el) return false;
+      el.scrollIntoView({ block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); return true; };
+    if (!state.searching && flash()) return;
+    let m;
+    try { m = await api(`/messages/${id}`); } catch (err) { alertInline(err.message); return; }
+    if (state.searching) { const el = $('#search'); el.value = ''; state.searching = null; }
+    if (state.current !== m.room_id && state.current !== ALL) await selectRoom(m.room_id);
+    if (state.view !== 'chat' && projectOf(state.current)) { state.view = 'chat'; applyView(); }
+    const room = state.current === ALL ? m.room_id : state.current;
+    for (let i = 0; i < 40 && !(state.messages.get(room) || []).some((x) => x.id === id); i++) {   // load older pages until it's there
+      const before = (state.messages.get(room) || []).length;
+      await loadRoom(room, { older: true });
+      if ((state.messages.get(room) || []).length === before) break;
+    }
+    renderHeader(); renderMessages({ keepScroll: true });
+    const fold = [...document.querySelectorAll('.sfold[data-fold]')].find((f) => id >= Number(f.dataset.fold) && id <= Number(f.dataset.last));
+    if (fold && !document.getElementById('m' + id)) { state.unfold.add(fold.dataset.fold); renderMessages({ keepScroll: true }); }   // it's in folded team updates
+    requestAnimationFrame(() => { if (!flash()) infoInline(`Message #${id} is in ${roomLabel(m.room_id)}.`); });
   }
   function findMsg(id) {
     for (const arr of state.messages.values()) { const f = arr.find((m) => m.id === id); if (f) return f; }
@@ -4316,7 +4345,7 @@
     if (t.dataset.read) { const id = Number(t.dataset.read); if (tts.current === id) ttsStop(); else { const m = findMsg(id); if (m) speakMessages([m]); } return; }
     if (t.dataset.copy) { const m = findMsg(Number(t.dataset.copy)); if (m) navigator.clipboard?.writeText(m.content); t.textContent = 'Copied'; setTimeout(() => (t.textContent = 'Copy'), 1200); return; }
     if (t.dataset.del) { if (t.dataset.confirm) { await api(`/messages/${t.dataset.del}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); } else { t.dataset.confirm = '1'; t.textContent = 'Confirm?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = 'Delete'; }, 2500); } return; }
-    if (t.dataset.jump) { const el = document.getElementById('m' + t.dataset.jump); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } return; }
+    if (t.dataset.jump) { e.preventDefault(); jumpToMsg(Number(t.dataset.jump)); return; }
     if (t.dataset.editAgent) { openAgentEditor(t.dataset.editAgent); return; }
     if (t.dataset.delAgent) { if (t.dataset.confirm) await api(`/agents/${encodeURIComponent(t.dataset.delAgent)}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); else { t.dataset.confirm = '1'; t.textContent = '?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = '×'; }, 2500); } }
   });
@@ -5757,8 +5786,8 @@
     const flush = () => {
       if (!run.length) return;
       const key = String(run[0].id), open = state.unfold.has(key);
-      out += `<button type="button" class="sfold" data-fold="${key}" aria-expanded="${open}">${SICON.chev}${run.length} team update${run.length === 1 ? '' : 's'}</button>`;
-      if (open) out += `<div class="sfold-list">${run.map((m) => `<div class="su k-${m.sender_kind}" id="m${m.id}" data-id="${m.id}"><span class="who">${esc(m.sender_kind === 'system' ? 'TropaAI' : m.sender)}</span><span class="body">${md(msgText(m))}</span>${attsHtml(m)}</div>`).join('')}</div>`;
+      out += `<button type="button" class="sfold" data-fold="${key}" data-last="${run[run.length - 1].id}" aria-expanded="${open}">${SICON.chev}${run.length} team update${run.length === 1 ? '' : 's'}</button>`;
+      if (open) out += `<div class="sfold-list">${run.map((m) => `<div class="su k-${m.sender_kind}" id="m${m.id}" data-id="${m.id}"><span class="who">${esc(m.sender_kind === 'system' ? 'TropaAI' : m.sender)}</span><span class="body">${md(msgText(m))}</span><a href="#m${m.id}" class="srid" data-jump="${m.id}" title="Message #${m.id}">#${m.id}</a>${attsHtml(m)}</div>`).join('')}</div>`;
       run = []; prev = null;
     };
     let owed = false;   // the lead's first message after yours answers you, even when it also hands out work
@@ -5794,8 +5823,9 @@
     const parent = m.reply_to ? findMsg(m.reply_to) : null;
     const quote = m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : 'an earlier message'}</div>` : '';
     const extras = `${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}`;
-    const adv = !simple(), when = `<span class="st" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span>`;
-    if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div>${adv ? `<div class="smeta">${when}</div>` : ''}${extras}${actsHtml(m)}</div>`;
+    const adv = !simple(), rid = `<a href="#m${m.id}" class="srid" data-jump="${m.id}" title="Message #${m.id}: copy or search this number to find it again">#${m.id}</a>`;
+    const when = `<span class="st" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span>${rid}`;
+    if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div><div class="smeta">${adv ? when : rid}</div>${extras}${actsHtml(m)}</div>`;
     if (k === 'sys') return `<div class="sm sm-sys" id="m${m.id}" data-id="${m.id}">${SICON.info}<div class="body">${md(msgText(m))}${when}</div>${extras}</div>`;
     const waitQ = k === 'note' && /`([\w.-]+)` is waiting on a question in its terminal/.exec(m.content);
     if (waitQ) {   // answer it here with buttons, while the question is still on its screen
@@ -5809,7 +5839,7 @@
     }
     const q = state.questions.find((x) => x.message_id === m.id);
     const cont = prev && prev.sender === m.sender && m.created_at - prev.created_at < 10 * 60e3 && !m.reply_to && !q;
-    return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? '' : `<div class="sn">${esc(m.sender)}${adv ? `${when}${agentTag(m.sender)}` : ''}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;
+    return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? '' : `<div class="sn">${esc(m.sender)}${adv ? `${when}${agentTag(m.sender)}` : rid}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;
   }
   const ansText = (q) => String(q.answer || '').replace(new RegExp('^@' + q.agent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').replace(/^\d+\.\s+/, '');
   // the question in full: questions stored before the fix were cut at 1,000 characters with their line breaks

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Go to a message by its number
+- **`#17378` in a message is a link now:** click it to go to that message. It loads older messages, switches room, or opens folded team updates as needed. "PR #34" and "issue #12" stay plain text.
+- **Every message shows its number again** in the new layout (hover a message, like the classic layout); click it to go there.
+- **Search for a number** (`#17378` or `17378`) to find that message, along with the messages that mention it.
+
 ### Claude agents in Claude's cloud
 - **A Claude agent can work in Claude's cloud** (Claude Code on the web) instead of on this computer: **＋ Add agent → Where it works → Claude's cloud**. It works on the project's GitHub repository in a cloud session you can follow at claude.ai/code.
 - **TropaAI bridges it to the room:** the messages meant for it go to its session, and what it pushes to `tropa/<name>/…` branches, plus the messages it writes to `.tropa/outbox/<name>.md`, are posted in the room under its name.

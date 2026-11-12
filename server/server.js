@@ -1411,7 +1411,15 @@ api.post('/tts', async (req, res) => {
 api.get('/search', wrap((req) => {
   const term = String(req.query.q || '').trim();
   if (!term) return [];
-  return q.search.all(`%${term.replace(/[\\%_]/g, (c) => '\\' + c)}%`, 200).map(rowToMessage);
+  const found = q.search.all(`%${term.replace(/[\\%_]/g, (c) => '\\' + c)}%`, 200).map(rowToMessage);
+  const num = /^#?(\d{1,12})$/.exec(term);   // "#17378" or "17378": that message first
+  const hit = num && q.getMsg.get(Number(num[1]));
+  return hit ? [rowToMessage(hit), ...found.filter((m) => m.id !== hit.id)] : found;
+}));
+api.get('/messages/:id', wrap((req) => {   // where a message is, for "#17378" links
+  const r = q.getMsg.get(Number(req.params.id) || 0);
+  if (!r) throw new UserError(`message #${req.params.id} doesn't exist (it may have been deleted)`);
+  return rowToMessage(r);
 }));
 api.get('/agents', wrap(() => q.listAgents.all().map(agentView)));
 api.post('/agents/register', wrap((req) => {
