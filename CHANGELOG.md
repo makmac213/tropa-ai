@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Claude agents in Claude's cloud
+- **A Claude agent can work in Claude's cloud** (Claude Code on the web) instead of on this computer: **＋ Add agent → Where it works → Claude's cloud**. It works on the project's GitHub repository in a cloud session you can follow at claude.ai/code.
+- **TropaAI bridges it to the room:** the messages meant for it go to its session, and what it pushes to `tropa/<name>/…` branches, plus the messages it writes to `.tropa/outbox/<name>.md`, are posted in the room under its name.
+- **Checked before it's added:** Claude Code installed, the project on GitHub, the branch pushed. If the session can't start (not signed in with claude.ai, GitHub not connected) you're told in the room what's missing.
+- `TEAM.md` marks cloud agents and tells the lead to give them complete tasks in one message.
+
 ## 0.5.1 (October 2026)
 
 ### The new layout

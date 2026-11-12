@@ -58,6 +58,40 @@ def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
+# ---------- agents in Claude's cloud (cloud_agent.py) ----------
+def is_cloud(cfg, a):
+    try:
+        with open(os.path.join(cfg["root"], "agents", a, "agent.json")) as f:
+            return json.load(f).get("where") == "cloud"
+    except (OSError, ValueError):
+        return False
+
+
+def cloud_text(cfg, a, ev):
+    """What a cloud agent gets for a wake: the messages themselves (it can't call read_messages), then why."""
+    ids = sorted(int(i) for i in (ev.get("message_ids") or []) if str(i).isdigit())
+    parts = []
+    if ids:
+        try:
+            msgs = http(cfg, f"/rooms/{urllib.parse.quote(cfg['room'], safe='')}/messages?after={ids[0] - 1}&limit=60") or []
+            for m in msgs:
+                if m.get("id") in ids:
+                    parts.append(f"[#{m['id']}] {m.get('sender')}{' (human)' if m.get('sender_kind') == 'human' else ''}: {m.get('content', '')}")
+        except Exception as e:
+            log(f"couldn't read messages for {a}: {e}")
+    reason = str(ev.get("reason") or "").strip()
+    head = f"New in the team room ({cfg['room']}):" if parts else "From the team room:"
+    return "\n\n".join([head, *parts, *([f"({reason})"] if reason and not parts else [])])
+
+
+def cloud_send(cfg, a, text):
+    try:
+        r = subprocess.run([sys.executable, os.path.join(HERE, "cloud_agent.py"), "send", a], input=text, capture_output=True, text=True, timeout=300)
+        log(f"{a} (cloud): {'message sent' if r.returncode == 0 else 'message not delivered'}")
+    except Exception as e:
+        log(f"{a} (cloud): {e}")
+
+
 # ---------- TropaAI ----------
 def tropa_key(server):
     """The server's key (~/.tropa/secret-<port>.key, made by tropa start), sent as X-Tropa-Key with every change.
@@ -777,6 +811,9 @@ class Watcher:
             return
         if ev.get("type") == "wake":
             if not a:
+                return
+            if is_cloud(self.cfg, a):   # it can't read the room: send it the messages themselves
+                threading.Thread(target=cloud_send, args=(self.cfg, a, cloud_text(self.cfg, a, ev)), daemon=True).start()
                 return
             self.deliver(a, ev.get("text") or wake_text(self.cfg, a, ev.get("reason", "")), ev.get("reason", ""))
         elif ev.get("type") == "command":

@@ -332,6 +332,23 @@ The team's watcher lists and reads the files, so the view works while the team i
 
 In the Team view, click **＋ Add agent**. Pick a name, role, CLI, Cloud or Ollama, and a model. The host helper creates the agent, starts it in the team's tmux session, updates `TEAM.md` for everyone, and tells the lead it can hand out work. From a terminal, `tropa panel` → 1 still works.
 
+### Claude agents in Claude's cloud
+
+A Claude agent can work in **Claude's cloud** (Claude Code on the web, claude.ai/code) instead of on this computer. In **＋ Add agent**, pick the Claude CLI and **Where it works → Claude's cloud**. It works on your project's GitHub repository in a cloud session, so its work goes on while this computer sleeps, and you can follow it at claude.ai/code.
+
+**What it needs**
+- Claude Code signed in with your claude.ai account (`claude auth login`; a Pro, Max, Team or Enterprise plan; API keys don't work). Its usage counts toward your plan.
+- GitHub connected at claude.ai/code (install the Claude GitHub app, or run `/web-setup` in Claude Code).
+- The project on GitHub, with your branch pushed: the cloud session clones the repository and only sees what's pushed. TropaAI checks this when you add the agent.
+- Optional: at claude.ai/code, choose the **cloud environment** your sessions use (network access, a setup script that installs your dependencies, environment variables). Claude Code uses your default one.
+
+**How it talks to the team.** A cloud session can't reach this computer, so it can't read the room. TropaAI bridges the two while it's running here:
+- The messages meant for it are sent to its session (`claude -p --cloud <session>`). The first one starts the session with its role and job.
+- It reports back through GitHub: it pushes to branches named `tropa/<name>/<topic>`, and anything it writes in `.tropa/outbox/<name>.md` in its branch is posted in the room under its name. TropaAI checks its branches every 45 seconds and posts new commits with a compare link. When a task is done it opens a pull request.
+- Give it complete tasks in one message; the lead is told how in `TEAM.md`.
+
+Its window in the tmux session shows the session link; the log is in `agents/<name>/cloud.log`. To carry on its work on this computer, run `claude --teleport <session>` in the project folder.
+
 ### 🧑‍🤝‍🧑 The team can grow itself
 
 When the work needs a role nobody on the team has, **the lead can add a teammate** with the `request_agent` tool (name, CLI, model, role and why). What happens next is set by **New agents** in the ▦ Team bar:

@@ -394,6 +394,9 @@ def skill_rules(cfg, a):
     return "\n".join(lines) + "\n"
 
 
+CLOUD_TAG = " (in Claude's cloud)"
+
+
 def write_team(cfg):
     lead = cfg["lead"]
     rows = all_agents(cfg)
@@ -419,10 +422,15 @@ def write_team(cfg):
         "|---|---|---|---|---|",
     ]
     for a in rows:
-        lines.append(f"| `@{a['name']}` | {'★' if a['name'] == lead else ('QA' if duty(cfg, a) == 'qa' else '')} | {a['provider']} | "
+        lines.append(f"| `@{a['name']}` | {'★' if a['name'] == lead else ('QA' if duty(cfg, a) == 'qa' else '')} | {a['provider']}{CLOUD_TAG if a.get('where') == 'cloud' else ''} | "
                      f"{a.get('model') or 'CLI default'} | {a.get('role', '')} |")
     if not rows:
         lines.append("| — | | | | |")
+    cloud = [x["name"] for x in rows if x.get("where") == "cloud"]
+    if cloud:
+        lines += ["", "**Agents in Claude's cloud:** " + ", ".join(f"`@{n}`" for n in cloud) + ". They can't read this room: "
+                  "each message that mentions them is sent to them as it is, so give them a complete, self-contained task in one message. "
+                  "They report back by pushing to `tropa/<name>/…` branches; TropaAI posts their commits and messages here, and they open a pull request when done."]
     dump(os.path.join(config.HERE, "TEAM.md"), "\n".join(lines) + "\n")
 
 
@@ -760,7 +768,8 @@ def main():
     cmd = args.pop(0)
     if cmd == "create":
         lead = "--lead" in args
-        args = [x for x in args if x != "--lead"]
+        cloud = "--cloud" in args   # a Claude agent that works in Claude's cloud (cloud_agent.py)
+        args = [x for x in args if x not in ("--lead", "--cloud")]
         prompt = ""
         if "--prompt" in args:   # the member's job description (ready-made teams)
             i = args.index("--prompt")
@@ -774,6 +783,8 @@ def main():
              "role": role, "instruction": instruction}
         if prompt.strip():
             a["prompt"] = prompt.strip()
+        if cloud and tool == "claude":
+            a["where"] = "cloud"
         dump(os.path.join(agents_dir(cfg), name, "agent.json"), a)
         if lead:
             config.save_key("lead", name)

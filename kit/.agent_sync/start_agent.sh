@@ -43,6 +43,8 @@ exec_agent() {
     export TROPA_AGENT="$SESSION_NAME/$name"
     # Rebuild config from agent.json + settings so roster, lead and paths are always current.
     python3 "$HERE/setup_agent.py" refresh "$name"
+    # a Claude agent that works in Claude's cloud: this window keeps its cloud session in touch with the room
+    if [ "$(field agent.json where)" = cloud ]; then exec python3 "$HERE/cloud_agent.py" run "$name"; fi
     local tool model role provider project room history human docs flags
     tool=$(field agent.json tool); model=$(field agent.json model)
     role=$(field agent.json role); provider=$(field agent.json provider)
