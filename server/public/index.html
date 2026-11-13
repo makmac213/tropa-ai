@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TropaAI</title>
 <link rel="icon" type="image/png" href="favicon.png">
-<script>try { const t = localStorage.getItem("airc.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; const p = localStorage.getItem("airc.palette"); if (p && p !== "graphite") document.documentElement.dataset.palette = p; } catch {}</script>
+<script>try { const t = localStorage.getItem("airc.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; const p = localStorage.getItem("airc.palette") || "moss"; if (p !== "graphite") document.documentElement.dataset.palette = p; } catch {}</script>
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
   /* Themes: dark by default; light via the OS setting (Auto) or the ◐ toggle (data-theme on <html>). */
@@ -2849,7 +2849,7 @@
       voices.filter((v) => !NOVELTY.test(v.name)).map((v) => `<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)}${v.localService ? '' : ', online'})</option>`).join('');
     mv.value = voices.some((v) => v.name === tts.mVoice) ? tts.mVoice : '';
   }
-  function openSettings() { renderOr(); api('/host').then((h) => { state.host = h; renderOr(); }).catch(() => {}); renderTtsSettings(); $('#notifySound').checked = localGet('airc.notifySound') !== 'off'; document.querySelectorAll('input[name="layout"]').forEach((r) => { r.checked = r.value === (localGet('airc.layout') === 'classic' ? 'classic' : 'quiet'); }); const pv = localGet('airc.palette') || 'graphite'; document.querySelectorAll('input[name="palette"]').forEach((r) => { r.checked = r.value === pv; }); renderPalNote(); $('#settingsDlg').showModal(); ttsInit(); waitForVoices().then(() => renderTtsSettings()); }
+  function openSettings() { renderOr(); api('/host').then((h) => { state.host = h; renderOr(); }).catch(() => {}); renderTtsSettings(); $('#notifySound').checked = localGet('airc.notifySound') !== 'off'; document.querySelectorAll('input[name="layout"]').forEach((r) => { r.checked = r.value === (localGet('airc.layout') === 'classic' ? 'classic' : 'quiet'); }); const pv = localGet('airc.palette') || 'moss'; document.querySelectorAll('input[name="palette"]').forEach((r) => { r.checked = r.value === pv; }); renderPalNote(); $('#settingsDlg').showModal(); ttsInit(); waitForVoices().then(() => renderTtsSettings()); }
   try { window.speechSynthesis?.addEventListener?.('voiceschanged', () => { if ($('#settingsDlg')?.open) renderTtsSettings(); }); } catch {}
 
   function readCommand(arg) {
@@ -3858,7 +3858,7 @@
   const PALETTES = ['graphite', 'ink', 'ember', 'plum', 'moss', 'oled'];
   function applyPalette(p) { if (p && p !== 'graphite') document.documentElement.dataset.palette = p; else delete document.documentElement.dataset.palette; }
   function setPalette(p) {
-    if (!PALETTES.includes(p)) p = 'graphite';
+    if (!PALETTES.includes(p)) p = 'moss';
     localSet('airc.palette', p); applyPalette(p); renderPalNote();
   }
   function renderPalNote() {
@@ -3866,7 +3866,7 @@
     const dark = document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
     el.textContent = dark ? '' : 'You are in light mode now: these colours show when TropaAI is dark (the moon button at the bottom of the sidebar).';
   }
-  applyPalette(localGet('airc.palette') || 'graphite');
+  applyPalette(localGet('airc.palette') || 'moss');
   document.addEventListener('change', (e) => { if (e.target.name === 'palette') setPalette(e.target.value); });
   function setTheme(t) {
     if (t === 'next') t = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
