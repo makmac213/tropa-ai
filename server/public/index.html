@@ -163,6 +163,8 @@
   .rail-me { width: 32px; height: 32px; border-radius: 50%; border: 0; margin-top: 8px; background: #8a5a10; color: #fff; font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; }
   .rail-pop { position: absolute; left: 62px; z-index: 50; min-width: 230px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 40px var(--shadow); padding: 8px; }
   .rail-pop .room { width: 100%; }
+  .rail-pop .pm { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 8px 10px; cursor: pointer; color: var(--text); font: inherit; font-size: 14px; }
+  .rail-pop .pm:hover, .rail-pop .pm:focus-visible { background: var(--panel2); } .rail-pop .pm.danger { color: var(--danger); }
   .me-pop { bottom: 12px; display: flex; flex-direction: column; gap: 6px; padding: 12px; } .me-pop label { font-size: 12px; color: var(--muted); }
   .me-pop input { width: 100%; }
   .hdr-mode { display: contents; }
@@ -289,6 +291,11 @@
   .hrow { display: flex; align-items: center; gap: 6px; min-height: 52px; position: relative; }
   /* the views as tabs (Advanced): Chat · Team · Tasks · Docs · Usage */
   .vtabs { display: flex; gap: 2px; margin: -4px 0 -1px; overflow-x: auto; scrollbar-width: none; }
+  .vtabs .tpower { margin: 2px 2px 6px auto; align-self: center; flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px;
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--text); white-space: nowrap; }
+  .vtabs .tpower.stop svg { color: var(--danger); } .vtabs .tpower.stop:hover { border-color: var(--danger); }
+  .vtabs .tpower.start { background: var(--fill-accent); border-color: var(--fill-accent); color: var(--on-accent); }
+  .vtabs .tpower:disabled { opacity: .6; cursor: default; }
   .vtab { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px 9px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; white-space: nowrap; }
   .vtab:hover { color: var(--text); } .vtab.on { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
   .vtab .n { font-size: 11.5px; font-weight: 500; color: var(--muted); background: var(--panel2); border-radius: 9px; padding: 0 6px; font-variant-numeric: tabular-nums; }
@@ -437,7 +444,7 @@
   .msg .who { font-weight: 600; }
   .msg .who.k-human { color: var(--human); }
   .msg .tag { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
-  .msg .time, .msg .rid { color: var(--muted); font-size: 12px; }
+  .msg .time, .msg .rid { color: var(--muted); font-size: 12px; } .msg a.rid { text-decoration: none; } .msg a.rid:hover { text-decoration: underline; }
   .msg .roomtag { font-size: 12px; color: var(--accent); cursor: pointer; }
   .msg.k-system .body { color: var(--system); }
   .body { word-wrap: break-word; overflow-wrap: anywhere; }
@@ -585,6 +592,7 @@
   .room .del:hover { color: var(--danger); }
   .room .del.ic { display: inline-grid; place-items: center; } .room .del.ic:hover { color: var(--text); }
   .room .del.ic svg { width: 14px; height: 14px; }
+  .rail-pop .room .del { opacity: 1; padding: 4px 6px; } .rail-pop .room .del.ic svg { width: 16px; height: 16px; } .rail-pop .room { gap: 4px; }
   .arch-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 16px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; text-align: left; }
   .arch-toggle:hover { color: var(--text); } .arch-toggle svg { width: 12px; height: 12px; transition: transform .15s; } .arch-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
   .arch-list .room .name { color: var(--muted); }
@@ -1189,6 +1197,7 @@
   .more-menu button:hover, .more-menu button:focus-visible { background: var(--panel2); }
   .more-menu button .k { margin-left: auto; color: var(--muted); font-size: 12px; }
   .more-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+  .more-menu button.danger { color: var(--danger); }
   #newProjBtn { display: none; }
   body.simple #newProjBtn { display: flex; align-items: center; gap: 10px; margin: 10px 12px 6px; width: calc(100% - 24px); height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-weight: 600; cursor: pointer; }
   body.simple #newProjBtn:hover { border-color: var(--accent); }
@@ -1230,6 +1239,12 @@
   .sm .quote { margin-bottom: 6px; }
   .sm .st { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
   .smeta { margin-top: 3px; } .smeta .st { margin-left: 0; }
+  .sm .srid { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; text-decoration: none; opacity: 0; transition: opacity .15s; }
+  .su .srid { font-size: 11.5px; color: var(--muted); margin-left: 8px; text-decoration: none; opacity: 0; transition: opacity .15s; }
+  .sm:hover .srid, .sm:focus-within .srid, .su:hover .srid, .srid:focus-visible { opacity: 1; } .sm .srid:hover { text-decoration: underline; }
+  .smeta .srid:first-child { margin-left: 0; }
+  @media (hover: none) { .sm .srid, .su .srid { opacity: .7; } }
+  a.mref { color: var(--accent); text-decoration: none; font-weight: 500; } a.mref:hover { text-decoration: underline; }
   .sm-ag .ptag { opacity: 0; margin-left: 8px; font-weight: 400; transition: opacity .15s; } .sm-ag:hover .ptag { opacity: 1; }
   .sm-sys { display: flex; gap: 8px; align-items: flex-start; margin-left: 42px; color: var(--muted); } .sm-sys svg { flex: none; margin-top: 2px; }
   .sm-sys .body { font-size: 12.5px; color: var(--muted); } .sm-sys .body p { display: inline; margin: 0; } .sm-sys .body pre { font-size: 12px; }
@@ -1312,6 +1327,7 @@
     <button type="button" class="rail-btn dashed" id="railNew" data-tip="New project" aria-label="New project"></button>
     <button type="button" class="rail-btn" id="railArch" data-tip="Archived projects" aria-label="Archived projects" aria-expanded="false" hidden></button>
     <div class="rail-pop" id="railArchPop" hidden></div>
+    <div class="rail-pop" id="railProjPop" role="menu" hidden></div>
     <span class="rail-sep"></span>
     <div class="rail-feeds" id="railFeeds"></div>
     <span class="rail-sp"></span>
@@ -1376,6 +1392,7 @@
         <button class="vtab" id="tasksBtn" hidden title="The team's task board">Tasks</button>
         <button class="vtab" id="docsBtn" hidden title="Browse the project's docs folder">Docs</button>
         <button class="vtab" id="usageBtn" hidden title="Tokens and API-equivalent cost for this project">Usage</button>
+        <button type="button" class="tpower" id="teamPower" hidden></button>
       </nav>
     </header>
     <div class="room-note" id="roomNote" hidden></div>
@@ -1860,6 +1877,8 @@
          .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?]|$)/g, '$1<i>$2</i>')
          .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
          .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
+         .replace(/(^|[\s(\[])#(\d{1,12})\b(?![\w-])/g, (m, pre, id, off, all) => (/\b(?:PRs?|pr|pull|[Ii]ssues?|[Tt]ickets?)\s*$/.test(all.slice(0, off + pre.length)) ? m
+           : `${pre}<a href="#m${id}" class="mref" data-jump="${id}" title="Go to message #${id}">#${id}</a>`))
          .replace(/(^|[^\w&])@([A-Za-z0-9._-]{1,40})/g, (m, pre, n) => `${pre}<span class="at${n.toLowerCase() === myName().toLowerCase() ? ' at-me' : ''}">@${n}</span>`);
     // lists + paragraphs
     const lines = s.split('\n'); let out = ''; let list = null;
@@ -2049,6 +2068,7 @@
       b.hidden = !views; b.classList.toggle('on', on); b.setAttribute('aria-current', on ? 'page' : 'false'); b.removeAttribute('aria-pressed');
       b.innerHTML = `${HICON[v]}${label}${n ? `<span class="n">${n}</span>` : ''}`;
     }
+    renderTeamPower(views);
     $('#skillsBtn').hidden = !proj || !!state.searching;
     $('#skillsBtn').className = 'dl-btn ic'; $('#skillsBtn').innerHTML = HICON.skills; $('#skillsBtn').setAttribute('aria-label', 'Skills');
     const oq = openQs(state.current).length, dq = state.questions.filter((q) => q.room_id === state.current && q.status !== 'open').length;
@@ -2096,7 +2116,7 @@
       <div>
         ${cont ? '' : `<div class="head"><span class="who k-${kind}">${esc(kind === 'system' ? 'TropaAI' : m.sender)}</span>${kind === 'human' ? '' : agentTag(m.sender)}${mentioned ? '<span class="foryou">For you</span>' : ''}
           ${showRoom ? `<span class="roomtag" data-room="${esc(m.room_id)}">${esc(roomLabel(m.room_id))}</span>` : ''}
-          <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><span class="rid">#${m.id}</span></div>`}
+          <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><a href="#m${m.id}" class="rid" data-jump="${m.id}" title="Message #${m.id}">#${m.id}</a></div>`}
         ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
         <div class="body">${md(msgText(m))}${kind === 'system' && !mentioned && !slashMsg ? `<span class="stime">${fmtTime(m.created_at)}</span>` : ''}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}${screenQ(m)}${oq ? `${oq.options?.length ? `<div class="mq">${oq.options.map((o, i) => `<button type="button" class="qopt ${i + 1 === oq.recommended ? 'rec' : ''}" data-qans="${oq.id}" data-ans="${esc(`${i + 1}. ${o}`)}">${esc(o)}${i + 1 === oq.recommended ? ' <span class="mut">· suggested</span>' : ''}</button>`).join('')}</div>` : ''}<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} · ${oq.options?.length ? 'other answer' : 'answer'}</button>` : ''}
       </div>
@@ -2177,6 +2197,27 @@
     if (!a || !(a.provider || a.model)) return '';
     const label = [a.provider, a.model].filter(Boolean).join(' · ');
     return `<span class="ptag" title="${esc(label)}">${esc(label)}</span>`;
+  }
+  // Go to a message by its number: in this room, an older part of it, or another room
+  async function jumpToMsg(id) {
+    const flash = () => { const el = document.getElementById('m' + id); if (!el) return false;
+      el.scrollIntoView({ block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); return true; };
+    if (!state.searching && flash()) return;
+    let m;
+    try { m = await api(`/messages/${id}`); } catch (err) { alertInline(err.message); return; }
+    if (state.searching) { const el = $('#search'); el.value = ''; state.searching = null; }
+    if (state.current !== m.room_id && state.current !== ALL) await selectRoom(m.room_id);
+    if (state.view !== 'chat' && projectOf(state.current)) { state.view = 'chat'; applyView(); }
+    const room = state.current === ALL ? m.room_id : state.current;
+    for (let i = 0; i < 40 && !(state.messages.get(room) || []).some((x) => x.id === id); i++) {   // load older pages until it's there
+      const before = (state.messages.get(room) || []).length;
+      await loadRoom(room, { older: true });
+      if ((state.messages.get(room) || []).length === before) break;
+    }
+    renderHeader(); renderMessages({ keepScroll: true });
+    const fold = [...document.querySelectorAll('.sfold[data-fold]')].find((f) => id >= Number(f.dataset.fold) && id <= Number(f.dataset.last));
+    if (fold && !document.getElementById('m' + id)) { state.unfold.add(fold.dataset.fold); renderMessages({ keepScroll: true }); }   // it's in folded team updates
+    requestAnimationFrame(() => { if (!flash()) infoInline(`Message #${id} is in ${roomLabel(m.room_id)}.`); });
   }
   function findMsg(id) {
     for (const arr of state.messages.values()) { const f = arr.find((m) => m.id === id); if (f) return f; }
@@ -2349,7 +2390,7 @@
       }
       else if (e.type === 'agent_deleted') { state.agents = state.agents.filter((a) => a.name !== e.name); renderSidebar(); }
       else if (e.type === 'docs') docsChanged(e.docs);
-      else if (e.type === 'team') { state.team[e.team.room_id] = e.team; if (e.team.room_id === state.current) { renderSidebar(); if (state.view === 'team') renderTeam(); } }
+      else if (e.type === 'team') { state.team[e.team.room_id] = e.team; if (e.team.room_id === state.current) { renderSidebar(); renderTeamPower(); if (state.view === 'team') renderTeam(); } }
       else if (e.type === 'reads') {
         const t = state.team[e.room_id]; if (t) { t.reads ||= {}; t.reads[e.agent] = e.last_read; }
         if (e.room_id === state.current && simpleChat()) renderWorking();
@@ -3159,6 +3200,31 @@
     try { await api(`/rooms/${encodeURIComponent(state.current)}/fix`, { method: 'POST', body: {} }); b.textContent = 'Done: see the chat'; }
     catch (err) { alertInline(err.message); b.textContent = label; }
     setTimeout(() => { b.disabled = false; b.textContent = label; rsLast = ''; renderRside(); }, 4000);
+  });
+  // Start / Stop the team, at the right end of the view tabs
+  const teamPower = { busy: '', until: 0 };
+  function renderTeamPower(show = !$('#viewTabs').hidden) {
+    const b = $('#teamPower'), t = state.team[state.current] || {};
+    b.hidden = !show; if (!show) return;
+    if (teamPower.busy && Date.now() > teamPower.until) teamPower.busy = '';
+    if (teamPower.busy === 'start' && t.watching) teamPower.busy = '';
+    if (teamPower.busy === 'stop' && !t.watching) teamPower.busy = '';
+    const on = !!t.watching, busy = teamPower.busy;
+    b.disabled = !!busy;
+    b.className = `tpower ${on ? 'stop' : 'start'}`;
+    b.innerHTML = busy ? (busy === 'start' ? 'Starting…' : 'Stopping…')
+      : on ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Stop team'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>Start team';
+    b.title = on ? 'Stop every agent and the room watcher. Chat, tasks and files stay; Start brings them back where they left off.'
+      : 'Start every agent and the room watcher';
+  }
+  $('#teamPower').addEventListener('click', async () => {
+    const t = state.team[state.current] || {}, id = state.current, on = !!t.watching;
+    if (on && !confirm(`Stop the team for ${projectOf(id)}?\n\nEvery agent and the room watcher stop, and work in progress is interrupted. Chat, tasks and files stay as they are.\n\nStart it again any time: each agent picks up its conversation where it left off.`)) return;
+    teamPower.busy = on ? 'stop' : 'start'; teamPower.until = Date.now() + 60e3; renderTeamPower();
+    try { await api(`/rooms/${encodeURIComponent(id)}/${on ? 'stop' : 'start'}`, { method: 'POST', body: {} }); }
+    catch (err) { alertInline(err.message); teamPower.busy = ''; }
+    renderTeamPower();
   });
   document.addEventListener('click', async (e) => {
     const b = e.target.closest('#startTeam'); if (!b) return;
@@ -4316,7 +4382,7 @@
     if (t.dataset.read) { const id = Number(t.dataset.read); if (tts.current === id) ttsStop(); else { const m = findMsg(id); if (m) speakMessages([m]); } return; }
     if (t.dataset.copy) { const m = findMsg(Number(t.dataset.copy)); if (m) navigator.clipboard?.writeText(m.content); t.textContent = 'Copied'; setTimeout(() => (t.textContent = 'Copy'), 1200); return; }
     if (t.dataset.del) { if (t.dataset.confirm) { await api(`/messages/${t.dataset.del}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); } else { t.dataset.confirm = '1'; t.textContent = 'Confirm?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = 'Delete'; }, 2500); } return; }
-    if (t.dataset.jump) { const el = document.getElementById('m' + t.dataset.jump); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } return; }
+    if (t.dataset.jump) { e.preventDefault(); jumpToMsg(Number(t.dataset.jump)); return; }
     if (t.dataset.editAgent) { openAgentEditor(t.dataset.editAgent); return; }
     if (t.dataset.delAgent) { if (t.dataset.confirm) await api(`/agents/${encodeURIComponent(t.dataset.delAgent)}`, { method: 'DELETE' }).catch((err) => alertInline(err.message)); else { t.dataset.confirm = '1'; t.textContent = '?'; setTimeout(() => { delete t.dataset.confirm; t.textContent = '×'; }, 2500); } }
   });
@@ -5625,12 +5691,26 @@
     const tip = (r) => { const nq = openQs(r.id).length; return name(r) + (nq ? ` · ${nq} question${nq === 1 ? '' : 's'} for you` : ''); };
     $('#railProj').innerHTML = live.map((r) => `<button type="button" class="rail-btn ${r.id === state.current ? 'active' : ''}" data-room="${esc(r.id)}" data-tip="${esc(tip(r))}" aria-label="${esc(tip(r))}"${r.id === state.current ? ' aria-current="page"' : ''}>${esc(projInitials(r))}${dot(r)}</button>`).join('');
     $('#railArch').hidden = !arch.length;
-    $('#railArchPop').innerHTML = '<div class="cmdk-g">Archived projects</div>' + arch.map((r) => `<button type="button" class="room ${r.id === state.current ? 'active' : ''}" data-room="${esc(r.id)}"><span class="hash">#</span><span class="name">${esc(name(r))}</span><span class="del ic" data-unarchive-project="${esc(r.id)}" title="Unarchive" role="button" aria-label="Unarchive ${esc(name(r))}">${HICON.unarchive}</span></button>`).join('');
+    $('#railArchPop').innerHTML = '<div class="cmdk-g">Archived projects</div>' + arch.map((r) => `<button type="button" class="room ${r.id === state.current ? 'active' : ''}" data-room="${esc(r.id)}"><span class="hash">#</span><span class="name">${esc(name(r))}</span><span class="del ic" data-unarchive-project="${esc(r.id)}" title="Unarchive (show it in the rail again)" role="button" aria-label="Unarchive ${esc(name(r))}">${HICON.unarchive}</span><span class="del" data-del-project="${esc(r.project)}" title="Delete project" role="button" aria-label="Delete ${esc(name(r))}">×</span></button>`).join('');
     const feeds = [[ALL, 'All activity', RIC.feed], ...(simple() ? [] : [[USAGE, 'Usage', HICON.usage]]), ['general', '#general', RIC.hash]];
     $('#railFeeds').innerHTML = feeds.map(([id, l, ic]) => { const u = id !== state.current && state.rooms.find((x) => x.id === id)?.unread_live;
       return `<button type="button" class="rail-btn ${id === state.current ? 'active' : ''}" data-room="${esc(id)}" data-tip="${esc(l)}" aria-label="${esc(l)}">${ic}${u ? '<i class="dot u"></i>' : ''}</button>`; }).join('');
     const ini = String(myName()).replace(/[^A-Za-z0-9]/g, ''); $('#railMe').textContent = (ini.slice(0, 1).toUpperCase() + ini.slice(1, 2).toLowerCase()) || '?'; $('#railMe').title = `You are ${myName()}`; $('#railMe').setAttribute('aria-label', `You are ${myName()}: change your name`);
   }
+  // right-click a project in the rail: open, archive or delete it
+  $('#railProj').addEventListener('contextmenu', (e) => {
+    const b = e.target.closest('[data-room]'); if (!b) return;
+    e.preventDefault(); closePops();
+    const r = state.rooms.find((x) => x.id === b.dataset.room); if (!r) return;
+    const pop = $('#railProjPop'), nm = esc(simple() ? projectTitle(r) : r.project);
+    pop.innerHTML = `<div class="cmdk-g">${nm}</div>
+      <button type="button" class="pm" role="menuitem" data-room="${esc(r.id)}">Open</button>
+      <button type="button" class="pm" role="menuitem" data-archive-project="${esc(r.id)}">Archive the project</button>
+      <button type="button" class="pm danger" role="menuitem" data-del-project="${esc(r.project)}">Delete the project…</button>`;
+    pop.style.top = Math.max(8, b.offsetTop - 8) + 'px'; pop.hidden = false;
+    pop.querySelector('button')?.focus();
+  });
+  $('#railProjPop').addEventListener('click', () => { setTimeout(closePops, 0); });
   const closePops = () => { document.querySelectorAll('.rail-pop').forEach((p) => { p.hidden = true; }); ['#railArch', '#railMe'].forEach((id) => $(id).setAttribute('aria-expanded', 'false')); };
   const togglePop = (btn, pop) => {
     const open = pop.hidden; closePops(); if (!open) return;
@@ -5676,6 +5756,7 @@
       if (!simple()) add('This project', 'Share a link to an app', () => $('#shareBtn').click(), '', RIC.act);
       const arch = state.rooms.find((x) => x.id === state.current)?.archived_at;
       add('This project', arch ? 'Unarchive this project' : 'Archive this project', () => archiveProject(state.current, !arch), '', RIC.act);
+      add('This project', 'Delete this project…', () => deleteProjectDialog(projectOf(state.current)), 'asks first', RIC.act);
     }
     add('TropaAI', 'New project', () => $('#newRoom').click(), '', RIC.plus);
     add('TropaAI', simple() ? 'Switch to Advanced' : 'Switch to Simple', () => setMode(simple() ? 'advanced' : 'simple'), '', RIC.act);
@@ -5757,8 +5838,8 @@
     const flush = () => {
       if (!run.length) return;
       const key = String(run[0].id), open = state.unfold.has(key);
-      out += `<button type="button" class="sfold" data-fold="${key}" aria-expanded="${open}">${SICON.chev}${run.length} team update${run.length === 1 ? '' : 's'}</button>`;
-      if (open) out += `<div class="sfold-list">${run.map((m) => `<div class="su k-${m.sender_kind}" id="m${m.id}" data-id="${m.id}"><span class="who">${esc(m.sender_kind === 'system' ? 'TropaAI' : m.sender)}</span><span class="body">${md(msgText(m))}</span>${attsHtml(m)}</div>`).join('')}</div>`;
+      out += `<button type="button" class="sfold" data-fold="${key}" data-last="${run[run.length - 1].id}" aria-expanded="${open}">${SICON.chev}${run.length} team update${run.length === 1 ? '' : 's'}</button>`;
+      if (open) out += `<div class="sfold-list">${run.map((m) => `<div class="su k-${m.sender_kind}" id="m${m.id}" data-id="${m.id}"><span class="who">${esc(m.sender_kind === 'system' ? 'TropaAI' : m.sender)}</span><span class="body">${md(msgText(m))}</span><a href="#m${m.id}" class="srid" data-jump="${m.id}" title="Message #${m.id}">#${m.id}</a>${attsHtml(m)}</div>`).join('')}</div>`;
       run = []; prev = null;
     };
     let owed = false;   // the lead's first message after yours answers you, even when it also hands out work
@@ -5794,8 +5875,9 @@
     const parent = m.reply_to ? findMsg(m.reply_to) : null;
     const quote = m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : 'an earlier message'}</div>` : '';
     const extras = `${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}`;
-    const adv = !simple(), when = `<span class="st" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span>`;
-    if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div>${adv ? `<div class="smeta">${when}</div>` : ''}${extras}${actsHtml(m)}</div>`;
+    const adv = !simple(), rid = `<a href="#m${m.id}" class="srid" data-jump="${m.id}" title="Message #${m.id}: copy or search this number to find it again">#${m.id}</a>`;
+    const when = `<span class="st" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span>${rid}`;
+    if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div><div class="smeta">${adv ? when : rid}</div>${extras}${actsHtml(m)}</div>`;
     if (k === 'sys') return `<div class="sm sm-sys" id="m${m.id}" data-id="${m.id}">${SICON.info}<div class="body">${md(msgText(m))}${when}</div>${extras}</div>`;
     const waitQ = k === 'note' && /`([\w.-]+)` is waiting on a question in its terminal/.exec(m.content);
     if (waitQ) {   // answer it here with buttons, while the question is still on its screen
@@ -5809,7 +5891,7 @@
     }
     const q = state.questions.find((x) => x.message_id === m.id);
     const cont = prev && prev.sender === m.sender && m.created_at - prev.created_at < 10 * 60e3 && !m.reply_to && !q;
-    return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? '' : `<div class="sn">${esc(m.sender)}${adv ? `${when}${agentTag(m.sender)}` : ''}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;
+    return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? '' : `<div class="sn">${esc(m.sender)}${adv ? `${when}${agentTag(m.sender)}` : rid}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;
   }
   const ansText = (q) => String(q.answer || '').replace(new RegExp('^@' + q.agent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').replace(/^\d+\.\s+/, '');
   // the question in full: questions stored before the fix were cut at 1,000 characters with their line breaks
@@ -5955,7 +6037,7 @@
   function renderSimpleHeader() {
     const proj = projectOf(state.current), on = simple() && !!proj && !state.searching;
     const t = state.team[state.current] || {};
-    $('#moreBtn').hidden = !simple() || !proj;
+    $('#moreBtn').hidden = !proj || !!state.searching || !(simple() || document.body.classList.contains('quiet'));   // Advanced has it in the new layout (the classic sidebar has its own buttons)
     $('#panelBtn').hidden = !on || state.view !== 'chat';
     const off = localGet('airc.rside') === 'off';
     $('#panelBtn').setAttribute('aria-pressed', String(!off)); $('#panelBtn').classList.toggle('on', !off);
@@ -5985,13 +6067,15 @@
       ['search', 'Search this chat', ''], ['transcript', 'Download the chat', ''], '-',
       ['pause', paused ? 'Resume the room' : 'Pause the room', ''], ['fix', 'Fix the team', ''],
       ['archive', state.rooms.find((r) => r.id === state.current)?.archived_at ? 'Unarchive the project' : 'Archive the project', ''], ['autoscroll', autoScroll ? 'Keep the chat still' : 'Follow new messages', ''], '-',
-      ['advanced', 'Switch to Advanced', ''],
-    ].filter((x) => x === '-' || proj || ['advanced'].includes(x[0]));
+      ['delete', 'Delete the project…', ''], '-',
+      simple() ? ['advanced', 'Switch to Advanced', ''] : ['simple', 'Switch to Simple', ''],
+    ].filter((x) => x === '-' || proj || ['advanced', 'simple'].includes(x[0]))
+      .filter((x) => simple() || !['tasks', 'docs'].includes(x[0]));   // Advanced has those as tabs
   }
   function openMore(on) {
     const m = $('#moreMenu'), b = $('#moreBtn');
     if (!on) { m.hidden = true; b.setAttribute('aria-expanded', 'false'); return; }
-    m.innerHTML = moreItems().map((x) => (x === '-' ? '<hr>' : `<button type="button" role="menuitem" data-more="${x[0]}">${esc(x[1])}${x[2] ? `<span class="k">${esc(x[2])}</span>` : ''}</button>`)).join('');
+    m.innerHTML = moreItems().map((x) => (x === '-' ? '<hr>' : `<button type="button" role="menuitem" data-more="${x[0]}"${x[0] === 'delete' ? ' class="danger"' : ''}>${esc(x[1])}${x[2] ? `<span class="k">${esc(x[2])}</span>` : ''}</button>`)).join('');
     m.hidden = false; b.setAttribute('aria-expanded', 'true');
     m.querySelector('button')?.focus();
   }
@@ -6017,7 +6101,9 @@
       case 'fix': { const x = document.createElement('button'); x.dataset.fixteam = '1'; x.hidden = true; document.body.append(x); x.click(); setTimeout(() => x.remove(), 5000); infoInline('Checking the team… what was fixed shows in the chat.'); break; }
       case 'autoscroll': $('#asBtn').click(); break;
       case 'archive': archiveProject(state.current, !state.rooms.find((r) => r.id === state.current)?.archived_at); break;
+      case 'delete': deleteProjectDialog(projectOf(state.current)); break;
       case 'advanced': setMode('advanced'); break;
+      case 'simple': setMode('simple'); break;
     }
   });
   $('#search').addEventListener('blur', () => { if (!$('#search').value) $('#search').classList.remove('show'); });

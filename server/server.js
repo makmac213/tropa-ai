@@ -1411,7 +1411,15 @@ api.post('/tts', async (req, res) => {
 api.get('/search', wrap((req) => {
   const term = String(req.query.q || '').trim();
   if (!term) return [];
-  return q.search.all(`%${term.replace(/[\\%_]/g, (c) => '\\' + c)}%`, 200).map(rowToMessage);
+  const found = q.search.all(`%${term.replace(/[\\%_]/g, (c) => '\\' + c)}%`, 200).map(rowToMessage);
+  const num = /^#?(\d{1,12})$/.exec(term);   // "#17378" or "17378": that message first
+  const hit = num && q.getMsg.get(Number(num[1]));
+  return hit ? [rowToMessage(hit), ...found.filter((m) => m.id !== hit.id)] : found;
+}));
+api.get('/messages/:id', wrap((req) => {   // where a message is, for "#17378" links
+  const r = q.getMsg.get(Number(req.params.id) || 0);
+  if (!r) throw new UserError(`message #${req.params.id} doesn't exist (it may have been deleted)`);
+  return rowToMessage(r);
 }));
 api.get('/agents', wrap(() => q.listAgents.all().map(agentView)));
 api.post('/agents/register', wrap((req) => {
@@ -3896,6 +3904,23 @@ api.post('/rooms/:id/start', wrap((req) => {
   host.queue.push({ ...job, log: undefined });
   for (const f of [...host.waiters]) f();
   return { job: jobView(job) };
+}));
+
+// stop a project's team from the page: the host helper ends its tmux session (every agent and the watcher). Nothing
+// else changes: chat, tasks and files stay, and Start brings it back with each agent resuming its conversation.
+api.post('/rooms/:id/stop', wrap((req) => {
+  const roomId = roomOf(req);
+  if (!roomId.startsWith('project:')) throw new UserError('only project rooms have a team');
+  const slug = roomId.slice('project:'.length);
+  if (!hostOnline()) throw new UserError('the tropa host helper is not running on your machine, so the team can\'t be stopped from here');
+  const tmux = watchers.get(roomId)?.tmux || '';
+  host.queue.push({ id: `stop-${slug}-${Date.now()}`, type: 'stop_project', slug, tmux_session: tmux, reason: 'stopped from the page' });
+  for (const f of [...host.waiters]) f();
+  watchers.delete(roomId);   // shows as stopped right away
+  for (const k of [...wakeState.keys()]) if (k.startsWith(roomId + '\0')) { clearTimeout(wakeState.get(k).timer); wakeState.delete(k); }
+  shareNote(roomId, `${HUMAN_NAME} stopped the team. Start it again any time; each agent picks up its conversation where it left off.`);
+  broadcastTeam(roomId);
+  return { ok: true };
 }));
 
 // What the team calls you (onboarding, or the "You are" box): one word agents can @mention. Saved, so it outlives
