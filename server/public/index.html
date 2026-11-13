@@ -634,6 +634,25 @@
   .dc-note { color: var(--muted); font-size: 12.5px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 6px; margin: 8px 0; }
   .dc-note.err { color: var(--danger); border-color: var(--danger); }
   .dc-empty { color: var(--muted); padding: 48px 12px; text-align: center; line-height: 1.6; }
+  /* CSV / TSV as a spreadsheet: column letters, row numbers, a header row that stays, numbers on the right */
+  #sheetDlg { width: min(1480px, 97vw); max-height: 88vh; padding: 0; display: none; flex-direction: column; overflow: hidden; }
+  #sheetDlg[open] { display: flex; }
+  .sh-bar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .sh-bar .sp { flex: 1; } .sh-bar .tbtn { font-size: 13px; text-decoration: none; }
+  .sh-x { background: none; border: 0; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 6px; } .sh-x:hover { color: var(--text); background: var(--panel2); }
+  .sh-wrap { overflow: auto; flex: 1; min-height: 0; }
+  .docs .sh-wrap { border: 1px solid var(--line); border-radius: 8px; max-height: calc(100vh - 240px); }
+  table.sheet { border-collapse: separate; border-spacing: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 100%; }
+  .sheet th, .sheet td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 5px 9px; white-space: nowrap; text-align: left; max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+  .sheet thead th { position: sticky; top: 0; z-index: 2; background: var(--panel2); color: var(--muted); font-weight: 500; font-size: 11.5px; text-align: center; padding: 4px 10px; }
+  .sheet .rn { position: sticky; left: 0; z-index: 1; background: var(--panel2); color: var(--muted); text-align: right; font-size: 11.5px; min-width: 38px; }
+  .sheet thead .rn { z-index: 3; }
+  .sheet tr.hdr td { position: sticky; top: 25px; z-index: 1; background: var(--panel); font-weight: 650; color: var(--text); }
+  .sheet tr.hdr .rn { z-index: 2; }
+  .sheet td.num { text-align: right; }
+  .sheet tr.tot td { font-weight: 650; border-top: 2px solid var(--line); }
+  .sheet tbody tr:not(.hdr):hover td:not(.rn) { background: var(--accent-weak); }
+  .sh-more { padding: 10px 14px; color: var(--muted); font-size: 12.5px; }
   .dc-pre { background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; overflow: auto; font-size: 12.5px; line-height: 1.45; white-space: pre; tab-size: 4; }
   .dc-img { max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); }
   .doc-md { max-width: 880px; line-height: 1.6; font-size: 14.5px; overflow-wrap: break-word; }
@@ -1486,6 +1505,12 @@
   <datalist id="modelList"></datalist>
 </dialog>
 
+<dialog id="sheetDlg" aria-labelledby="sheetTitle">
+  <div class="sh-bar"><b id="sheetTitle"></b><span id="sheetInfo" class="mut"></span><span class="sp"></span>
+    <a class="tbtn" id="sheetRaw" target="_blank" rel="noopener">Open raw</a><a class="tbtn" id="sheetDl">Download</a>
+    <button type="button" class="sh-x" id="sheetClose" aria-label="Close">×</button></div>
+  <div class="sh-wrap" id="sheetBody"></div>
+</dialog>
 <dialog id="settingsDlg">
   <form method="dialog">
     <h3>Settings</h3>
@@ -2189,7 +2214,7 @@
       if (!a.stored) return `<span class="att ${a.error ? 'failed' : 'pending'}" title="${esc(a.path)}">${a.error ? HICON.alert : HICON.clock} ${esc(a.name)} <small>${a.error ? esc(a.error) : `waiting for ${esc(a.uploader)}'s upload…`}</small></span>`;
       const where = !inProject ? 'stored on the chat server' : a.error ? `not saved in the project: ${a.error}` : a.synced ? `in the project: ${a.path}` : `copying into the project (${a.path})…`;
       if (a.is_image) return `<a class="att img" href="${a.url}" target="_blank" rel="noopener" title="${esc(where)}"><img src="${a.url}" alt="${esc(a.name)}" loading="lazy"><span>${a.synced || !inProject ? '' : 'copying · '}${esc(a.name)} · ${fmtSize(a.size)}</span></a>`;
-      return `<a class="att file" href="${a.url}" target="_blank" rel="noopener" title="${esc(where)}">${fileIcon(a.mime)} <b>${esc(a.name)}</b> <small>${fmtSize(a.size)}${a.synced || !inProject ? '' : ' · copying'}</small></a>`;
+      return `<a class="att file" href="${a.url}" target="_blank" rel="noopener" title="${esc(isSheet(a.name) ? 'Open as a spreadsheet · ' + where : where)}"${isSheet(a.name) ? ` data-sheet="${esc(a.name)}"` : ''}>${fileIcon(a.mime)} <b>${esc(a.name)}</b> <small>${fmtSize(a.size)}${a.synced || !inProject ? '' : ' · copying'}</small></a>`;
     }).join('')}</div>`;
   }
   function agentTag(name) {
@@ -3376,6 +3401,54 @@
   }
   const dirFormHtml = (v) => `<form class="dc-dir" id="dcDirForm"><input id="dcDirIn" value="${esc(v)}" aria-label="Docs folder, relative to the project" spellcheck="false"><button type="submit">Save</button></form><div class="dc-note" id="dcDirErr" style="margin:0 4px 8px">A folder inside the project. Agents started after the change use it.</div>`;
   let docSeq = 0;
+  // ---------- CSV / TSV as a spreadsheet ----------
+  function parseDelimited(text, sep) {   // RFC 4180-ish: quoted fields, "" inside quotes, line breaks inside quotes
+    const rows = []; let row = [], f = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; continue; }
+      if (c === '"' && f === '') q = true;
+      else if (c === sep) { row.push(f); f = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
+      else f += c;
+    }
+    if (f !== '' || row.length) { row.push(f); rows.push(row); }
+    return rows.filter((r) => r.length > 1 || r[0] !== '');
+  }
+  const colName = (i) => { let n = ''; i++; while (i) { const m = (i - 1) % 26; n = String.fromCharCode(65 + m) + n; i = Math.floor((i - 1) / 26); } return n; };
+  const NUMISH = /^[-+(]?[₱$€£¥]?\s?[-+]?\d[\d,]*(\.\d+)?%?\)?$/;
+  function sheetHtml(text, name) {
+    const sep = /\.tsv$/i.test(name) ? '\t' : (text.split('\n', 1)[0].split(';').length > text.split('\n', 1)[0].split(',').length ? ';' : ',');
+    const all = parseDelimited(text.replace(/^\uFEFF/, ''), sep), MAX = 2000, rows = all.slice(0, MAX);
+    const cols = rows.reduce((m, r) => Math.max(m, r.length), 0);
+    if (!rows.length) return { html: '<div class="sh-more">The file is empty.</div>', info: '0 rows' };
+    const head = `<thead><tr><th class="rn"></th>${Array.from({ length: cols }, (_, i) => `<th>${colName(i)}</th>`).join('')}</tr></thead>`;
+    const body = rows.map((r, ri) => {
+      const tot = ri > 0 && /^(total|totals|grand total)\b/i.test(String(r[0] || '').trim());
+      return `<tr class="${ri === 0 ? 'hdr' : ''}${tot ? ' tot' : ''}"><td class="rn">${ri + 1}</td>${Array.from({ length: cols }, (_, ci) => {
+        const v = r[ci] ?? '', num = ri > 0 && NUMISH.test(v.trim());
+        return `<td class="${num ? 'num' : ''}" title="${esc(v)}">${esc(v)}</td>`; }).join('')}</tr>`;
+    }).join('');
+    return { html: `<table class="sheet">${head}<tbody>${body}</tbody></table>${all.length > MAX ? `<div class="sh-more">Showing the first ${MAX} of ${all.length} rows. Download the file for the rest.</div>` : ''}`,
+      info: `${all.length - 1} row${all.length === 2 ? '' : 's'} · ${cols} column${cols === 1 ? '' : 's'}` };
+  }
+  const isSheet = (name) => /\.(csv|tsv)$/i.test(String(name || ''));
+  async function openSheet(url, name) {
+    $('#sheetTitle').textContent = name; $('#sheetInfo').textContent = 'Loading…'; $('#sheetBody').innerHTML = '';
+    $('#sheetRaw').href = url; $('#sheetDl').href = url + (url.includes('?') ? '&' : '?') + 'download=1'; $('#sheetDl').setAttribute('download', name);
+    $('#sheetDlg').showModal();
+    try {
+      const res = await fetch(url); if (!res.ok) throw new Error(res.statusText);
+      const { html, info } = sheetHtml(await res.text(), name);
+      $('#sheetBody').innerHTML = html; $('#sheetInfo').textContent = info;
+    } catch (e) { $('#sheetBody').innerHTML = `<div class="sh-more">Couldn't open ${esc(name)}: ${esc(e.message)}</div>`; $('#sheetInfo').textContent = ''; }
+  }
+  $('#sheetClose').addEventListener('click', () => $('#sheetDlg').close());
+  $('#sheetDlg').addEventListener('click', (e) => { if (e.target === $('#sheetDlg')) $('#sheetDlg').close(); });
+  document.addEventListener('click', (e) => {   // a CSV in the chat opens as a spreadsheet here (Ctrl/Cmd-click still opens the raw file)
+    const a = e.target.closest('a.att.file[data-sheet]'); if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault(); e.stopPropagation(); openSheet(a.getAttribute('href'), a.dataset.sheet);
+  }, true);
   async function showDoc(keepScroll = false) {
     const room = state.current, d = state.docs[room] || {};
     const main = $('#dcMain'); if (!main) return;
@@ -3412,6 +3485,7 @@
     if (seq !== docSeq) return;
     if (!DOC_MD.includes(ext)) {
       if (!DOC_TEXT.includes(ext) && /[\u0000-\u0008\u000e-\u001f]/.test(body.slice(0, 2000))) { main.innerHTML = bar + '<div class="dc-empty">Binary file: no preview. Use Download.</div>'; return; }
+      if (isSheet(p)) { const sh = sheetHtml(body, p); main.innerHTML = bar.replace('</span><span class="sp">', ` · ${esc(sh.info)}</span><span class="sp">`) + `<div class="sh-wrap">${sh.html}</div>`; main.scrollTop = scroll; return; }
       main.innerHTML = bar + `<pre class="dc-pre">${esc(body)}</pre>`; main.scrollTop = scroll; return;
     }
     let html;

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **CSV and TSV files open as a spreadsheet.** Click a `.csv` file an agent shares in the chat and it opens right in TropaAI as a grid: column letters, row numbers, a header row that stays while you scroll, numbers aligned right and a bold Total row. Open raw and Download are one click away, and Ctrl/Cmd-click still opens the raw file. The Docs view shows CSV files the same way.
+
+## Unreleased
+
 - **Moss is the default dark palette** (green-black with a mint accent). If you picked a palette in Settings, yours is kept; Graphite, the old default, is still there.
 
 ## Unreleased
