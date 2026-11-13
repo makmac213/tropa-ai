@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Moss is the default dark palette** (green-black with a mint accent). If you picked a palette in Settings, yours is kept; Graphite, the old default, is still there.
+
+## Unreleased
+
 ### Archive and delete projects in the new layout
 - **Right-click a project in the rail** for Open, Archive the project and Delete the project…. The Archived list in the rail now shows its Unarchive and Delete buttons without hovering. ⋯ → Archive / Unarchive the project works in Advanced too.
 - **⋯ → Delete the project…** in the header, in Simple and now in Advanced too (the new layout had no delete button), and **Delete this project…** in the command bar (Ctrl+K). Both ask first, as before. In Advanced the ⋯ menu leaves out Tasks and Docs, which are tabs there.
