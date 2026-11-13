@@ -163,6 +163,8 @@
   .rail-me { width: 32px; height: 32px; border-radius: 50%; border: 0; margin-top: 8px; background: #8a5a10; color: #fff; font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; }
   .rail-pop { position: absolute; left: 62px; z-index: 50; min-width: 230px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 40px var(--shadow); padding: 8px; }
   .rail-pop .room { width: 100%; }
+  .rail-pop .pm { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 8px 10px; cursor: pointer; color: var(--text); font: inherit; font-size: 14px; }
+  .rail-pop .pm:hover, .rail-pop .pm:focus-visible { background: var(--panel2); } .rail-pop .pm.danger { color: var(--danger); }
   .me-pop { bottom: 12px; display: flex; flex-direction: column; gap: 6px; padding: 12px; } .me-pop label { font-size: 12px; color: var(--muted); }
   .me-pop input { width: 100%; }
   .hdr-mode { display: contents; }
@@ -590,6 +592,7 @@
   .room .del:hover { color: var(--danger); }
   .room .del.ic { display: inline-grid; place-items: center; } .room .del.ic:hover { color: var(--text); }
   .room .del.ic svg { width: 14px; height: 14px; }
+  .rail-pop .room .del { opacity: 1; padding: 4px 6px; } .rail-pop .room .del.ic svg { width: 16px; height: 16px; } .rail-pop .room { gap: 4px; }
   .arch-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 16px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; text-align: left; }
   .arch-toggle:hover { color: var(--text); } .arch-toggle svg { width: 12px; height: 12px; transition: transform .15s; } .arch-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
   .arch-list .room .name { color: var(--muted); }
@@ -1324,6 +1327,7 @@
     <button type="button" class="rail-btn dashed" id="railNew" data-tip="New project" aria-label="New project"></button>
     <button type="button" class="rail-btn" id="railArch" data-tip="Archived projects" aria-label="Archived projects" aria-expanded="false" hidden></button>
     <div class="rail-pop" id="railArchPop" hidden></div>
+    <div class="rail-pop" id="railProjPop" role="menu" hidden></div>
     <span class="rail-sep"></span>
     <div class="rail-feeds" id="railFeeds"></div>
     <span class="rail-sp"></span>
@@ -5687,12 +5691,26 @@
     const tip = (r) => { const nq = openQs(r.id).length; return name(r) + (nq ? ` · ${nq} question${nq === 1 ? '' : 's'} for you` : ''); };
     $('#railProj').innerHTML = live.map((r) => `<button type="button" class="rail-btn ${r.id === state.current ? 'active' : ''}" data-room="${esc(r.id)}" data-tip="${esc(tip(r))}" aria-label="${esc(tip(r))}"${r.id === state.current ? ' aria-current="page"' : ''}>${esc(projInitials(r))}${dot(r)}</button>`).join('');
     $('#railArch').hidden = !arch.length;
-    $('#railArchPop').innerHTML = '<div class="cmdk-g">Archived projects</div>' + arch.map((r) => `<button type="button" class="room ${r.id === state.current ? 'active' : ''}" data-room="${esc(r.id)}"><span class="hash">#</span><span class="name">${esc(name(r))}</span><span class="del ic" data-unarchive-project="${esc(r.id)}" title="Unarchive" role="button" aria-label="Unarchive ${esc(name(r))}">${HICON.unarchive}</span></button>`).join('');
+    $('#railArchPop').innerHTML = '<div class="cmdk-g">Archived projects</div>' + arch.map((r) => `<button type="button" class="room ${r.id === state.current ? 'active' : ''}" data-room="${esc(r.id)}"><span class="hash">#</span><span class="name">${esc(name(r))}</span><span class="del ic" data-unarchive-project="${esc(r.id)}" title="Unarchive (show it in the rail again)" role="button" aria-label="Unarchive ${esc(name(r))}">${HICON.unarchive}</span><span class="del" data-del-project="${esc(r.project)}" title="Delete project" role="button" aria-label="Delete ${esc(name(r))}">×</span></button>`).join('');
     const feeds = [[ALL, 'All activity', RIC.feed], ...(simple() ? [] : [[USAGE, 'Usage', HICON.usage]]), ['general', '#general', RIC.hash]];
     $('#railFeeds').innerHTML = feeds.map(([id, l, ic]) => { const u = id !== state.current && state.rooms.find((x) => x.id === id)?.unread_live;
       return `<button type="button" class="rail-btn ${id === state.current ? 'active' : ''}" data-room="${esc(id)}" data-tip="${esc(l)}" aria-label="${esc(l)}">${ic}${u ? '<i class="dot u"></i>' : ''}</button>`; }).join('');
     const ini = String(myName()).replace(/[^A-Za-z0-9]/g, ''); $('#railMe').textContent = (ini.slice(0, 1).toUpperCase() + ini.slice(1, 2).toLowerCase()) || '?'; $('#railMe').title = `You are ${myName()}`; $('#railMe').setAttribute('aria-label', `You are ${myName()}: change your name`);
   }
+  // right-click a project in the rail: open, archive or delete it
+  $('#railProj').addEventListener('contextmenu', (e) => {
+    const b = e.target.closest('[data-room]'); if (!b) return;
+    e.preventDefault(); closePops();
+    const r = state.rooms.find((x) => x.id === b.dataset.room); if (!r) return;
+    const pop = $('#railProjPop'), nm = esc(simple() ? projectTitle(r) : r.project);
+    pop.innerHTML = `<div class="cmdk-g">${nm}</div>
+      <button type="button" class="pm" role="menuitem" data-room="${esc(r.id)}">Open</button>
+      <button type="button" class="pm" role="menuitem" data-archive-project="${esc(r.id)}">Archive the project</button>
+      <button type="button" class="pm danger" role="menuitem" data-del-project="${esc(r.project)}">Delete the project…</button>`;
+    pop.style.top = Math.max(8, b.offsetTop - 8) + 'px'; pop.hidden = false;
+    pop.querySelector('button')?.focus();
+  });
+  $('#railProjPop').addEventListener('click', () => { setTimeout(closePops, 0); });
   const closePops = () => { document.querySelectorAll('.rail-pop').forEach((p) => { p.hidden = true; }); ['#railArch', '#railMe'].forEach((id) => $(id).setAttribute('aria-expanded', 'false')); };
   const togglePop = (btn, pop) => {
     const open = pop.hidden; closePops(); if (!open) return;
