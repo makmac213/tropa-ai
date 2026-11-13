@@ -1520,7 +1520,7 @@ class Host:
                 if n in roots:
                     self.reap(roots[n])
                 subprocess.run(["tmux", "kill-session", "-t", f"={n}"], capture_output=True)
-                log(f"[{slug}] project deleted in the chat: stopped tmux session {n}")
+                log(f"[{slug}] {job.get('reason') or 'project deleted in the chat'}: stopped tmux session {n}")
 
     # ---------- loop ----------
     def loop(self):

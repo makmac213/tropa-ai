@@ -3906,6 +3906,23 @@ api.post('/rooms/:id/start', wrap((req) => {
   return { job: jobView(job) };
 }));
 
+// stop a project's team from the page: the host helper ends its tmux session (every agent and the watcher). Nothing
+// else changes: chat, tasks and files stay, and Start brings it back with each agent resuming its conversation.
+api.post('/rooms/:id/stop', wrap((req) => {
+  const roomId = roomOf(req);
+  if (!roomId.startsWith('project:')) throw new UserError('only project rooms have a team');
+  const slug = roomId.slice('project:'.length);
+  if (!hostOnline()) throw new UserError('the tropa host helper is not running on your machine, so the team can\'t be stopped from here');
+  const tmux = watchers.get(roomId)?.tmux || '';
+  host.queue.push({ id: `stop-${slug}-${Date.now()}`, type: 'stop_project', slug, tmux_session: tmux, reason: 'stopped from the page' });
+  for (const f of [...host.waiters]) f();
+  watchers.delete(roomId);   // shows as stopped right away
+  for (const k of [...wakeState.keys()]) if (k.startsWith(roomId + '\0')) { clearTimeout(wakeState.get(k).timer); wakeState.delete(k); }
+  shareNote(roomId, `${HUMAN_NAME} stopped the team. Start it again any time; each agent picks up its conversation where it left off.`);
+  broadcastTeam(roomId);
+  return { ok: true };
+}));
+
 // What the team calls you (onboarding, or the "You are" box): one word agents can @mention. Saved, so it outlives
 // restarts and wins over the login name tropa started the server with; each project's watcher adopts it.
 api.post('/me', wrap((req) => {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Start and stop the team from the tabs
+- **Start team / Stop team** at the right end of the Chat · Team · Tasks · Docs · Usage tabs. Stop asks first, then ends every agent and the room watcher; chat, tasks and files stay, and the room says who stopped it. Start brings the team back, each agent resuming its conversation.
+
 ### Go to a message by its number
 - **`#17378` in a message is a link now:** click it to go to that message. It loads older messages, switches room, or opens folded team updates as needed. "PR #34" and "issue #12" stay plain text.
 - **Every message shows its number again** in the new layout (hover a message, like the classic layout); click it to go there.
