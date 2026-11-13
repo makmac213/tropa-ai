@@ -1194,6 +1194,7 @@
   .more-menu button:hover, .more-menu button:focus-visible { background: var(--panel2); }
   .more-menu button .k { margin-left: auto; color: var(--muted); font-size: 12px; }
   .more-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+  .more-menu button.danger { color: var(--danger); }
   #newProjBtn { display: none; }
   body.simple #newProjBtn { display: flex; align-items: center; gap: 10px; margin: 10px 12px 6px; width: calc(100% - 24px); height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-weight: 600; cursor: pointer; }
   body.simple #newProjBtn:hover { border-color: var(--accent); }
@@ -5737,6 +5738,7 @@
       if (!simple()) add('This project', 'Share a link to an app', () => $('#shareBtn').click(), '', RIC.act);
       const arch = state.rooms.find((x) => x.id === state.current)?.archived_at;
       add('This project', arch ? 'Unarchive this project' : 'Archive this project', () => archiveProject(state.current, !arch), '', RIC.act);
+      add('This project', 'Delete this project…', () => deleteProjectDialog(projectOf(state.current)), 'asks first', RIC.act);
     }
     add('TropaAI', 'New project', () => $('#newRoom').click(), '', RIC.plus);
     add('TropaAI', simple() ? 'Switch to Advanced' : 'Switch to Simple', () => setMode(simple() ? 'advanced' : 'simple'), '', RIC.act);
@@ -6017,7 +6019,7 @@
   function renderSimpleHeader() {
     const proj = projectOf(state.current), on = simple() && !!proj && !state.searching;
     const t = state.team[state.current] || {};
-    $('#moreBtn').hidden = !simple() || !proj;
+    $('#moreBtn').hidden = !proj || !!state.searching || !(simple() || document.body.classList.contains('quiet'));   // Advanced has it in the new layout (the classic sidebar has its own buttons)
     $('#panelBtn').hidden = !on || state.view !== 'chat';
     const off = localGet('airc.rside') === 'off';
     $('#panelBtn').setAttribute('aria-pressed', String(!off)); $('#panelBtn').classList.toggle('on', !off);
@@ -6047,13 +6049,15 @@
       ['search', 'Search this chat', ''], ['transcript', 'Download the chat', ''], '-',
       ['pause', paused ? 'Resume the room' : 'Pause the room', ''], ['fix', 'Fix the team', ''],
       ['archive', state.rooms.find((r) => r.id === state.current)?.archived_at ? 'Unarchive the project' : 'Archive the project', ''], ['autoscroll', autoScroll ? 'Keep the chat still' : 'Follow new messages', ''], '-',
-      ['advanced', 'Switch to Advanced', ''],
-    ].filter((x) => x === '-' || proj || ['advanced'].includes(x[0]));
+      ['delete', 'Delete the project…', ''], '-',
+      simple() ? ['advanced', 'Switch to Advanced', ''] : ['simple', 'Switch to Simple', ''],
+    ].filter((x) => x === '-' || proj || ['advanced', 'simple'].includes(x[0]))
+      .filter((x) => simple() || !['tasks', 'docs'].includes(x[0]));   // Advanced has those as tabs
   }
   function openMore(on) {
     const m = $('#moreMenu'), b = $('#moreBtn');
     if (!on) { m.hidden = true; b.setAttribute('aria-expanded', 'false'); return; }
-    m.innerHTML = moreItems().map((x) => (x === '-' ? '<hr>' : `<button type="button" role="menuitem" data-more="${x[0]}">${esc(x[1])}${x[2] ? `<span class="k">${esc(x[2])}</span>` : ''}</button>`)).join('');
+    m.innerHTML = moreItems().map((x) => (x === '-' ? '<hr>' : `<button type="button" role="menuitem" data-more="${x[0]}"${x[0] === 'delete' ? ' class="danger"' : ''}>${esc(x[1])}${x[2] ? `<span class="k">${esc(x[2])}</span>` : ''}</button>`)).join('');
     m.hidden = false; b.setAttribute('aria-expanded', 'true');
     m.querySelector('button')?.focus();
   }
@@ -6079,7 +6083,9 @@
       case 'fix': { const x = document.createElement('button'); x.dataset.fixteam = '1'; x.hidden = true; document.body.append(x); x.click(); setTimeout(() => x.remove(), 5000); infoInline('Checking the team… what was fixed shows in the chat.'); break; }
       case 'autoscroll': $('#asBtn').click(); break;
       case 'archive': archiveProject(state.current, !state.rooms.find((r) => r.id === state.current)?.archived_at); break;
+      case 'delete': deleteProjectDialog(projectOf(state.current)); break;
       case 'advanced': setMode('advanced'); break;
+      case 'simple': setMode('simple'); break;
     }
   });
   $('#search').addEventListener('blur', () => { if (!$('#search').value) $('#search').classList.remove('show'); });

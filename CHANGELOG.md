@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Delete a project in the new layout
+- **⋯ → Delete the project…** in the header, in Simple and now in Advanced too (the new layout had no delete button), and **Delete this project…** in the command bar (Ctrl+K). Both ask first, as before. In Advanced the ⋯ menu leaves out Tasks and Docs, which are tabs there.
+
 ### Start and stop the team from the tabs
 - **Start team / Stop team** at the right end of the Chat · Team · Tasks · Docs · Usage tabs. Stop asks first, then ends every agent and the room watcher; chat, tasks and files stay, and the room says who stopped it. Start brings the team back, each agent resuming its conversation.
 
