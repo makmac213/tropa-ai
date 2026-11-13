@@ -1200,6 +1200,11 @@
   .nps-who { display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text); text-align: center; flex-wrap: wrap; }
   .nps-who .s-avs .sav { width: 24px; height: 24px; font-size: 10px; border-color: var(--bg); }
   .nps-who .linkbtn { margin: 0; }
+  .nps-how { list-style: none; counter-reset: how; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 26px 0 0; padding: 0; max-width: 720px; width: 100%; }
+  .nps-how li { counter-increment: how; position: relative; padding: 12px 14px 12px 44px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; line-height: 1.45; color: var(--muted); text-align: left; }
+  .nps-how li::before { content: counter(how); position: absolute; left: 14px; top: 12px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent-weak); color: var(--accent); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+  .nps-how b { color: var(--text); font-weight: 600; }
+  @media (max-width: 760px) { .nps-how { grid-template-columns: 1fr; } }
   .nps-start .err { color: var(--danger); text-align: center; font-size: 13.5px; min-height: 18px; }
   @media (max-width: 760px) { .nps-start { padding: 56px 16px 24px; } .nps-start h1 { font-size: 26px; } .nps-chips { justify-content: flex-start; } .nps-q, .nps-who { justify-content: flex-start; text-align: left; } }
   /* ---------- Simple mode, chat-first: one conversation, a side panel with what the team is doing ---------- */
@@ -6419,6 +6424,7 @@
           <button type="button" class="nps-more" data-bd="full">See all teams ›</button></div>
       </div>
       <div class="nps-who" id="npWho" aria-live="polite">${npWho()}</div>
+      <ol class="nps-how" aria-label="How it works"><li><b>You describe the work</b> in your own words.</li><li><b>The team plans it first</b> and shows you the plan, so nothing is guessed.</li><li><b>They do the work</b> and ask you only when a choice is yours.</li></ol>
     </div>`;
     if (keep) { const g = $('#npGoal'); g.focus(); g.setSelectionRange(keep[0], keep[1]); }
   }
@@ -6524,7 +6530,7 @@
       const made = await api('/projects', { method: 'POST', body: {
         name, slug, existing, untouched: existing && bt.untouched !== false, path: path || undefined, parent: parent || undefined, folder: slug, topic: name, brief: bt.brief.trim(), files: [],
         agents: bt.members.map((m) => ({ name: m.name, tool: m.tool || 'claude', model: m.model || '', role: m.role, prompt: [m.prompt, how].filter(Boolean).join('\n\n') })),
-        lead, kickoff: `@${lead} The work is described in the brief in docs/. Plan it with the team, tell me the plan in a few lines, and ask me anything that's unclear.`,
+        lead, kickoff: `@${lead} Before anyone starts, make a plan with the team and show it to me in a few lines. Ask me anything that's unclear.`,   // the agents' own instructions point them to the brief in docs/
         tools: [], design_system: '', git: bt.git && !!state.host?.git, auto_approve: false, start: true, trust: true, keys: {} } });
       Object.assign(bt, { teamId: null, members: [], lead: '', name: '', brief: '', path: '', where: 'new', hiring: false, step: 'start', chosen: false });
       closeBuild(); state.view = 'chat'; localSet('airc.view', 'chat'); selectRoom(room.id);
