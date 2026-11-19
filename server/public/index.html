@@ -137,7 +137,17 @@
     body.quiet:not(.simple) .cmdk-btn { width: 200px; }
     body.quiet .adv-team { white-space: nowrap; flex: none; }
     body.quiet:not(.simple) .hdr-mode .mode-sw { width: 168px; }
-    body.quiet #roomTopic { min-width: 80px; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    body.quiet #roomTopic { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* the header never runs off the screen: the title and topic give way first, then labels fold to icons as the room
+       for the header shrinks (it depends on the team column and Details panel, not just the window) */
+    body.quiet main > header { container-type: inline-size; container-name: hdr; }
+    body.quiet .hrow > * { flex-shrink: 0; }
+    body.quiet .hrow > #roomTitle { flex: 0 1 auto; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    body.quiet .hrow > #roomTopic { flex: 1 1 0; min-width: 0; }   /* the topic only takes what's left: the room name never shrinks for it */
+    @container hdr (max-width: 1360px) { .hrow > #roomTopic { display: none; } .cmdk-btn .cmdk-t { display: none; } .cmdk-btn { width: auto !important; } }
+    @container hdr (max-width: 1080px) { .adv-team .lbl { display: none; } .hdr-mode .mode-sw { width: 148px !important; } }
+    @container hdr (max-width: 960px) { #askBtn .t, #attnBtn .t { display: none; } }
+    @container hdr (max-width: 820px) { #advTeam { display: none !important; } }
   }
   @media (min-width: 761px) and (max-width: 1280px) {
     body.quiet .cmdk-btn .cmdk-t { display: none; } body.quiet .cmdk-btn { width: auto; }
@@ -2103,11 +2113,11 @@
     $('#skillsBtn').className = 'dl-btn ic'; $('#skillsBtn').innerHTML = HICON.skills; $('#skillsBtn').setAttribute('aria-label', 'Skills');
     const oq = openQs(state.current).length, dq = state.questions.filter((q) => q.room_id === state.current && q.status !== 'open').length;
     $('#askBtn').hidden = !proj || !!state.searching || (!oq && !dq && !state.qOpen);
-    $('#askBtn').classList.add('lab'); $('#askBtn').innerHTML = `${HICON.question}${oq ? `Questions · ${oq}` : 'Questions'}`;
+    $('#askBtn').classList.add('lab'); $('#askBtn').innerHTML = `${HICON.question}<span class="t">Questions${oq ? ' · ' : ''}</span>${oq || ''}`; $('#askBtn').setAttribute('aria-label', oq ? `Questions: ${oq} waiting` : 'Questions');
     $('#askBtn').classList.toggle('hot', !!oq); $('#askBtn').classList.toggle('on', !!state.qOpen);
     const na = (state.attention[state.current]?.items || []).length;
     $('#attnBtn').hidden = !proj || !!state.searching || !na;
-    $('#attnBtn').classList.add('lab'); $('#attnBtn').innerHTML = `${HICON.alert}Attention · ${na}`;
+    $('#attnBtn').classList.add('lab'); $('#attnBtn').innerHTML = `${HICON.alert}<span class="t">Attention · </span>${na}`; $('#attnBtn').setAttribute('aria-label', `Needs attention: ${na}`);
     $('#dlBtn').parentElement.hidden = state.current === USAGE;
     $('#dlBtn').className = 'dl-btn ic'; $('#dlBtn').innerHTML = HICON.download; $('#dlBtn').setAttribute('aria-label', 'Download the transcript');
     if (state.current === USAGE && !state.searching) $('#roomTopic').textContent = 'Tokens and API-equivalent cost for every project';
