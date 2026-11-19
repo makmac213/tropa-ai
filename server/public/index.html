@@ -153,6 +153,18 @@
     body.quiet .cmdk-btn .cmdk-t { display: none; } body.quiet .cmdk-btn { width: auto; }
   }
   .q-av { display: none; }
+  .pinmark { display: inline-grid; place-items: center; color: var(--human); margin-left: 6px; vertical-align: -2px; }
+  .pinmark svg { width: 13px; height: 13px; }
+  .smeta .pinmark { margin: 0 6px 0 0; }
+  .pin-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--human); margin: 2px 0 2px; } .pin-tag svg { width: 12px; height: 12px; }
+  .actions button.on { color: var(--human); }
+  .pin-row { display: flex; align-items: flex-start; gap: 4px; padding: 2px 0; }
+  .pin-go { flex: 1; min-width: 0; display: grid; gap: 2px; text-align: left; background: none; border: 0; border-radius: 8px; padding: 7px 8px; color: var(--text); font: inherit; cursor: pointer; }
+  .pin-go:hover, .pin-go:focus-visible { background: var(--panel2); }
+  .pin-who { font-size: 12.5px; font-weight: 600; } .pin-who .mut { font-weight: 400; }
+  .pin-txt { font-size: 13px; color: var(--muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pin-x { flex: none; background: none; border: 0; color: var(--muted); font-size: 16px; line-height: 1; padding: 8px 6px; border-radius: 6px; cursor: pointer; }
+  .pin-x:hover { color: var(--text); background: var(--panel2); }
   #rail { flex-direction: column; align-items: center; gap: 6px; padding: 14px 0 12px; background: var(--bg); border-right: 1px solid var(--line); min-height: 0; position: relative; z-index: 30; }
   .rail-logo { width: 30px; height: 30px; margin-bottom: 12px; }
   .rail-proj { display: flex; flex-direction: column; gap: 6px; align-items: center; overflow-y: auto; overflow-x: visible; max-height: 52vh; scrollbar-width: none; padding: 0 12px; }
@@ -1792,6 +1804,7 @@
   // one line-icon set for the whole page (no emoji standing in for icons)
   const HI = (d, extra = '') => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${extra}>${d}</svg>`;
   const HICON = {
+    pin: HI('<path d="M9 4h6l-1 6 3 3H7l3-3z"/><path d="M12 13v7"/>'),
     chat: HI('<path d="M4 5h16v11H9l-5 4z"/>'),
     team: HI('<rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="7" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="13" width="8" height="7" rx="1"/>'),
     tasks: HI('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8.5 12l2.5 2.5 4.5-5"/>'),
@@ -2154,9 +2167,9 @@
     return `<div class="msg ${cont ? 'cont' : ''} ${mentioned ? 'mention' : ''} ${oq ? 'q-open' : ''} ${slashMsg ? 'slash' : ''} k-${kind}" id="m${m.id}" data-id="${m.id}">
       <div class="avatar" style="background:${bg};color:${fg}">${kind === 'system' ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.5"/></svg>' : esc(initials)}</div>
       <div>
-        ${cont ? '' : `<div class="head"><span class="who k-${kind}">${esc(kind === 'system' ? 'TropaAI' : m.sender)}</span>${kind === 'human' ? '' : agentTag(m.sender)}${mentioned ? '<span class="foryou">For you</span>' : ''}
+        ${cont ? pinTag(m) : `<div class="head"><span class="who k-${kind}">${esc(kind === 'system' ? 'TropaAI' : m.sender)}</span>${kind === 'human' ? '' : agentTag(m.sender)}${mentioned ? '<span class="foryou">For you</span>' : ''}
           ${showRoom ? `<span class="roomtag" data-room="${esc(m.room_id)}">${esc(roomLabel(m.room_id))}</span>` : ''}
-          <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><a href="#m${m.id}" class="rid" data-jump="${m.id}" title="Message #${m.id}">#${m.id}</a></div>`}
+          <span class="time" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span><a href="#m${m.id}" class="rid" data-jump="${m.id}" title="Message #${m.id}">#${m.id}</a>${pinMark(m)}</div>`}
         ${m.reply_to ? `<div class="quote" data-jump="${m.reply_to}">↩ ${parent ? `<b>${esc(parent.sender)}</b>: <span class="qtext">${esc(parent.content.slice(0, 140))}</span>` : `#${m.reply_to}`}</div>` : ''}
         <div class="body">${md(msgText(m))}${kind === 'system' && !mentioned && !slashMsg ? `<span class="stime">${fmtTime(m.created_at)}</span>` : ''}</div>${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}${screenQ(m)}${oq ? `${oq.options?.length ? `<div class="mq">${oq.options.map((o, i) => `<button type="button" class="qopt ${i + 1 === oq.recommended ? 'rec' : ''}" data-qans="${oq.id}" data-ans="${esc(`${i + 1}. ${o}`)}">${esc(o)}${i + 1 === oq.recommended ? ' <span class="mut">· suggested</span>' : ''}</button>`).join('')}</div>` : ''}<button type="button" class="qbadge" data-openq="${oq.id}">Waiting on you · ${agoShort(oq.created_at)} · ${oq.options?.length ? 'other answer' : 'answer'}</button>` : ''}
       </div>
@@ -2171,7 +2184,7 @@
     return menu ? menuButtons(n, menu) : '';
   }
   function actsHtml(m) {
-    return `<div class="actions"><button data-react="up" data-rxmsg="${m.id}" class="${myRx(m) === 'up' ? 'on' : ''}" title="Approve${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} to go ahead` : ''}" aria-label="Thumbs up">${HICON.up}</button><button data-react="down" data-rxmsg="${m.id}" class="${myRx(m) === 'down' ? 'on' : ''}" title="Disapprove${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} not to go ahead` : ''}" aria-label="Thumbs down">${HICON.down}</button><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? 'Stop' : 'Read'}</button><button data-reply="${m.id}">Reply</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>`;
+    return `<div class="actions"><button data-react="up" data-rxmsg="${m.id}" class="${myRx(m) === 'up' ? 'on' : ''}" title="Approve${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} to go ahead` : ''}" aria-label="Thumbs up">${HICON.up}</button><button data-react="down" data-rxmsg="${m.id}" class="${myRx(m) === 'down' ? 'on' : ''}" title="Disapprove${m.sender_kind === 'agent' ? `: tells ${esc(m.sender)} not to go ahead` : ''}" aria-label="Thumbs down">${HICON.down}</button><button data-read="${m.id}" class="${tts.current === m.id ? 'on' : ''}">${tts.current === m.id ? 'Stop' : 'Read'}</button><button data-reply="${m.id}">Reply</button><button data-pin="${m.id}"${m.pinned_at ? ' data-unpin class="on"' : ''} title="${m.pinned_at ? 'Unpin' : 'Pin it to re-read later (it stays in the side panel)'}">${m.pinned_at ? 'Unpin' : 'Pin'}</button><button data-copy="${m.id}">Copy</button><button data-del="${m.id}">Delete</button></div>`;
   }
   // 👍 / 👎: a quick approve or disapprove. An agent whose message you react to is told; on its question, it's the answer.
   const myRx = (m) => (m.reactions || []).find((r) => r.who.toLowerCase() === myName().toLowerCase())?.kind || '';
@@ -2469,6 +2482,12 @@
       else if (e.type === 'skills') {
         state.skills[e.skills.room_id] = e.skills;
         if (e.skills.room_id === state.current && $('#skillsDlg').open && sk.mode === 'list') renderSkills();
+      }
+      else if (e.type === 'pin') {
+        let hit = false;
+        for (const arr of state.messages.values()) for (const m of arr) if (m.id === e.message_id) { m.pinned_at = e.pinned_at; m.pinned_by = e.pinned_by; hit = true; }
+        if (state.pins[e.room_id] !== undefined) loadPins(e.room_id);
+        if (hit && (e.room_id === state.current || state.current === ALL)) renderMessages({ stick: false });
       }
       else if (e.type === 'reaction') {
         let hit = false;
@@ -3542,7 +3561,26 @@
     }
   }
   // ---- chat side panel: background tasks, files shared, docs mentioned ----
-  state.files = {}; state.docsAsked = {};
+  state.files = {}; state.docsAsked = {}; state.pins = {};
+  async function loadPins(room) {
+    try { state.pins[room] = await api(`/rooms/${encodeURIComponent(room)}/pins`); } catch { state.pins[room] = []; }
+    if (room === state.current) { rsLast = ''; renderRside(); }
+  }
+  const pinTag = (m) => (m.pinned_at ? `<div class="pin-tag">${HICON.pin}Pinned</div>` : '');   // for a message shown without its name line
+  const pinMark = (m) => (m.pinned_at ? `<span class="pinmark" title="Pinned ${esc(new Date(m.pinned_at).toLocaleString())}" aria-label="Pinned">${HICON.pin}</span>` : '');
+  function pinsHtml(room) {   // the side panel's Pinned list: click one to go to it
+    const pins = state.pins[room];
+    if (pins === undefined || pins === null) return '<div class="rs-empty">Loading…</div>';
+    if (!pins.length) return '<div class="rs-empty">Pin a message to keep it here: hover it and click <b>Pin</b>.</div>';
+    return pins.map((m) => `<div class="pin-row"><button type="button" class="pin-go" data-jump="${m.id}" title="Go to the message"><span class="pin-who">${esc(m.sender_kind === 'system' ? 'TropaAI' : m.sender)} <span class="mut">· ${esc(fmtTime(m.created_at))}</span></span><span class="pin-txt">${esc(shortText(msgText(m).replace(/\s+/g, ' '), 140))}</span></button><button type="button" class="pin-x" data-pin="${m.id}" data-unpin aria-label="Unpin" title="Unpin">×</button></div>`).join('');
+  }
+  document.addEventListener('click', async (e) => {   // Pin / Unpin (a message's actions, or × in the Pinned list)
+    const b = e.target.closest('[data-pin]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const id = Number(b.dataset.pin), on = !b.hasAttribute('data-unpin');
+    try { await api(`/messages/${id}/pin`, { method: 'POST', body: { pinned: on } }); if (on) infoInline('Pinned. Find it in the side panel under Pinned.'); }
+    catch (err) { alertInline(err.message); }
+  }, true);
   async function loadFiles(room) {
     try { state.files[room] = await api(`/rooms/${encodeURIComponent(room)}/files?limit=300`); } catch { state.files[room] = []; }
     if (room === state.current) renderRside();
@@ -3581,6 +3619,7 @@
     const off = localGet('airc.rside') === 'off';
     el.classList.toggle('off', off);
     if (state.files[room] === undefined) { state.files[room] = null; loadFiles(room); }
+    if (state.pins[room] === undefined) { state.pins[room] = null; loadPins(room); }
     if (proj && state.docs[room] === undefined && !state.docsAsked[room]) { state.docsAsked[room] = true; loadDocs(room).then(() => { if (room === state.current) renderRside(); }); }
     const sec = (key, title, n, body) => `<details data-rs="${key}" ${rsOpen(key) ? 'open' : ''}><summary>${title}${n ? `<span class="n">${n}</span>` : ''}</summary>${body}</details>`;
     let html = simple() && proj
@@ -3588,6 +3627,7 @@
       : `<div class="rs-top"><span>${document.body.classList.contains('quiet') ? 'Details' : 'Room'}</span><button type="button" data-rs-toggle title="${off ? 'Show' : 'Hide'} this panel">${off ? '⟨' : '⟩'}</button></div>`;
     if (proj && simple()) html += simplePanel(room);
     else {
+      html += sec('pins', 'Pinned', state.pins[room]?.length || '', pinsHtml(room));
       if (proj && !simple()) {
         const t = state.team[room];
         const rows = (t?.agents || []).map((n) => ({ n, p: t.panes?.[n], bg: bgTasks(t.panes?.[n]) })).filter((x) => x.bg);
@@ -5842,6 +5882,7 @@
       add('This project', t.settings?.wake === 'paused' ? 'Resume the room' : 'Pause the room', () => setPaused(t.settings?.wake !== 'paused'), '', RIC.act);
       add('This project', 'Skills', () => $('#skillsBtn').click(), '', RIC.act);
       add('This project', 'Download the chat', () => downloadTranscript('md'), 'Markdown', RIC.act);
+      for (const m of (state.pins[state.current] || []).slice(0, 6)) add('Pinned', shortText(msgText(m).replace(/\s+/g, ' '), 70), () => jumpToMsg(m.id), m.sender_kind === 'system' ? 'TropaAI' : m.sender, HICON.pin);
       if (!simple()) add('This project', 'Share a link to an app', () => $('#shareBtn').click(), '', RIC.act);
       const arch = state.rooms.find((x) => x.id === state.current)?.archived_at;
       add('This project', arch ? 'Unarchive this project' : 'Archive this project', () => archiveProject(state.current, !arch), '', RIC.act);
@@ -5966,7 +6007,7 @@
     const extras = `${rxHtml(m)}${attsHtml(m)}${shareActs(m)}${agentReqActs(m)}${roomReqActs(m)}${rmReqActs(m)}`;
     const adv = !simple(), rid = `<a href="#m${m.id}" class="srid" data-jump="${m.id}" title="Message #${m.id}: copy or search this number to find it again">#${m.id}</a>`;
     const when = `<span class="st" title="${new Date(m.created_at).toLocaleString()}">${fmtTime(m.created_at)}</span>${rid}`;
-    if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div><div class="smeta">${adv ? when : rid}</div>${extras}${actsHtml(m)}</div>`;
+    if (k === 'mine') return `<div class="sm sm-me" id="m${m.id}" data-id="${m.id}">${quote}<div class="sb body">${md(m.content)}</div><div class="smeta">${pinMark(m)}${adv ? when : rid}</div>${extras}${actsHtml(m)}</div>`;
     if (k === 'sys') return `<div class="sm sm-sys" id="m${m.id}" data-id="${m.id}">${SICON.info}<div class="body">${md(msgText(m))}${when}</div>${extras}</div>`;
     const waitQ = k === 'note' && /`([\w.-]+)` is waiting on a question in its terminal/.exec(m.content);
     if (waitQ) {   // answer it here with buttons, while the question is still on its screen
@@ -5980,7 +6021,7 @@
     }
     const q = state.questions.find((x) => x.message_id === m.id);
     const cont = prev && prev.sender === m.sender && m.created_at - prev.created_at < 10 * 60e3 && !m.reply_to && !q;
-    return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? '' : `<div class="sn">${esc(m.sender)}${adv ? `${when}${agentTag(m.sender)}` : rid}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;
+    return `<div class="sm sm-ag ${cont ? 'cont' : ''}" id="m${m.id}" data-id="${m.id}">${sav(m.sender)}<div style="min-width:0">${cont ? pinTag(m) : `<div class="sn">${esc(m.sender)}${adv ? `${when}${agentTag(m.sender)}` : rid}${pinMark(m)}</div>`}${quote}${q ? sqCard(q) : `<div class="body">${md(m.content)}</div>`}${extras}</div>${actsHtml(m)}</div>`;
   }
   const ansText = (q) => String(q.answer || '').replace(new RegExp('^@' + q.agent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').replace(/^\d+\.\s+/, '');
   // the question in full: questions stored before the fix were cut at 1,000 characters with their line breaks
@@ -6271,7 +6312,7 @@
     const tsum = !tl.length ? '<div class="sp-empty">The lead adds tasks here when it plans your request.</div>'
       : `<div class="sp-empty" style="color:var(--text)">${[['todo', 'to do'], ['doing', 'doing'], ['review', 'in review'], ['qa', 'in QA'], ['blocked', 'blocked'], ['done', 'done']].filter(([k]) => tcount(k)).map(([k, l]) => `${tcount(k)} ${l}`).join(' · ')}</div>`;
     const tasksSec = sec('tsk', 'Tasks', open.length || '', tsum + '<div class="sp-fix"><button type="button" class="linkbtn" data-sview-go="board">Open the board</button> · <button type="button" class="linkbtn" data-sview-go="flow">See the flow</button></div>');
-    return sec('who', 'Team', t.watching ? (t.agents || []).length : '', team) + tasksSec + sec('run', 'Running now', procs.length || '', run)
+    return sec('who', 'Team', t.watching ? (t.agents || []).length : '', team) + tasksSec + sec('pins', 'Pinned', state.pins[room]?.length || '', pinsHtml(room)) + sec('run', 'Running now', procs.length || '', run)
       + sec('dec', 'Decisions', openDecs ? `${openDecs} need you` : '', dec) + sec('chg', 'Files', '', fl);
   }
 

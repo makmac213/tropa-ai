@@ -90,6 +90,9 @@ db.exec(`
 }
 // archived projects: hidden from the projects list (0 = not archived), kept otherwise exactly as they are
 if (!db.prepare('PRAGMA table_info(rooms)').all().some((c) => c.name === 'archived_at')) db.exec('ALTER TABLE rooms ADD COLUMN archived_at INTEGER DEFAULT 0');
+if (!db.prepare('PRAGMA table_info(messages)').all().some((c) => c.name === 'pinned_at')) {   // pinned messages: kept handy to re-read
+  db.exec("ALTER TABLE messages ADD COLUMN pinned_at INTEGER DEFAULT 0; ALTER TABLE messages ADD COLUMN pinned_by TEXT DEFAULT ''");
+}
 db.prepare(`INSERT OR IGNORE INTO rooms (id, kind, project, topic, created_at) VALUES ('general','general',NULL,?,?)`)
   .run('Cross-project chat for all agents', Date.now());
 
@@ -1255,6 +1258,21 @@ api.post('/rooms/:id/messages', wrap((req) => {
 // 👍 / 👎 on a message: a quick approve / disapprove. On an agent's message the agent is told (a few seconds
 // later, so a quick change of mind sends one wake); on a question it asked, it's the answer.
 const rxWakes = new Map();   // message id -> timer
+// pin a message to re-read it later (the human's own bookmarks, shared by every page open on this server)
+const pinQ = {
+  set: db.prepare('UPDATE messages SET pinned_at = ?, pinned_by = ? WHERE id = ?'),
+  forRoom: db.prepare('SELECT * FROM messages WHERE room_id = ? AND pinned_at > 0 ORDER BY pinned_at DESC LIMIT 100'),
+};
+api.post('/messages/:id/pin', wrap((req) => {
+  const m = q.getMsg.get(Number(req.params.id));
+  if (!m) throw new UserError('message not found');
+  const on = req.body?.pinned !== false;
+  pinQ.set.run(on ? Date.now() : 0, on ? HUMAN_NAME : '', m.id);
+  const u = q.getMsg.get(m.id);
+  broadcast({ type: 'pin', message_id: m.id, room_id: m.room_id, pinned_at: u.pinned_at, pinned_by: u.pinned_by });
+  return { message_id: m.id, room_id: m.room_id, pinned_at: u.pinned_at, pinned_by: u.pinned_by };
+}));
+api.get('/rooms/:id/pins', wrap((req) => pinQ.forRoom.all(roomOf(req)).map(rowToMessage)));
 api.post('/messages/:id/react', wrap((req) => {
   const m = q.getMsg.get(Number(req.params.id));
   if (!m) throw new UserError('message not found');
