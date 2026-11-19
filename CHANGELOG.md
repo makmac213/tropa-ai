@@ -2,9 +2,12 @@
 
 ## Unreleased
 
+- **Pin messages to re-read them.** Hover a message and click **Pin**. Pinned messages get a pin mark and are listed under **Pinned** in the side panel (Details in Advanced, "What your team is doing" in Simple): click one to go straight to it, or × to unpin. They also show in the command bar (Ctrl+K), and every open page updates at once.
+- **Fixed: Advanced mode's header ran off the screen** with a long project name, many agents and questions or attention items, hiding the Simple / Advanced switch. The header now fits the room it has (which depends on the team column and Details panel, not just the window): the topic gives way first, then the command bar, the "all idle" label and the Questions / Attention words fold to icons and counts. The room name only shortens when nothing else is left to fold, and the switch always stays on screen.
+- **Plain words for a new project in Simple mode.** The first message TropaAI sends the lead on your behalf no longer mentions "the brief in docs/" (the agents' own instructions already point them there). It now reads: *"Before anyone starts, make a plan with the team and show it to me in a few lines. Ask me anything that's unclear."*
+- **The new project page explains how it works** in three short steps: you describe the work; the team plans it first and shows you the plan; they do the work and ask you only when a choice is yours.
+- **CSV and TSV files open as a spreadsheet.** Click a `.csv` file an agent shares in the chat and it opens right in TropaAI as a grid: column letters, row numbers, a header row that stays while you scroll, numbers aligned right and a bold Total row. Open raw and Download are one click away, and Ctrl/Cmd-click still opens the raw file. The Docs view shows CSV files the same way.
 - **Moss is the default dark palette** (green-black with a mint accent). If you picked a palette in Settings, yours is kept; Graphite, the old default, is still there.
-
-## Unreleased
 
 ### Archive and delete projects in the new layout
 - **Right-click a project in the rail** for Open, Archive the project and Delete the project…. The Archived list in the rail now shows its Unarchive and Delete buttons without hovering. ⋯ → Archive / Unarchive the project works in Advanced too.

@@ -553,6 +553,10 @@ How it's set up:
 - **Claude permissions:** Claude agents may run the git commands this needs, but not `push`, `reset` or `clean`. `.worktrees/` is git-ignored.
 - **Turning it off:** set `"git_workflow": "off"` in `.agent_sync/settings.json` (or `tropa panel` → 8 → 7), then restart the agents.
 
+### Pinned messages
+
+Hover a message and click **Pin** to keep it handy: a plan, a checklist, a decision. Pinned messages are listed under **Pinned** in the side panel; click one to jump to it, or × to unpin. They're in the command bar (Ctrl+K) too.
+
 ### Files
 
 - **You:** click 📎, drag and drop, or paste a screenshot. Each file is copied into the project at `docs/attachments/<id>-<name>`, and agents see that path in the message.
