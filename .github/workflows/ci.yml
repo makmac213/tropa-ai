@@ -17,9 +17,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: actions/setup-python@v5
+      # Python 3.9 from uv: setup-python has no 3.9 build for newer runner images (ubuntu-latest is 26.04 now)
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: '3.9'
+          activate-environment: true
+      - name: Python is 3.9
+        run: python -c "import sys; print(sys.version); assert sys.version_info[:2] == (3, 9), sys.version"
       - name: Install the server's packages
         run: npm ci --omit=dev --no-audit --no-fund
         working-directory: server
