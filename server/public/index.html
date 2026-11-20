@@ -2006,7 +2006,15 @@
   }
 
   // what an agent of this room is doing, in words: "Building the menu page · 4 min", "Asking you on its screen", "Idle 12 min"
+  /** Taken off work in this room (out of credits, or by hand): { since, why } or null. */
+  function pausedAg(room, n) {
+    const p = state.team[room]?.settings?.paused_agents || {};
+    const k = Object.keys(p).find((x) => x.toLowerCase() === String(n).toLowerCase());
+    return k ? p[k] : null;
+  }
   function agentLine(a, p) {
+    const pz = pausedAg(state.current, a.name);
+    if (pz) return `<div class="s lim">Paused${pz.why ? ` · ${esc(pz.why)}` : ''}</div>`;
     if (!p) return `<div class="s">${esc(a.last_seen ? 'not running · seen ' + fmtTime(a.last_seen) : 'not running')}</div>`;
     const mins = Math.max(0, Math.round((Date.now() - (p.changed_at || Date.now())) / 60e3));
     if (p.state === 'approval') return '<div class="s warn">Needs your OK</div>';
@@ -2978,17 +2986,20 @@
     const p = t.panes?.[name] || { text: '', state: 'idle' };
     const a = state.agents.find((x) => x.name.toLowerCase() === name.toLowerCase());
     const lead = (t.settings?.lead || '').toLowerCase() === name.toLowerCase();
-    return `<div class="card s-${esc(p.state)}" data-card="${esc(name)}" data-lim="${esc(p.limit?.kind || '')}">
+    const pz = pausedAg(t.room_id || state.current, name);
+    return `<div class="card s-${esc(p.state)}${pz ? ' paused' : ''}" data-card="${esc(name)}" data-lim="${esc(p.limit?.kind || '')}">
       <div class="ch">${document.body.classList.contains('quiet') ? sav(name) : ''}<b>${esc(name)}</b>${lead ? '<span title="lead">★</span>' : ''}
         <span class="model">${esc([a?.provider, a?.model].filter(Boolean).join(' · '))}</span><span class="sp"></span>${usageToday(name, 'uc')}
         <span class="ago" data-ago="${p.changed_at || 0}">${agoText(p.changed_at)}</span><span class="st">${esc(p.state)}</span></div>
       <div class="ca">
         <button class="tbtn" data-model="${esc(name)}" title="Switch ${esc(name)}'s model (keeps its conversation)">Model</button>
-        <button class="tbtn" data-wake="${esc(name)}" title="Tell ${esc(name)} to read the room now">Wake</button>
+        ${pz ? '' : `<button class="tbtn" data-wake="${esc(name)}" title="Tell ${esc(name)} to read the room now">Wake</button>`}
+        <button class="tbtn" data-pausea="${esc(name)}" data-on="${pz ? 0 : 1}" title="${pz ? `Put ${esc(name)} back to work: it gets the messages that came in meanwhile` : `Take ${esc(name)} off work for now (e.g. its account is out of credits): nothing is typed into it until you resume it`}">${pz ? 'Resume' : 'Pause'}</button>
         ${lead ? '' : `<button class="tbtn" data-mklead="${esc(name)}" title="Make ${esc(name)} the lead of this room (for today, or from now on)">Make lead</button>`}
         <button class="tbtn" data-restart="${esc(name)}" title="Restart ${esc(name)}'s CLI (it resumes its conversation). Use it when it's stuck, crashed or logged out">Restart</button>
         <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)}: same CLI, model, role and instructions under a new name (change the model if this one is rate-limited)">Clone</button>
         <button class="tbtn warn" data-remove="${esc(name)}" title="Remove ${esc(name)} from the team: stops its CLI and moves agents/${esc(name)}/ to agents/.removed/">Remove</button></div>
+      ${pz ? `<div class="appr lim"><span><b>Paused</b>${pz.why ? ` · ${esc(pz.why)}` : ''} · since ${esc(fmtTime(pz.since))}. Nothing is typed into it; its messages wait.</span><button class="tbtn" data-pausea="${esc(name)}" data-on="0">Resume</button></div>` : ''}
       ${p.limit && p.state !== 'approval' ? `<div class="appr lim"><span><b>${p.limit.kind === 'credits' ? 'Out of credits' : p.limit.kind === 'limit' ? 'Usage limit reached' : 'Rate-limited'}</b>${p.limit.resets ? ` · resets ${esc(p.limit.resets)}` : ''}${p.limit.kind === 'credits' ? ' · top up the account, or' : ' ·'} switch to another model</span>
         <button class="tbtn" data-model="${esc(name)}">Switch model</button>
         <button class="tbtn" data-clone="${esc(name)}" title="Add a copy of ${esc(name)} on another model">Clone</button>${lead ? '<button class="tbtn" data-mklead="" title="Let another agent lead while this one is stuck">Pass the lead…</button>' : ''}</div>` : ''}
@@ -3574,6 +3585,16 @@
     if (!pins.length) return '<div class="rs-empty">Pin a message to keep it here: hover it and click <b>Pin</b>.</div>';
     return pins.map((m) => `<div class="pin-row"><button type="button" class="pin-go" data-jump="${m.id}" title="Go to the message"><span class="pin-who">${esc(m.sender_kind === 'system' ? 'TropaAI' : m.sender)} <span class="mut">· ${esc(fmtTime(m.created_at))}</span></span><span class="pin-txt">${esc(shortText(msgText(m).replace(/\s+/g, ' '), 140))}</span></button><button type="button" class="pin-x" data-pin="${m.id}" data-unpin aria-label="Unpin" title="Unpin">×</button></div>`).join('');
   }
+  document.addEventListener('click', async (e) => {   // Pause / Resume one agent (team card, side panel)
+    const b = e.target.closest('[data-pausea]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const name = b.dataset.pausea, on = b.dataset.on === '1';
+    if (on && !confirm(`Pause ${name}?\n\nTropaAI stops typing into it: no messages, no nudges, no retries. Messages for it are kept and handed over when you resume it, and its open cards go to a teammate who can work.`)) return;
+    b.disabled = true;
+    try { await api(`/rooms/${encodeURIComponent(state.current)}/agents/${encodeURIComponent(name)}/pause`, { method: 'POST', body: { paused: on } }); }
+    catch (err) { alertInline(err.message); }
+    finally { b.disabled = false; }
+  }, true);
   document.addEventListener('click', async (e) => {   // Pin / Unpin (a message's actions, or × in the Pinned list)
     const b = e.target.closest('[data-pin]'); if (!b) return;
     e.preventDefault(); e.stopPropagation();
@@ -4564,7 +4585,9 @@
     const room = a.project ? `project:${a.project.toLowerCase()}` : '', here = room && room === state.current;
     const lead = String(state.team[room]?.settings?.lead || '').toLowerCase() === a.name.toLowerCase();
     $('#agActs').hidden = !room;
-    $('#agActs').innerHTML = !room ? '' : `<button type="button" class="tbtn" data-agact="wake" title="Tell ${esc(a.name)} to read the room now">Wake</button>
+    const pz = room && pausedAg(room, a.name);
+    $('#agActs').innerHTML = !room ? '' : `${pz ? `<button type="button" class="tbtn pri" data-agact="resume" title="Put it back to work: it gets the messages that came in meanwhile">Resume</button>` : `<button type="button" class="tbtn" data-agact="wake" title="Tell ${esc(a.name)} to read the room now">Wake</button>
+      <button type="button" class="tbtn" data-agact="pause" title="Take it off work for now (e.g. out of credits): nothing is typed into it until you resume it">Pause</button>`}
       <button type="button" class="tbtn" data-agact="restart" title="Stop and start its CLI again; it picks up its conversation">Restart</button>
       ${here ? `<button type="button" class="tbtn" data-agact="clone" title="Add a copy: same CLI, model, role and instructions under a new name">Clone</button>` : ''}
       ${here && !lead ? `<button type="button" class="tbtn" data-agact="lead">Make lead</button>` : ''}
@@ -4583,6 +4606,7 @@
     b.disabled = true;
     try {
       if (act === 'wake') { const r = await api(`/rooms/${room}/wake`, { method: 'POST', body: { agents: [name] } }); b.textContent = r.woke?.length ? '✓ Woken' : 'Not woken'; }
+      else if (act === 'pause' || act === 'resume') { await api(`/rooms/${room}/agents/${encodeURIComponent(name)}/pause`, { method: 'POST', body: { paused: act === 'pause' } }); $('#agentDlg').close(); return; }
       else { await api(`/rooms/${room}/agents/${encodeURIComponent(name)}/restart`, { method: 'POST', body: {} }); b.textContent = '↻ Restarting'; }
     } catch (err) { b.textContent = 'Failed'; $('#agErr').textContent = err.message; }
     setTimeout(() => { b.textContent = label; b.disabled = false; }, 2500);
@@ -6273,7 +6297,9 @@
         const oq = qs.find((q) => q.status === 'open' && sameName(q.agent, n));
         let s, cls = '';
         const menu = p.state !== 'approval' ? paneMenu(p.text) : null;
-        if (p.state === 'approval') { s = 'Needs your OK'; cls = 'warn'; }
+        const pz = pausedAg(room, n);
+        if (pz) { s = `Paused${pz.why ? `: ${pz.why}` : ''}`; cls = 'lim'; }
+        else if (p.state === 'approval') { s = 'Needs your OK'; cls = 'warn'; }
         else if (menu) { s = 'Asking you something on its screen'; cls = 'warn'; }
         else if (p.limit) { s = `Paused: ${limitLabel(p)}${p.limit.kind === 'credits' ? ' (top up the account)' : ''}`; cls = 'lim'; }
         else if (oq) { s = 'Waiting for your answer'; cls = 'warn'; }
@@ -6284,7 +6310,7 @@
         return `<div class="sp-row">${sav(n, paneDot(p))}<div class="bd"><div class="t">${esc(n)}${n.toLowerCase() === lead ? '<span class="lab">lead</span>' : `<button type="button" class="linkbtn mk-lead" data-mklead="${esc(n)}">Make lead</button>`}</div><div class="s ${cls}">${esc(s)}</div>
           ${p.state === 'approval' ? `<div class="s" style="white-space:normal">${esc(p.prompt || 'wants to do something that needs your permission')}</div>
             <div class="rs-ask"><button type="button" class="tbtn pri" data-approve="${esc(n)}" data-act="yes">Allow</button><button type="button" class="tbtn" data-approve="${esc(n)}" data-act="no">Don't allow</button></div>` : ''}
-          ${menu ? `${menu.question ? `<div class="s" style="white-space:normal">${esc(menu.question)}</div>` : ''}${menuButtons(n, menu)}` : ''}</div></div>`;
+          ${menu ? `${menu.question ? `<div class="s" style="white-space:normal">${esc(menu.question)}</div>` : ''}${menuButtons(n, menu)}` : ''}${pz ? `<div class="rs-ask"><button type="button" class="tbtn" data-pausea="${esc(n)}" data-on="0">Resume</button></div>` : ''}</div></div>`;
       }).join('') + `<div class="sp-fix">Something not working? <button type="button" class="linkbtn" data-fixteam>Fix the team</button></div>`;
     }
     const procs = t.activity?.procs || [];

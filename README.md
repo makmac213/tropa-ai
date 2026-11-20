@@ -425,6 +425,10 @@ When an agent can't work because of its AI provider, TropaAI shows why instead o
 
 You see it as a **purple** node on the graph and a purple dot in the sidebar, labelled *out of credits*, *usage limit · resets at 3pm* or *rate-limited*. The agent's ▦ Team card gets a banner with **Switch model** and **Clone**, and Simple mode's *Your team* says *Paused: …*. The room gets one message about it; a rate limit only after it has lasted a minute, since those usually clear by themselves. All of it clears on its own once the agent works again.
 
+**Out of credits pauses the agent.** Only a top-up fixes that, so TropaAI stops typing into it: no messages, no nudges, no half-hourly retries. Its open cards go to a teammate who can work, and messages for it are kept. Once you've topped up, click **Resume** on its card in ▦ Team (or in Simple mode's *Your team*): it gets the messages that came in meanwhile.
+
+**Pause any agent by hand** the same way: **Pause** on its card in ▦ Team, or in its dialog (click its name in the team list). Use it for an agent whose provider is down, or one you want to keep out of the way for a while. A paused agent shows *Paused* everywhere it's listed, and the rest of the team carries on.
+
 ### 🩺 Self-healing and Fix the team
 
 TropaAI keeps a running team running, so you don't need a terminal when something stops:

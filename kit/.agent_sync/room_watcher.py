@@ -296,8 +296,9 @@ def limit_in(rows):
 def limit_alert(cfg, a, kind, line, resets):
     h = cfg["human"]
     if kind == "credits":
-        return (f"@{h} 💳 `{a}` is out of credits with its AI provider, so it has stopped working. Top up that account, or switch "
-                f"`{a}` to another model (**Model** on its card in ▦ Team) or **Clone** it on another model.\n> {line}")
+        return (f"@{h} 💳 `{a}` is out of credits with its AI provider, so TropaAI pauses it: nothing is typed into it until "
+                f"you resume it. Top up that account, then click **Resume** on its card in ▦ Team (or in the team list). Or switch "
+                f"`{a}` to another model (**Model**) or **Clone** it on another model.\n> {line}")
     if kind == "limit":
         return (f"@{h} ⏳ `{a}` reached its usage limit{f', which resets {resets}' if resets else ''}, so it's paused until then. "
                 f"To keep going now, switch its model (**Model** on its card in ▦ Team) or **Clone** it on another model.\n> {line}")
@@ -700,6 +701,7 @@ class Watcher:
                                            "settings": local, "settings_changed": changed,
                                            "timeout": timeout, "caps": ["rename_agent", "keys", "activity"] + (["slash"] if slash else []) + (["skills"] if team_skills else [])}, timeout=timeout + 10)
         server = routing(r.get("settings") or {})
+        self.paused = {str(k).lower() for k in ((r.get("settings") or {}).get("paused_agents") or {})}   # taken off work in TropaAI
         if changed:
             log(f"pushed settings to TropaAI: {local}")
         elif server != (snap or local) and server != local:
@@ -815,7 +817,7 @@ class Watcher:
             if is_cloud(self.cfg, a):   # it can't read the room: send it the messages themselves
                 threading.Thread(target=cloud_send, args=(self.cfg, a, cloud_text(self.cfg, a, ev)), daemon=True).start()
                 return
-            self.deliver(a, ev.get("text") or wake_text(self.cfg, a, ev.get("reason", "")), ev.get("reason", ""))
+            self.deliver(a, ev.get("text") or wake_text(self.cfg, a, ev.get("reason", "")), ev.get("reason", ""), resumed=bool(ev.get("resumed")))
         elif ev.get("type") == "command":
             act = ev.get("action")
             if not a:
@@ -833,7 +835,7 @@ class Watcher:
             say(self.cfg, f"{'✅' if act != 'no' else '🚫'} `{a}`: {act} (sent {' '.join(keys)})")
             self.last_capture = 0   # refresh screens soon
 
-    def deliver(self, a, text, reason=""):
+    def deliver(self, a, text, reason="", resumed=False):
         self.since_compact[a] = True
         text += self.lead_compact_ask(a)
         if a in self.slash_busy:   # a slash command from the chat is running: don't type into its answer
@@ -855,7 +857,8 @@ class Watcher:
             log(f"{a} is waiting on a question in its terminal; wake held")
             return
         lim = limit_in(pane_rows(self.cfg, a))
-        if lim and lim[0] in ("credits", "limit") and self.heal_on():   # typed into a CLI at its limit, the wake is lost
+        if lim and lim[0] in ("credits", "limit") and self.heal_on() and not resumed:   # typed into a CLI at its limit, the wake is lost
+            # (resumed: the human put it back to work, e.g. after a top-up; the old error line may still be on screen)
             self.held[a] = text
             log(f"{a} can't work ({lim[0]}); wake held until it can again")
             return
@@ -1439,8 +1442,8 @@ class Watcher:
             at = resets_at(lim[2], now)
             self.probe_at[a] = min(at + 60, now + 6 * 3600) if at else now + PROBE_EVERY
             return
-        if now < self.probe_at[a] or not self.heal_on() or self.cfg.get("wake") == "paused":
-            return
+        if now < self.probe_at[a] or not self.heal_on() or self.cfg.get("wake") == "paused" or a.lower() in getattr(self, "paused", set()):
+            return   # a paused agent is left alone until the human resumes it
         self.probe_at[a] = now + PROBE_EVERY
         text = self.held.pop(a, None) or (f"[tropa] Checking whether you can work again after your {'credits ran out' if lim[0] == 'credits' else 'usage limit'}. "
                                           f"If you can, carry on where you stopped: post a one-line status in {self.cfg['room']} first.")
