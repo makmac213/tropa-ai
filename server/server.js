@@ -1552,6 +1552,9 @@ const WAKE_DEFAULTS = { lead: '', wake: 'auto', wake_rules: 'smart', max_wakes_p
   auto_heal: true,
   // passing the lead "for today": who gets it back, and when (0 = for good)
   lead_back: '', lead_until: 0,
+  // agents taken off work for now (out of credits, or by hand): { name: { since, why } }. Nothing is typed into them
+  // until they're resumed; messages for them wait and are handed over then.
+  paused_agents: {},
   // "needs attention" limits in minutes (0 = don't flag): quiet in Doing, waiting in Review, on an approval prompt, Blocked, idle with ready work
   attention: { doing_quiet: 15, review_wait: 45, approval_wait: 5, blocked_wait: 60, idle_ready: 20 } };
 const EVERYONE = new Set(['all', 'here', 'team', 'everyone']);
@@ -1578,6 +1581,10 @@ function cleanWake(patch) {
   if ('team_shrink' in patch) {
     if (!['ask', 'auto', 'off'].includes(patch.team_shrink)) throw new UserError('team_shrink must be "ask", "auto" or "off"');
     out.team_shrink = patch.team_shrink;
+  }
+  if ('paused_agents' in patch) {
+    const p = patch.paused_agents && typeof patch.paused_agents === 'object' ? patch.paused_agents : {};
+    out.paused_agents = Object.fromEntries(Object.entries(p).slice(0, 100).map(([k, v]) => [cleanName(k), { since: Math.floor(Number(v?.since) || Date.now()), why: String(v?.why || '').slice(0, 120) }]).filter(([k]) => k));
   }
   if ('auto_heal' in patch) out.auto_heal = patch.auto_heal === true || patch.auto_heal === 'true';
   if ('auto_compact' in patch) out.auto_compact = patch.auto_compact === true || patch.auto_compact === 'true';
@@ -1657,7 +1664,7 @@ const watchers = new Map();   // roomId -> { agents, tmux, seen, queue, waiters,
 const wakeState = new Map();  // roomId \0 agent(lower) -> { pending, timer, last, history, capped }
 function watcherRecord(roomId) {
   let w = watchers.get(roomId);
-  if (!w) { w = { agents: [], tmux: '', seen: 0, queue: [], waiters: new Set(), panes: {} }; watchers.set(roomId, w); }
+  if (!w) { w = { room: roomId, agents: [], tmux: '', seen: 0, queue: [], waiters: new Set(), panes: {} }; watchers.set(roomId, w); }
   return w;
 }
 function watcherFor(roomId) {
@@ -1690,9 +1697,42 @@ function wakeText(roomId, agent, reason, s, rooms = [roomId]) {
 }
 const sameName = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
 /** Out of credits or at its usage limit (a rate limit retries by itself): it can't work until that changes. */
-function limitOf(w, a) {
+function screenLimit(w, a) {   // what the agent's screen says
   const l = a && w?.panes?.[a]?.limit;
   return l && (l.kind === 'credits' || l.kind === 'limit') ? l : null;
+}
+/** Paused by the human (or automatically when out of credits): { since, why } or null. */
+function pausedOf(roomId, a) {
+  const p = wakeSettings(roomId).paused_agents || {};
+  const k = a && Object.keys(p).find((x) => sameName(x, a));
+  return k ? p[k] : null;
+}
+/** Out of credits, at its usage limit, or paused: it can't work until that changes (a rate limit retries by itself). */
+function limitOf(w, a) {
+  const p = w?.room && pausedOf(w.room, a);
+  return p ? { kind: 'paused', text: p.why, resets: '' } : screenLimit(w, a);
+}
+function setAgentPaused(roomId, a, on, why = '') {
+  const s = wakeSettings(roomId), p = { ...(s.paused_agents || {}) };
+  const k = Object.keys(p).find((x) => sameName(x, a));
+  if (on) { if (k) return false; p[a] = { since: Date.now(), why }; }
+  else { if (!k) return false; delete p[k]; }
+  setWakeSettings(roomId, { paused_agents: p });
+  broadcastTeam(roomId);
+  if (on) {
+    watcherSay(roomId, `⏸ \`${a}\` is paused${why ? ` (${why})` : ''}: TropaAI types nothing into it, no messages and no nudges, until you resume it. Messages for it are kept. Resume it from its card in ▦ Team or from the team list.`);
+    setTimeout(() => { try { healLimit(roomId, a); } catch (e) { console.error('heal', e); } }, 0);   // its open cards go to someone who can work
+  } else {
+    const st = wakeEntry(roomId, a), n = st.pending.length;
+    watcherSay(roomId, `▶ \`${a}\` is back at work${n ? `; it gets the ${n} message${n === 1 ? '' : 's'} that came in meanwhile` : ''}.`);
+    const w = watcherFor(roomId);
+    if (w?.panes?.[a]) {   // resumed (after a top-up): the old error line still on its screen doesn't count until the screen changes
+      w.panes[a].limit = null;
+      (w.resumedOn ||= {})[a.toLowerCase()] = w.panes[a].text;
+    }
+    if (n) setTimeout(() => fireWake(roomId, a, { resumed: true }), 0);
+  }
+  return true;
 }
 /** A teammate that can take over for a while: not at a limit, not excluded; an idle one first. */
 function standIn(w, except = []) {
@@ -1711,7 +1751,7 @@ function healLimit(roomId, a) {
   if (!helper) return;   // the whole team is out: the human was told on screen; nothing anyone can do until a reset
   const open = taskViews(roomId).filter((t) => sameName(t.assignee, a) && t.status !== 'done');
   if (!isLead && !open.length) return;   // nothing waits on it
-  const what = l.kind === 'credits' ? 'is out of credits' : `reached its usage limit${l.resets ? ` (it resets ${l.resets})` : ''}`;
+  const what = l.kind === 'paused' ? `is paused${l.text ? ` (${l.text})` : ''}` : l.kind === 'credits' ? 'is out of credits' : `reached its usage limit${l.resets ? ` (it resets ${l.resets})` : ''}`;
   const cards = open.length ? ` Its open cards: ${open.slice(0, 6).map((t) => `#${t.id} "${t.title}" (${t.status})`).join('; ')}.` : '';
   const ask = isLead
     ? `You stand in for the lead until it's back: answer ${HUMAN_NAME}, keep the cards moving and hand off with @mentions.`
@@ -1758,7 +1798,7 @@ function scheduleWake(roomId, agent, msg) {
   const due = Math.max(Date.now() + s.debounce_seconds * 1000, st.last + s.cooldown_seconds * 1000);
   st.timer = setTimeout(() => fireWake(roomId, agent), Math.max(0, due - Date.now()));
 }
-function fireWake(roomId, agent, { manual = false, reason } = {}) {
+function fireWake(roomId, agent, { manual = false, reason, resumed = false } = {}) {
   const st = wakeEntry(roomId, agent);
   if (st.timer) { clearTimeout(st.timer); st.timer = null; }
   const s = wakeSettings(roomId);
@@ -1772,8 +1812,9 @@ function fireWake(roomId, agent, { manual = false, reason } = {}) {
     return false;
   }
   st.capped = false;
+  if (pausedOf(roomId, agent)) { st.pending = st.pending.slice(-50); return false; }   // paused: its messages wait for Resume
   const w = watcherFor(roomId);
-  if (!manual && s.auto_heal && limitOf(w, agent) && st.pending.length) {   // at its usage limit: typing into it is lost; wait until it's back
+  if (!manual && !resumed && s.auto_heal && limitOf(w, agent) && st.pending.length) {   // at its usage limit: typing into it is lost; wait until it's back
     st.timer = setTimeout(() => fireWake(roomId, agent), 60e3);
     return false;
   }
@@ -1800,10 +1841,10 @@ function fireWake(roomId, agent, { manual = false, reason } = {}) {
     why = `${who} mentioned you in ${rooms.join(' and ')} (${ids}).`;
     const text = `[tropa] ${why} Read it there (tropa read_messages, room "${rooms[0]}", agent "${agent}") and answer in that room with send_message. ` +
       `It's not about ${roomId}: post nothing here for it. If it doesn't need you, end your turn without posting.`;
-    pushEvent(roomId, { type: 'wake', agent, reason: why, message_ids: msgs.map((m) => m.id), text });
+    pushEvent(roomId, { type: 'wake', agent, reason: why, message_ids: msgs.map((m) => m.id), ...(resumed ? { resumed: true } : {}), text });
     return true;
   }
-  pushEvent(roomId, { type: 'wake', agent, reason: why, message_ids: msgs.map((m) => m.id), text: wakeText(roomId, agent, why, s, rooms.length ? rooms : [roomId]) });
+  pushEvent(roomId, { type: 'wake', agent, reason: why, message_ids: msgs.map((m) => m.id), ...(resumed ? { resumed: true } : {}), text: wakeText(roomId, agent, why, s, rooms.length ? rooms : [roomId]) });
   return true;
 }
 /** The one project room whose running watcher runs `agent` ('' if none, or if it's ambiguous). Agent names are
@@ -2104,16 +2145,19 @@ api.post('/watch/panes', wrap((req) => {
     const n = cleanName(name) && shownName(w, cleanName(name));
     if (!n || !p) continue;
     w.approvalSince ||= {};
-    const was = limitOf(w, n);
+    const was = screenLimit(w, n);
     if (p.state === 'approval') w.approvalSince[n] ||= Date.now(); else delete w.approvalSince[n];
     w.panes[n] = { text: String(p.text || '').slice(-8000), state: ['working', 'idle', 'approval', 'stopped'].includes(p.state) ? p.state : 'idle',
       prompt: String(p.prompt || '').slice(0, 300), changed_at: Number(p.changed_at) || Date.now(), at: Date.now(),
       // out of credits / usage limit / rate-limited, read off the agent's screen by the watcher
       limit: p.limit && ['credits', 'limit', 'rate'].includes(p.limit.kind)
         ? { kind: p.limit.kind, text: String(p.limit.text || '').slice(0, 200), resets: String(p.limit.resets || '').slice(0, 60) } : null };
-    const now = limitOf(w, n);
-    if (!was && now) setTimeout(() => { try { healLimit(roomId, n); } catch (e) { console.error('heal', e); } }, 0);
-    if (was && !now && wakeSettings(roomId).auto_heal) watcherSay(roomId, `✅ \`${n}\` is working again.`);
+    let now = screenLimit(w, n);
+    const paused = pausedOf(roomId, n), seen = w.resumedOn?.[n.toLowerCase()];
+    if (seen !== undefined) { if (w.panes[n].text === seen) { w.panes[n].limit = null; now = null; } else delete w.resumedOn[n.toLowerCase()]; }
+    if (!was && now && now.kind === 'credits' && !paused) setTimeout(() => setAgentPaused(roomId, n, true, 'out of credits'), 0);   // only a top-up fixes it: stop typing into it
+    else if (!was && now && !paused) setTimeout(() => { try { healLimit(roomId, n); } catch (e) { console.error('heal', e); } }, 0);
+    if (was && !now && !paused && wakeSettings(roomId).auto_heal) watcherSay(roomId, `✅ \`${n}\` is working again.`);
   }
   broadcast({ type: 'panes', room_id: roomId, panes: w.panes });
   return { ok: true };
@@ -3924,6 +3968,15 @@ api.post('/rooms/:id/start', wrap((req) => {
   return { job: jobView(job) };
 }));
 
+// pause or resume one agent: { paused: true|false }
+api.post('/rooms/:id/agents/:name/pause', wrap((req) => {
+  const roomId = roomOf(req), w = watcherFor(roomId);
+  const a = (w?.agents || []).find((x) => sameName(x, req.params.name)) || cleanName(req.params.name);
+  if (!a) throw new UserError('which agent?');
+  const on = req.body?.paused !== false;
+  const changed = setAgentPaused(roomId, a, on, on ? String(req.body?.why || '').slice(0, 120) : '');
+  return { agent: a, paused: on, changed, paused_agents: wakeSettings(roomId).paused_agents };
+}));
 // stop a project's team from the page: the host helper ends its tmux session (every agent and the watcher). Nothing
 // else changes: chat, tasks and files stay, and Start brings it back with each agent resuming its conversation.
 api.post('/rooms/:id/stop', wrap((req) => {
