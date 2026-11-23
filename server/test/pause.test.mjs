@@ -26,7 +26,7 @@ before(async () => {
   port = await freePort(); base = `http://127.0.0.1:${port}`;
   srv = spawn(process.execPath, ['--no-warnings', join(here, '..', 'server.js')], {
     env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: join(tmp, 'data'), TROPA_STATE: join(tmp, 'state'),
-      TROPA_SECRET: '', TROPA_WATCH_GRACE_MS: '0', HUMAN_NAME: 'tester' }, stdio: 'ignore' });
+      TROPA_SECRET: '', TROPA_WATCH_GRACE_MS: '0', TROPA_CREDIT_SURE_MS: '300', HUMAN_NAME: 'tester' }, stdio: 'ignore' });
   for (let i = 0; i < 100; i++) { try { if ((await fetch(base + '/health')).ok) break; } catch {} await new Promise((r) => setTimeout(r, 100)); }
   key = readFileSync(join(tmp, 'state', `secret-${port}.key`), 'utf8').trim();
 });
@@ -41,9 +41,11 @@ test('an agent out of credits is paused: nothing reaches it until it is resumed,
   await poll();
   await req(`/api/rooms/${R}/wake`, { method: 'PATCH', headers: KEY(), body: { debounce_seconds: 0, cooldown_seconds: 0 } });
   // the watcher sees "out of credits" on ada's screen
-  await req('/api/watch/panes', { method: 'POST', headers: KEY(), body: { room: 'project:paused', panes: {
+  const outOfCredits = () => req('/api/watch/panes', { method: 'POST', headers: KEY(), body: { room: 'project:paused', panes: {
     ada: { state: 'idle', text: 'x', limit: { kind: 'credits', text: 'Personal is out of credits' } }, bob: { state: 'idle', text: 'x' } } } });
-  await settle();
+  await outOfCredits(); await settle();
+  assert.deepEqual((await (await req(`/api/rooms/${R}/team`)).json()).settings.paused_agents, {}, 'one glimpse is not enough');
+  await outOfCredits(); await settle();
   const team = await (await req(`/api/rooms/${R}/team`)).json();
   assert.ok(team.settings.paused_agents.ada, 'ada is paused');
   assert.equal(team.settings.paused_agents.ada.why, 'out of credits');
@@ -73,7 +75,7 @@ test('an agent out of credits is paused: nothing reaches it until it is resumed,
   await panes('x'); await settle();
   assert.deepEqual((await (await req(`/api/rooms/${R}/team`)).json()).settings.paused_agents, {}, 'the old error line is ignored after Resume');
   // a new credits error (the screen changed) pauses it again
-  await panes('x\nworking...\nPersonal is out of credits'); await settle();
+  await panes('x\nworking...\nPersonal is out of credits'); await settle(); await panes('x\nworking...\nPersonal is out of credits'); await settle();
   assert.ok((await (await req(`/api/rooms/${R}/team`)).json()).settings.paused_agents.ada, 'a new error pauses it again');
   await req(`/api/rooms/${R}/agents/ada/pause`, { method: 'POST', headers: KEY(), body: { paused: false } });
 });
@@ -84,4 +86,19 @@ test('pausing by hand works the same, and doesn\'t repeat', async () => {
   const b = await (await req(`/api/rooms/${R}/agents/bob/pause`, { method: 'POST', headers: KEY(), body: {} })).json();
   assert.equal(b.changed, false);
   await req(`/api/rooms/${R}/agents/bob/pause`, { method: 'POST', headers: KEY(), body: { paused: false } });
+});
+
+test('a glimpse of the error does not pause; posting in the room proves it can work and resumes it', async () => {
+  const pane = (limit, state = 'idle', text = 'y') => req('/api/watch/panes', { method: 'POST', headers: KEY(), body: { room: 'project:paused', panes: {
+    bob: { state, text, ...(limit ? { limit: { kind: 'credits', text: 'Credit balance is too low' } } : {}) } } } });
+  const pausedNow = async () => (await (await req(`/api/rooms/${R}/team`)).json()).settings.paused_agents.bob;
+  await pane(true); await settle(100); await pane(false); await settle(500); await pane(false); await settle();
+  assert.equal(await pausedNow(), undefined, 'gone before it was sure: not paused');
+  await pane(true, 'idle', 'z'); await settle(); await pane(true, 'idle', 'z'); await settle();
+  assert.equal((await pausedNow())?.why, 'out of credits');
+  await req(`/api/rooms/${R}/messages`, { method: 'POST', body: { agent: 'bob', content: 'Done: card #42 is in review.' } });
+  await settle();
+  assert.equal(await pausedNow(), undefined, 'it posted, so it has credits: resumed');
+  const msgs = await (await req(`/api/rooms/${R}/messages`)).json();
+  assert.ok(msgs.some((m) => /`bob` just posted in the room, so it isn't out of credits after all/.test(m.content)));
 });

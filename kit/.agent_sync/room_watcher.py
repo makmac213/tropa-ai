@@ -251,6 +251,9 @@ LIMIT_KINDS = [
                          r"exhausted your .{0,20}quota|RESOURCE_EXHAUSTED", re.I)),
     ("rate", re.compile(r"rate.?limit|too many requests|\b429\b|overloaded|\b529\b", re.I)),
 ]
+# Lines that only quote a limit: room messages and notes the agent is reading (`names`, @mentions, "> " quotes, TropaAI's
+# wording), not an error from the agent's own CLI.
+ECHO = re.compile(r"`|@\w|\btropa\b|^\s*>|is out of credits with its|\bis paused\b|can't work for now", re.I)
 LIMIT_CONTEXT = re.compile(r"error|status|retry|retrying|failed|exceeded|reached|try again|rejected", re.I)
 RESETS = re.compile(r"(?:resets?|reset|available again|try again)\s*((?:at|in|on)\s+)?((?:[0-9]|tomorrow|(?:mon|tue|wed|thu|fri|sat|sun|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b)[^.·∙|│\]]{0,40})", re.I)
 
@@ -284,8 +287,12 @@ def resets_at(text, now=None):
 def limit_in(rows):
     """(kind, line, resets) when the bottom of the screen shows a usage, rate or credit limit, else None.
     kind: "credits" (top up), "limit" (usage limit, waits for its reset) or "rate" (provider throttling, retries by itself)."""
-    tail = [BOX.sub(" ", r).strip() for r in rows if r.strip()][-12:]
+    # the last few lines only (the CLI's own error sits just above its input box): an error from earlier, e.g. before
+    # the account was switched, scrolls out of range after one normal reply
+    tail = [BOX.sub(" ", r).strip() for r in rows if r.strip()][-9:]
     for r in reversed(tail):
+        if ECHO.search(r):   # chat or tool output quoting an error (TropaAI's own notes, a teammate's message): not this CLI's
+            continue
         for kind, rx in LIMIT_KINDS:
             if rx.search(r) and (kind != "rate" or LIMIT_CONTEXT.search(r)):
                 m = RESETS.search(r) or next((x for x in (RESETS.search(t) for t in tail) if x), None)
