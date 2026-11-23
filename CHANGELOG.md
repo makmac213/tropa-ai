@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fixed: the Start / Stop team button followed you to other rooms.** Starting one room's team left "Starting…" (and a disabled button) on every room you opened next. Each room's button now shows its own team.
 - **Fixed: agents reported (and paused) as out of credits when they weren't.** The watcher read any "out of credits" wording near the bottom of an agent's screen, including an old error from before you switched accounts, and room messages the agent was reading that quoted one (TropaAI's own notes too). Now only the last few lines count and quoted chat or tool output is ignored; an agent is paused only after the error has stayed on screen for 30 seconds while it's idle; and an agent paused for credits that posts in the room or starts working is resumed at once, with a note.
 - **Pause an agent.** **Pause** on an agent's card in ▦ Team (or in its dialog) takes it off work: TropaAI types nothing into it (no messages, no nudges, no retries), its open cards go to a teammate who can work, and messages for it are kept. **Resume** puts it back and hands it those messages.
 - **Out of credits pauses the agent automatically.** Agents that ran out of credits kept being typed into, so the same "out of credits" note came back again and again, and the watcher retried them every half hour. Now the agent is paused once, with one note, until you top up and click **Resume**. Usage limits that reset by themselves work as before.

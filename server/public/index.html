@@ -3272,14 +3272,13 @@
     setTimeout(() => { b.disabled = false; b.textContent = label; rsLast = ''; renderRside(); }, 4000);
   });
   // Start / Stop the team, at the right end of the view tabs
-  const teamPower = { busy: '', until: 0 };
+  const teamPower = new Map();   // room -> { busy: 'start' | 'stop', until }: each room's button shows its own team
   function renderTeamPower(show = !$('#viewTabs').hidden) {
-    const b = $('#teamPower'), t = state.team[state.current] || {};
+    const b = $('#teamPower'), room = state.current, t = state.team[room] || {};
     b.hidden = !show; if (!show) return;
-    if (teamPower.busy && Date.now() > teamPower.until) teamPower.busy = '';
-    if (teamPower.busy === 'start' && t.watching) teamPower.busy = '';
-    if (teamPower.busy === 'stop' && !t.watching) teamPower.busy = '';
-    const on = !!t.watching, busy = teamPower.busy;
+    const tp = teamPower.get(room);
+    if (tp && (Date.now() > tp.until || (tp.busy === 'start' && t.watching) || (tp.busy === 'stop' && !t.watching))) teamPower.delete(room);
+    const on = !!t.watching, busy = teamPower.get(room)?.busy || '';
     b.disabled = !!busy;
     b.className = `tpower ${on ? 'stop' : 'start'}`;
     b.innerHTML = busy ? (busy === 'start' ? 'Starting…' : 'Stopping…')
@@ -3291,9 +3290,9 @@
   $('#teamPower').addEventListener('click', async () => {
     const t = state.team[state.current] || {}, id = state.current, on = !!t.watching;
     if (on && !confirm(`Stop the team for ${projectOf(id)}?\n\nEvery agent and the room watcher stop, and work in progress is interrupted. Chat, tasks and files stay as they are.\n\nStart it again any time: each agent picks up its conversation where it left off.`)) return;
-    teamPower.busy = on ? 'stop' : 'start'; teamPower.until = Date.now() + 60e3; renderTeamPower();
+    teamPower.set(id, { busy: on ? 'stop' : 'start', until: Date.now() + 60e3 }); renderTeamPower();
     try { await api(`/rooms/${encodeURIComponent(id)}/${on ? 'stop' : 'start'}`, { method: 'POST', body: {} }); }
-    catch (err) { alertInline(err.message); teamPower.busy = ''; }
+    catch (err) { alertInline(err.message); teamPower.delete(id); }
     renderTeamPower();
   });
   document.addEventListener('click', async (e) => {
