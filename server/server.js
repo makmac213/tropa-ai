@@ -516,6 +516,7 @@ function postMessage({ room, sender, kind = 'agent', content, reply_to, attachme
   if (!text) throw new UserError('content is empty');
   if (text.length > MAX_CONTENT) throw new UserError(`content too long (max ${MAX_CONTENT} chars)`);
   if (kind === 'agent') requireRoom(roomId); else ensureRoom(roomId);
+  if (kind === 'agent') setTimeout(() => proofOfLife(roomId, sender, 'just posted in the room'), 0);
   let replyTo = null;
   if (reply_to != null && reply_to !== '') {
     const parent = q.getMsg.get(Number(reply_to));
@@ -1712,7 +1713,13 @@ function limitOf(w, a) {
   const p = w?.room && pausedOf(w.room, a);
   return p ? { kind: 'paused', text: p.why, resets: '' } : screenLimit(w, a);
 }
-function setAgentPaused(roomId, a, on, why = '') {
+const CREDIT_SURE = Number(process.env.TROPA_CREDIT_SURE_MS ?? 30e3), CREDITS_WHY = 'out of credits';
+/** An agent paused for running out of credits shows it can work after all (it posted, or it's working): resume it. */
+function proofOfLife(roomId, a, how) {
+  if (pausedOf(roomId, a)?.why !== CREDITS_WHY) return;
+  setAgentPaused(roomId, a, false, '', `\`${a}\` ${how}, so it isn't out of credits after all (or its account was topped up): it's back at work.`);
+}
+function setAgentPaused(roomId, a, on, why = '', note = '') {
   const s = wakeSettings(roomId), p = { ...(s.paused_agents || {}) };
   const k = Object.keys(p).find((x) => sameName(x, a));
   if (on) { if (k) return false; p[a] = { since: Date.now(), why }; }
@@ -1724,7 +1731,7 @@ function setAgentPaused(roomId, a, on, why = '') {
     setTimeout(() => { try { healLimit(roomId, a); } catch (e) { console.error('heal', e); } }, 0);   // its open cards go to someone who can work
   } else {
     const st = wakeEntry(roomId, a), n = st.pending.length;
-    watcherSay(roomId, `▶ \`${a}\` is back at work${n ? `; it gets the ${n} message${n === 1 ? '' : 's'} that came in meanwhile` : ''}.`);
+    watcherSay(roomId, (note || `▶ \`${a}\` is back at work.`).replace(/\.$/, '') + (n ? `; it gets the ${n} message${n === 1 ? '' : 's'} that came in meanwhile.` : '.'));
     const w = watcherFor(roomId);
     if (w?.panes?.[a]) {   // resumed (after a top-up): the old error line still on its screen doesn't count until the screen changes
       w.panes[a].limit = null;
@@ -2155,8 +2162,13 @@ api.post('/watch/panes', wrap((req) => {
     let now = screenLimit(w, n);
     const paused = pausedOf(roomId, n), seen = w.resumedOn?.[n.toLowerCase()];
     if (seen !== undefined) { if (w.panes[n].text === seen) { w.panes[n].limit = null; now = null; } else delete w.resumedOn[n.toLowerCase()]; }
-    if (!was && now && now.kind === 'credits' && !paused) setTimeout(() => setAgentPaused(roomId, n, true, 'out of credits'), 0);   // only a top-up fixes it: stop typing into it
-    else if (!was && now && !paused) setTimeout(() => { try { healLimit(roomId, n); } catch (e) { console.error('heal', e); } }, 0);
+    // out of credits: only a top-up fixes it, so stop typing into it. Only once it has shown for CREDIT_SURE with the agent
+    // idle: an old error line, or a quote of one, flickers past while the agent works.
+    w.creditSince ||= {};
+    if (now?.kind === 'credits' && p.state === 'idle') w.creditSince[n] ||= Date.now(); else delete w.creditSince[n];
+    if (now?.kind === 'credits' && !paused && Date.now() - w.creditSince[n] >= CREDIT_SURE) { delete w.creditSince[n]; setTimeout(() => setAgentPaused(roomId, n, true, CREDITS_WHY), 0); }
+    else if (!was && now && now.kind !== 'credits' && !paused) setTimeout(() => { try { healLimit(roomId, n); } catch (e) { console.error('heal', e); } }, 0);
+    if (paused?.why === CREDITS_WHY && p.state === 'working') setTimeout(() => proofOfLife(roomId, n, 'is working'), 0);
     if (was && !now && !paused && wakeSettings(roomId).auto_heal) watcherSay(roomId, `✅ \`${n}\` is working again.`);
   }
   broadcast({ type: 'panes', room_id: roomId, panes: w.panes });
