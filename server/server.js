@@ -1676,7 +1676,7 @@ function teamView(roomId) {
   const w = watcherFor(roomId);
   return { room_id: roomId, watching: !!w, tmux_session: w?.tmux || '', agents: w?.agents || [],
     panes: w ? w.panes : {}, settings: wakeSettings(roomId), caps: w?.caps || [], commands: w?.commands || {},
-    activity: w?.activity || { procs: [], files: [] }, reads: Object.fromEntries(q.roomCursors.all(roomId).map((r) => [r.agent, r.last_read])) };
+    activity: w?.activity || { procs: [], files: [], containers: [] }, reads: Object.fromEntries(q.roomCursors.all(roomId).map((r) => [r.agent, r.last_read])) };
 }
 function broadcastTeam(roomId) { broadcast({ type: 'team', team: teamView(roomId) }); }
 function pushEvent(roomId, ev) {
@@ -2184,7 +2184,10 @@ api.post('/watch/activity', wrap((req) => {
     pid: Math.max(0, Math.floor(Number(p.pid) || 0)), agent: str(p.agent, 40), cmd: str(p.cmd, 120), age: Math.max(0, Number(p.age) || 0),
     ports: (Array.isArray(p.ports) ? p.ports : []).map(Number).filter((x) => Number.isInteger(x) && x > 0 && x < 65536).slice(0, 4) })).filter((p) => p.pid > 1);
   const files = (Array.isArray(req.body.files) ? req.body.files : []).slice(0, 20).map((f) => ({ path: str(f.path, 300), mtime: Number(f.mtime) || 0, doc: str(f.doc, 300) })).filter((f) => f.path);
-  w.activity = { procs, files, at: Date.now() };
+  const containers = (Array.isArray(req.body.containers) ? req.body.containers : []).slice(0, 20).map((c) => ({   // the team's Docker apps
+    name: str(c.name, 80), service: str(c.service, 60), image: str(c.image, 80), status: str(c.status, 60),
+    ports: (Array.isArray(c.ports) ? c.ports : []).map(Number).filter((x) => Number.isInteger(x) && x > 0 && x < 65536).slice(0, 6) })).filter((c) => c.name);
+  w.activity = { procs, files, containers, at: Date.now() };
   broadcast({ type: 'activity', room_id: roomId, activity: w.activity });
   return { ok: true };
 }));
