@@ -241,6 +241,38 @@ def background(cfg, min_age=30):
     return sorted(out, key=lambda x: x["age"])[:20]
 
 
+def containers(cfg):
+    """This project's running Docker containers and the ports they publish on this computer, for "Running now" and the
+    share dialog: [{name, service, image, ports, status}]. A container counts when Docker Compose started it from the
+    project's folder (or one inside it), or when its Compose project is named after that folder. [] without Docker."""
+    import json as _json, shutil as _shutil
+    if not _shutil.which("docker"):
+        return []
+    try:
+        r = subprocess.run(["docker", "ps", "--format", "{{json .}}"], capture_output=True, text=True, timeout=5)
+    except Exception:
+        return []
+    if r.returncode != 0:
+        return []
+    roots = {os.path.realpath(x) for x in (cfg.get("root"), cfg.get("code_dir")) if x}
+    names = {re.sub(r"[^a-z0-9_-]", "", os.path.basename(x).lower()) for x in roots} | {str(cfg.get("project") or "").lower()}
+    out = []
+    for line in r.stdout.splitlines():
+        try:
+            c = _json.loads(line)
+        except ValueError:
+            continue
+        labels = dict(kv.split("=", 1) for kv in str(c.get("Labels") or "").split(",") if "=" in kv)
+        wd = os.path.realpath(labels["com.docker.compose.project.working_dir"]) if labels.get("com.docker.compose.project.working_dir") else ""
+        proj = labels.get("com.docker.compose.project", "").lower()
+        if not ((wd and any(wd == x or wd.startswith(x + os.sep) for x in roots)) or (proj and proj in names)):
+            continue
+        ports = sorted({int(m.group(1)) for m in re.finditer(r":(\d{1,5})->", str(c.get("Ports") or ""))})
+        out.append({"name": str(c.get("Names") or "")[:80], "service": labels.get("com.docker.compose.service", "")[:60],
+                    "image": str(c.get("Image") or "")[:80], "ports": ports[:6], "status": str(c.get("Status") or "")[:60]})
+    return out[:20]
+
+
 def stop_one(cfg, pid):
     """Stop one command from the "Running now" list, and what it started. False if it isn't one of the team's."""
     if not any(b["pid"] == pid for b in background(cfg, 0)):

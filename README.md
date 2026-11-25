@@ -879,7 +879,7 @@ ngrok config add-authtoken <token>     # free token: https://dashboard.ngrok.com
 Restart the host helper (`tropa host stop && tropa host start`) or wait about a minute, and the chat picks it up.
 
 **Open a link** in any of these ways. The link is posted in the project room:
-- **In the chat:** click **🌐 Share** in a project room, enter the port (e.g. `3000`) and choose how long to keep it open (1 h to 24 h, or until you stop it; 4 h by default).
+- **In the chat:** click **🌐 Share** in a project room (or **Share** next to an app under *Apps running* / *Running now* in the side panel), pick the port and choose how long to keep it open (1 h to 24 h, or until you stop it; 4 h by default). TropaAI lists your team's apps for you, the likeliest first: the project's **Docker** containers and the ports they publish on your computer, the dev servers the agents left running, then the `localhost:` ports mentioned in the chat. Pick one or type another port.
 - **By message:** type `@tropa share 3000`, or `@tropa share 3000 2h`.
 - **From a terminal:** run `tropa share 3000` in the project folder (`--hours N`, `tropa share list`, `tropa share stop ID|PORT`). Outside a tropa project, it simply runs `ngrok http PORT` in the foreground.
 - **Agents ask, you decide:** an agent calls the `request_share` tool, the request appears in the room with **Approve link** / **Deny** buttons (or reply `@tropa approve share N` / `@tropa deny share N`), and the agent is woken with the URL. Agents never run ngrok themselves.

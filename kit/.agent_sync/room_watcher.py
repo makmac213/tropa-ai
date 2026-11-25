@@ -1065,10 +1065,11 @@ class Watcher:
         """The team's background commands (dev servers…) and the recently changed files, for the chat's side panel."""
         procs = reap.background(self.cfg) if hasattr(reap, "background") else []
         files = recent_files(self.cfg)
-        sig = json.dumps([[(p["pid"], p["ports"]) for p in procs], files])
+        boxes = reap.containers(self.cfg) if hasattr(reap, "containers") else []   # Docker apps: their ports are on this computer too
+        sig = json.dumps([[(p["pid"], p["ports"]) for p in procs], files, [(c["name"], c["ports"]) for c in boxes]])
         if sig == self.activity_sig and not force and time.time() - getattr(self, "activity_sent", 0) < 120:
             return
-        http(self.cfg, "/watch/activity", {"room": self.cfg["room"], "procs": procs, "files": files})
+        http(self.cfg, "/watch/activity", {"room": self.cfg["room"], "procs": procs, "files": files, "containers": boxes})
         self.activity_sig, self.activity_sent = sig, time.time()
 
     def post_docs(self, force=False):

@@ -569,6 +569,10 @@
   #shareDlg .sh-row { display: flex; gap: 8px; align-items: flex-start; }
   #shareDlg .sh-row input, #shareDlg .sh-row select { height: 36px; }
   #shareDlg .sh-row > div { flex: 1; }
+  .sh-ports { display: grid; gap: 6px; margin-bottom: 12px; }
+  .sh-port { display: flex; align-items: baseline; gap: 10px; text-align: left; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+  .sh-port b { font-variant-numeric: tabular-nums; min-width: 52px; } .sh-port span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sh-port.on { border-color: var(--accent); background: var(--accent-weak); }
   #shareDlg select { width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 8px; color: var(--text); margin-bottom: 10px; }
   .sh-note { font-size: 12px; color: var(--muted); background: var(--panel2); border-radius: 6px; padding: 8px 10px; margin: 0 0 12px; }
   .sh-note.warn { color: var(--text); border-left: 3px solid var(--human); }
@@ -3272,14 +3276,13 @@
     setTimeout(() => { b.disabled = false; b.textContent = label; rsLast = ''; renderRside(); }, 4000);
   });
   // Start / Stop the team, at the right end of the view tabs
-  const teamPower = { busy: '', until: 0 };
+  const teamPower = new Map();   // room -> { busy: 'start' | 'stop', until }: each room's button shows its own team
   function renderTeamPower(show = !$('#viewTabs').hidden) {
-    const b = $('#teamPower'), t = state.team[state.current] || {};
+    const b = $('#teamPower'), room = state.current, t = state.team[room] || {};
     b.hidden = !show; if (!show) return;
-    if (teamPower.busy && Date.now() > teamPower.until) teamPower.busy = '';
-    if (teamPower.busy === 'start' && t.watching) teamPower.busy = '';
-    if (teamPower.busy === 'stop' && !t.watching) teamPower.busy = '';
-    const on = !!t.watching, busy = teamPower.busy;
+    const tp = teamPower.get(room);
+    if (tp && (Date.now() > tp.until || (tp.busy === 'start' && t.watching) || (tp.busy === 'stop' && !t.watching))) teamPower.delete(room);
+    const on = !!t.watching, busy = teamPower.get(room)?.busy || '';
     b.disabled = !!busy;
     b.className = `tpower ${on ? 'stop' : 'start'}`;
     b.innerHTML = busy ? (busy === 'start' ? 'Starting…' : 'Stopping…')
@@ -3291,9 +3294,9 @@
   $('#teamPower').addEventListener('click', async () => {
     const t = state.team[state.current] || {}, id = state.current, on = !!t.watching;
     if (on && !confirm(`Stop the team for ${projectOf(id)}?\n\nEvery agent and the room watcher stop, and work in progress is interrupted. Chat, tasks and files stay as they are.\n\nStart it again any time: each agent picks up its conversation where it left off.`)) return;
-    teamPower.busy = on ? 'stop' : 'start'; teamPower.until = Date.now() + 60e3; renderTeamPower();
+    teamPower.set(id, { busy: on ? 'stop' : 'start', until: Date.now() + 60e3 }); renderTeamPower();
     try { await api(`/rooms/${encodeURIComponent(id)}/${on ? 'stop' : 'start'}`, { method: 'POST', body: {} }); }
-    catch (err) { alertInline(err.message); teamPower.busy = ''; }
+    catch (err) { alertInline(err.message); teamPower.delete(id); }
     renderTeamPower();
   });
   document.addEventListener('click', async (e) => {
@@ -3661,6 +3664,9 @@
               <div class="bd"><div class="t"><b>${esc(n)}</b><span class="lab">${esc(bg)}</span></div><div class="s">${esc(how)}${a?.status ? ` · “${esc(a.status)}”` : ''}</div></div><span class="go">▦</span></div>`;
           }).join('');
         html += sec('bg', 'Background tasks', rows.length ? `${rows.length} running` : '', body);
+        const apps = (t?.activity?.procs || []).filter((x) => x.ports.length), boxes = t?.activity?.containers || [];
+        if (t?.watching && (apps.length || boxes.length)) html += sec('apps', 'Apps running', apps.length + boxes.length, appRows(room) + apps.map((x) => `<div class="sp-row"><span class="dotx" aria-hidden="true"></span><div class="bd"><div class="t" style="font-weight:500;font-size:13.5px;overflow-wrap:anywhere">${esc(x.cmd)}</div>
+          <div class="s">${esc(x.agent || '')}${x.ports.map((p) => ` · <a href="${esc(previewUrl(p))}" target="_blank" rel="noopener">Open :${p}</a> <button type="button" class="linkbtn" data-share-port="${p}" style="margin:0">Share</button>`).join('')}</div></div></div>`).join(''));
       }
       const files = state.files[room];
       html += sec('files', 'Files shared', files?.length || '', files === null ? '<div class="rs-empty">Loading…</div>' : !files?.length ? '<div class="rs-empty">No files shared in this room yet. Drop or paste one into the chat.</div>'
@@ -5705,6 +5711,24 @@
   });
 
   // ---------- public links (ngrok, optional) ----------
+  /** Ports this room's apps listen on, best guess first: the team's Docker containers, then its dev servers, then
+   *  localhost ports mentioned in the chat (newest first; teams say where they put things). [{ port, label }] */
+  function appPorts(room) {
+    const act = state.team[room]?.activity || {}, out = new Map(), skip = new Set([Number(location.port) || 0, 4040]);
+    const add = (port, label) => { if (!skip.has(port) && !out.has(port)) out.set(port, label); };
+    for (const c of act.containers || []) for (const p of c.ports) add(p, `Docker · ${c.service || c.name}`);
+    for (const x of act.procs || []) for (const p of x.ports) add(p, `${x.cmd}${x.agent ? ` · ${x.agent}` : ''}`);
+    const msgs = [...(state.messages.get(room) || [])].reverse().slice(0, 400);
+    for (const m of msgs) for (const h of String(m.content).matchAll(/\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0)[:](\d{2,5})\b/g)) {
+      const p = Number(h[1]); if (p > 0 && p < 65536) add(p, `mentioned by ${m.sender_kind === 'system' ? 'TropaAI' : m.sender}, ${((x) => (/now/.test(x) ? x : `${x} ago`))(agoShort(m.created_at))}`);
+    }
+    return [...out].map(([port, label]) => ({ port, label }));
+  }
+  const appRows = (room) => {   // Docker apps for the side panels: name, image, and each port with Open and Share
+    const cs = state.team[room]?.activity?.containers || [];
+    return cs.map((c) => `<div class="sp-row"><span class="dotx" aria-hidden="true"></span><div class="bd"><div class="t" style="font-weight:500;font-size:13.5px;overflow-wrap:anywhere">${esc(c.service || c.name)} <span class="mut" style="font-weight:400">· Docker</span></div>
+      <div class="s">${esc([c.image, c.status].filter(Boolean).join(' · '))}${c.ports.map((p) => ` · <a href="${esc(previewUrl(p))}" target="_blank" rel="noopener">Open :${p}</a> <button type="button" class="linkbtn" data-share-port="${p}" style="margin:0">Share</button>`).join('')}</div></div></div>`).join('');
+  };
   function renderShare() {
     const h = state.host || {}, n = h.ngrok || {};
     const mine = state.shares.filter((x) => x.room_id === state.current && ['requested', 'starting', 'online', 'stopping'].includes(x.status)).sort((a, b) => b.id - a.id);
@@ -5716,16 +5740,26 @@
     if (!h.connected) form = `<div class="sh-note warn">${helperOff('links can\'t be opened from the chat')}</div>`;
     else if (!n.installed) form = `<div class="sh-note warn"><b>ngrok is optional and not installed.</b> To share links to apps running on your machine:<br>1. Install it: <code>brew install ngrok</code> (macOS) or see <a href="https://ngrok.com/download" target="_blank" rel="noopener">ngrok.com/download</a><br>2. Add your free token once: <code>ngrok config add-authtoken &lt;token&gt;</code> (<a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener">get it here</a>)<br>Then reopen this dialog.</div>`;
     else if (!n.authed) form = `<div class="sh-note warn"><b>ngrok needs your token once.</b> Run <code>ngrok config add-authtoken &lt;token&gt;</code> (free at <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener">dashboard.ngrok.com</a>), then reopen this dialog.</div>`;
-    else form = `<div class="sh-row"><div><label class="f" for="sharePort">Local port</label><input id="sharePort" inputmode="numeric" placeholder="3000" value="${esc($('#sharePort')?.value || '3000')}"></div>
+    else form = `${(() => { const ps = appPorts(state.current); if (!ps.length) return '';
+        const cur = Number($('#sharePort')?.value || share.port || ps[0].port);
+        return `<label class="f">Your team's apps</label><div class="sh-ports" role="radiogroup" aria-label="Port to share">${ps.slice(0, 6).map((x) => `<button type="button" class="sh-port${x.port === cur ? ' on' : ''}" role="radio" aria-checked="${x.port === cur}" data-pick-port="${x.port}"><b>:${x.port}</b><span>${esc(x.label)}</span></button>`).join('')}</div>`; })()}
+      <div class="sh-row"><div><label class="f" for="sharePort">Local port <small>or type another</small></label><input id="sharePort" inputmode="numeric" placeholder="3000" value="${esc($('#sharePort')?.value || share.port || appPorts(state.current)[0]?.port || '')}"></div>
         <div><label class="f" for="shareHours">Close after</label><select id="shareHours"><option value="1">1 hour</option><option value="4" selected>4 hours</option><option value="8">8 hours</option><option value="24">24 hours</option><option value="0">When I stop it</option></select></div></div>
       <div class="sh-note warn">Anyone with the link can open the app, with no password. Share development data only, and stop the link when you're done.</div>
       <div class="sh-note">Runs <code>ngrok http PORT</code> on your machine (ngrok ${esc(n.version || '')}); the link is posted in this room. Agents can ask for one with <code>request_share</code>; you approve it here or in the chat. Vite dev servers need <code>server.allowedHosts: ['.ngrok-free.app']</code>.</div>`;
     $('#shareBody').innerHTML = (list ? `<label class="f">Open in this project</label>${list}` : '') + form;
     $('#shareGo').hidden = !(h.connected && n.installed && n.authed);
   }
+  const share = { port: 0 };   // a port picked in the side panel's Share button
+  document.addEventListener('click', (e) => {
+    const pk = e.target.closest('[data-pick-port]');
+    if (pk) { $('#sharePort').value = pk.dataset.pickPort; document.querySelectorAll('.sh-port').forEach((b) => { const on = b === pk; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }); return; }
+    const sp = e.target.closest('[data-share-port]');
+    if (sp) { e.preventDefault(); share.port = Number(sp.dataset.sharePort); if ($('#sharePort')) $('#sharePort').value = sp.dataset.sharePort; openShare(); }
+  });
   async function openShare() {
     try { state.host = await api('/host'); } catch { state.host = { connected: false }; }
-    $('#shareErr').textContent = ''; renderShare(); $('#shareDlg').showModal();
+    $('#shareErr').textContent = ''; renderShare(); $('#shareDlg').showModal(); share.port = 0;
   }
   $('#shareGo').addEventListener('click', async () => {
     const port = Number($('#sharePort')?.value);
@@ -6313,9 +6347,9 @@
           ${menu ? `${menu.question ? `<div class="s" style="white-space:normal">${esc(menu.question)}</div>` : ''}${menuButtons(n, menu)}` : ''}${pz ? `<div class="rs-ask"><button type="button" class="tbtn" data-pausea="${esc(n)}" data-on="0">Resume</button></div>` : ''}</div></div>`;
       }).join('') + `<div class="sp-fix">Something not working? <button type="button" class="linkbtn" data-fixteam>Fix the team</button></div>`;
     }
-    const procs = t.activity?.procs || [];
-    const run = !t.watching ? '<div class="sp-empty">Nothing, the team isn\'t running.</div>' : !procs.length ? '<div class="sp-empty">Nothing running in the background.</div>'
-      : procs.map((p) => `<div class="sp-row"><span class="dotx" aria-hidden="true"></span><div class="bd"><div class="t" style="font-weight:500;font-size:13.5px;overflow-wrap:anywhere">${esc(p.cmd)}</div>
+    const procs = t.activity?.procs || [], boxes = t.activity?.containers || [];
+    const run = !t.watching ? '<div class="sp-empty">Nothing, the team isn\'t running.</div>' : !procs.length && !boxes.length ? '<div class="sp-empty">Nothing running in the background.</div>'
+      : appRows(room) + procs.map((p) => `<div class="sp-row"><span class="dotx" aria-hidden="true"></span><div class="bd"><div class="t" style="font-weight:500;font-size:13.5px;overflow-wrap:anywhere">${esc(p.cmd)}</div>
           <div class="s">${esc([p.agent, ageText(p.age)].filter(Boolean).join(' · '))}${p.ports.length ? ` · <a href="${esc(previewUrl(p.ports[0]))}" target="_blank" rel="noopener">Open :${p.ports[0]}</a>` : ''}</div></div>
           <button type="button" class="mini" data-stopproc="${p.pid}" aria-label="Stop ${esc(p.cmd)}">Stop</button></div>`).join('');
     const decs = qs.filter((q) => q.status !== 'dismissed').sort((a, b) => (b.status === 'open') - (a.status === 'open') || (b.closed_at || b.created_at) - (a.closed_at || a.created_at)).slice(0, 8);
@@ -6338,7 +6372,7 @@
     const tsum = !tl.length ? '<div class="sp-empty">The lead adds tasks here when it plans your request.</div>'
       : `<div class="sp-empty" style="color:var(--text)">${[['todo', 'to do'], ['doing', 'doing'], ['review', 'in review'], ['qa', 'in QA'], ['blocked', 'blocked'], ['done', 'done']].filter(([k]) => tcount(k)).map(([k, l]) => `${tcount(k)} ${l}`).join(' · ')}</div>`;
     const tasksSec = sec('tsk', 'Tasks', open.length || '', tsum + '<div class="sp-fix"><button type="button" class="linkbtn" data-sview-go="board">Open the board</button> · <button type="button" class="linkbtn" data-sview-go="flow">See the flow</button></div>');
-    return sec('who', 'Team', t.watching ? (t.agents || []).length : '', team) + tasksSec + sec('pins', 'Pinned', state.pins[room]?.length || '', pinsHtml(room)) + sec('run', 'Running now', procs.length || '', run)
+    return sec('who', 'Team', t.watching ? (t.agents || []).length : '', team) + tasksSec + sec('pins', 'Pinned', state.pins[room]?.length || '', pinsHtml(room)) + sec('run', 'Running now', (procs.length + boxes.length) || '', run)
       + sec('dec', 'Decisions', openDecs ? `${openDecs} need you` : '', dec) + sec('chg', 'Files', '', fl);
   }
 
